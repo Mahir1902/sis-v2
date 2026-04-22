@@ -34,6 +34,11 @@ export const computeGradesForStudent = mutation({
       )
       .collect();
 
+    // No assessments for this subject at this level — skip
+    if (assessments.length === 0) {
+      return null;
+    }
+
     // Get weighting rule (fall back to equal thirds)
     const rule = await ctx.db
       .query("assessmentWeightingRules")
