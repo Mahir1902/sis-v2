@@ -57,6 +57,25 @@ export const bulkCreateAssessments = mutation({
     await requireRole(ctx, ["admin", "teacher"]);
     const ids = [];
     for (const num of [1, 2, 3] as const) {
+      // Prevent duplicate CA-X for same subject/semester/level/year
+      const existing = await ctx.db
+        .query("assessments")
+        .withIndex("by_subject_semester", (q) =>
+          q.eq("subjectId", args.subjectId).eq("semester", args.semester)
+        )
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("standardLevelId"), args.standardLevelId),
+            q.eq(q.field("academicYearId"), args.academicYearId),
+            q.eq(q.field("assessmentNumber"), num)
+          )
+        )
+        .first();
+      if (existing) {
+        throw new Error(
+          `CA-${num} already exists for this subject/semester/level/year`
+        );
+      }
       const id = await ctx.db.insert("assessments", {
         name: `CA-${num}`,
         assessmentNumber: num,
@@ -90,7 +109,7 @@ export const getAssessmentsByLevelYear = query({
           .eq("standardLevelId", args.standardLevelId)
           .eq("academicYearId", args.academicYearId)
       );
-    const assessments = await q.collect();
+    const assessments = await q.take(200);
     const filtered = args.semester
       ? assessments.filter((a) => a.semester === args.semester)
       : assessments;
@@ -101,7 +120,7 @@ export const getAssessmentsByLevelYear = query({
         const questions = await ctx.db
           .query("assessmentQuestions")
           .withIndex("by_assessment", (q) => q.eq("assessmentId", a._id))
-          .collect();
+          .take(200);
         const totalQMarks = questions.reduce(
           (sum, q) => sum + q.marksAllocated,
           0
@@ -122,7 +141,7 @@ export const getAssessmentById = query({
     const questions = await ctx.db
       .query("assessmentQuestions")
       .withIndex("by_assessment_order", (q) => q.eq("assessmentId", args.assessmentId))
-      .collect();
+      .take(200);
     const subject = await ctx.db.get(assessment.subjectId);
     return { ...assessment, subjectDoc: subject, questions };
   },
@@ -159,7 +178,80 @@ export const getAssessmentsBySubjectSemester = query({
 export const deactivateAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireRole(ctx, ["admin", "teacher"]);
     await ctx.db.patch(args.assessmentId, { isActive: false });
+  },
+});
+
+/** Update editable assessment fields (name, totalMarks, passingMarks, assessmentDate). */
+export const updateAssessment = mutation({
+  args: {
+    assessmentId: v.id("assessments"),
+    name: v.optional(v.string()),
+    totalMarks: v.optional(v.float64()),
+    passingMarks: v.optional(v.float64()),
+    assessmentDate: v.optional(v.float64()),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["admin", "teacher"]);
+    const assessment = await ctx.db.get(args.assessmentId);
+    if (!assessment) throw new Error("Assessment not found");
+
+    // If lowering totalMarks, ensure it doesn't go below allocated question marks
+    if (args.totalMarks !== undefined && args.totalMarks < assessment.totalMarks) {
+      const questions = await ctx.db
+        .query("assessmentQuestions")
+        .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+        .take(200);
+      const allocatedMarks = questions.reduce((sum, q) => sum + q.marksAllocated, 0);
+      if (args.totalMarks < allocatedMarks) {
+        throw new Error(
+          `Cannot reduce total marks below ${allocatedMarks} (currently allocated across ${questions.length} questions)`
+        );
+      }
+    }
+
+    const { assessmentId, ...updates } = args;
+    // Remove undefined values so we only patch what was provided
+    const patch: Partial<{ name: string; totalMarks: number; passingMarks: number; assessmentDate: number }> = {};
+    if (updates.name !== undefined) patch.name = updates.name;
+    if (updates.totalMarks !== undefined) patch.totalMarks = updates.totalMarks;
+    if (updates.passingMarks !== undefined) patch.passingMarks = updates.passingMarks;
+    if (updates.assessmentDate !== undefined) patch.assessmentDate = updates.assessmentDate;
+
+    await ctx.db.patch(assessmentId, patch);
+  },
+});
+
+/** Hard-delete an assessment and cascade-delete its questions and student answers. */
+export const deleteAssessment = mutation({
+  args: { assessmentId: v.id("assessments") },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["admin", "teacher"]);
+    const assessment = await ctx.db.get(args.assessmentId);
+    if (!assessment) throw new Error("Assessment not found");
+
+    // 1. Delete all student answers for this assessment
+    const answers = await ctx.db
+      .query("studentAssessmentAnswers")
+      .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+      .take(5000);
+    for (const answer of answers) {
+      await ctx.db.delete(answer._id);
+    }
+
+    // 2. Delete all questions for this assessment
+    const questions = await ctx.db
+      .query("assessmentQuestions")
+      .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+      .take(200);
+    for (const question of questions) {
+      await ctx.db.delete(question._id);
+    }
+
+    // 3. Delete the assessment itself
+    await ctx.db.delete(args.assessmentId);
+
+    return { deletedAnswers: answers.length, deletedQuestions: questions.length };
   },
 });

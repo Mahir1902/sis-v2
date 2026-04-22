@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -28,14 +27,43 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Plus, BookOpen } from "lucide-react";
+import { Plus, BookOpen, CheckCircle2, AlertCircle } from "lucide-react";
 import { RoleGate } from "@/components/shared/RoleGate";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type EnrichedAssessment = {
+  _id: Id<"assessments">;
+  name: string;
+  assessmentNumber: 1 | 2 | 3;
+  semester: 1 | 2;
+  subjectId: Id<"subjects">;
+  totalMarks: number;
+  isActive: boolean;
+  questionCount: number;
+  totalQMarks: number;
+  subjectDoc: { _id: Id<"subjects">; name: string; displayOrder?: number } | null;
+};
+
+type GroupedSubject = {
+  subject: { _id: Id<"subjects">; name: string; displayOrder?: number };
+  assessments: Record<1 | 2 | 3, EnrichedAssessment | null>;
+};
 
 // ── Create Assessment schema ──────────────────────────────────────────────────
 
@@ -63,28 +91,123 @@ export default function AssessmentsPage() {
 function AssessmentsPageContent() {
   const [selectedLevelId, setSelectedLevelId] = useState<string>("");
   const [selectedYearId, setSelectedYearId] = useState<string>("");
-  const [selectedSemester, setSelectedSemester] = useState<"all" | "1" | "2">("all");
+  const [selectedSemester, setSelectedSemester] = useState<"1" | "2">("1");
   const [createOpen, setCreateOpen] = useState(false);
+  const [createDefaults, setCreateDefaults] = useState<{
+    subjectId?: string;
+    semester?: "1" | "2";
+    assessmentNumber?: "1" | "2" | "3";
+  }>({});
 
   const levels = useQuery(api.standardLevels.list);
   const years = useQuery(api.academicYears.list);
+  const subjects = useQuery(api.subjects.list);
+
+  // Fetch ALL assessments for this level+year (no semester filter — we filter client-side)
   const assessments = useQuery(
     api.assessments.getAssessmentsByLevelYear,
     selectedLevelId && selectedYearId
       ? {
           standardLevelId: selectedLevelId as Id<"standardLevels">,
           academicYearId: selectedYearId as Id<"academicYears">,
-          semester: selectedSemester !== "all" ? (parseInt(selectedSemester) as 1 | 2) : undefined,
         }
       : "skip"
   );
 
+  // Auto-select current academic year
+  useEffect(() => {
+    if (years && years.length > 0 && !selectedYearId) {
+      setSelectedYearId(years[0]._id);
+    }
+  }, [years, selectedYearId]);
+
+  const activeSubjects = useMemo(
+    () => subjects?.filter((s) => s.isActive) ?? [],
+    [subjects]
+  );
+
+  // Group assessments by subject for current semester
+  const grouped = useMemo((): GroupedSubject[] | null => {
+    if (!assessments || !activeSubjects.length) return null;
+
+    const semesterNum = parseInt(selectedSemester, 10) as 1 | 2;
+    const filtered = assessments.filter((a) => a.semester === semesterNum);
+
+    const map = new Map<string, GroupedSubject>();
+
+    // Initialize all active subjects
+    for (const s of activeSubjects) {
+      map.set(s._id, {
+        subject: { _id: s._id as Id<"subjects">, name: s.name, displayOrder: s.displayOrder ?? undefined },
+        assessments: { 1: null, 2: null, 3: null },
+      });
+    }
+
+    // Fill in existing assessments
+    for (const a of filtered) {
+      let entry = map.get(a.subjectId);
+      if (!entry && a.subjectDoc) {
+        // Subject exists in assessments but not in active subjects (deactivated)
+        entry = {
+          subject: { _id: a.subjectId, name: a.subjectDoc.name, displayOrder: a.subjectDoc.displayOrder },
+          assessments: { 1: null, 2: null, 3: null },
+        };
+        map.set(a.subjectId, entry);
+      }
+      if (entry) {
+        entry.assessments[a.assessmentNumber as 1 | 2 | 3] = a as EnrichedAssessment;
+      }
+    }
+
+    return Array.from(map.values()).sort(
+      (a, b) => (a.subject.displayOrder ?? 999) - (b.subject.displayOrder ?? 999)
+    );
+  }, [assessments, activeSubjects, selectedSemester]);
+
+  // Summary stats
+  const stats = useMemo(() => {
+    if (!grouped) return null;
+    const totalSubjects = grouped.length;
+    let created = 0;
+    let withQuestions = 0;
+    for (const g of grouped) {
+      for (const ca of [1, 2, 3] as const) {
+        if (g.assessments[ca]) {
+          created++;
+          if (g.assessments[ca]?.questionCount && g.assessments[ca].questionCount > 0) withQuestions++;
+        }
+      }
+    }
+    return { totalSubjects, created, possible: totalSubjects * 3, withQuestions };
+  }, [grouped]);
+
+  function openCreatePrefilled(subjectId: string, semester: "1" | "2", assessmentNumber: "1" | "2" | "3") {
+    setCreateDefaults({ subjectId, semester, assessmentNumber });
+    setCreateOpen(true);
+  }
+
+  function openCreateFresh() {
+    setCreateDefaults({});
+    setCreateOpen(true);
+  }
+
+  const selectedLevel = levels?.find((l) => l._id === selectedLevelId);
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Assessments</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Assessments</h1>
+          {selectedLevel && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              {selectedLevel.name} &mdash;{" "}
+              {years?.find((y) => y._id === selectedYearId)?.name}
+            </p>
+          )}
+        </div>
         <Button
-          onClick={() => setCreateOpen(true)}
+          onClick={openCreateFresh}
           disabled={!selectedLevelId || !selectedYearId}
           className="bg-school-green hover:bg-school-green/90 text-white"
         >
@@ -96,7 +219,7 @@ function AssessmentsPageContent() {
       {/* Filters */}
       <div className="bg-white rounded-lg border p-4 flex flex-wrap gap-3">
         <Select value={selectedYearId} onValueChange={setSelectedYearId}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-44" aria-label="Select academic year">
             <SelectValue placeholder="Academic Year" />
           </SelectTrigger>
           <SelectContent>
@@ -109,7 +232,7 @@ function AssessmentsPageContent() {
         </Select>
 
         <Select value={selectedLevelId} onValueChange={setSelectedLevelId}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-44" aria-label="Select standard level">
             <SelectValue placeholder="Standard Level" />
           </SelectTrigger>
           <SelectContent>
@@ -120,73 +243,55 @@ function AssessmentsPageContent() {
             ))}
           </SelectContent>
         </Select>
-
-        <Select value={selectedSemester} onValueChange={(v) => setSelectedSemester(v as "all" | "1" | "2")}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="All Semesters" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Semesters</SelectItem>
-            <SelectItem value="1">Semester 1</SelectItem>
-            <SelectItem value="2">Semester 2</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
-      {/* Assessment list */}
-      {!selectedLevelId || !selectedYearId ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-lg border">
-          <BookOpen className="h-10 w-10 text-gray-300 mb-3" />
-          <p className="text-gray-500 font-medium">Select a year and level to view assessments</p>
-        </div>
+      {/* Main content */}
+      {!selectedLevelId ? (
+        <LevelPickerGrid levels={levels} onSelect={setSelectedLevelId} />
       ) : assessments === undefined ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 rounded-lg" />
+            <Skeleton key={i} className="h-16 rounded-lg" />
           ))}
-        </div>
-      ) : assessments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-lg border">
-          <BookOpen className="h-10 w-10 text-gray-300 mb-3" />
-          <p className="text-gray-500 font-medium">No assessments yet</p>
-          <p className="text-sm text-gray-400 mt-1">Create CA-1, CA-2, and CA-3 for each subject.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border divide-y">
-          {assessments.map((a) => (
-            <Link
-              key={a._id}
-              href={`/admin/assessments/${a._id}`}
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
-              aria-label={`View ${a.name} — ${a.subjectDoc?.name ?? "Unknown subject"}`}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm text-gray-900">{a.name}</span>
-                  <Badge variant="outline" className="text-xs">
-                    CA-{a.assessmentNumber}
-                  </Badge>
-                  <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">
-                    Sem {a.semester}
-                  </Badge>
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {a.subjectDoc?.name} &bull; {a.totalMarks} marks &bull;{" "}
-                  {a.questionCount} question{a.questionCount !== 1 ? "s" : ""}
-                </p>
-              </div>
-              <Badge
-                className={
-                  a.isActive
-                    ? "bg-green-100 text-green-700 border-green-200"
-                    : "bg-gray-100 text-gray-500"
-                }
-              >
-                {a.isActive ? "Active" : "Inactive"}
-              </Badge>
-            </Link>
-          ))}
-        </div>
+        <>
+          {/* Summary stats */}
+          {stats && (
+            <SummaryStats
+              totalSubjects={stats.totalSubjects}
+              created={stats.created}
+              possible={stats.possible}
+              withQuestions={stats.withQuestions}
+            />
+          )}
+
+          {/* Semester tabs + grid */}
+          <Tabs value={selectedSemester} onValueChange={(v) => setSelectedSemester(v as "1" | "2")}>
+            <TabsList>
+              <TabsTrigger value="1">Semester 1</TabsTrigger>
+              <TabsTrigger value="2">Semester 2</TabsTrigger>
+            </TabsList>
+            <TabsContent value="1">
+              <AssessmentGrid
+                grouped={grouped}
+                semester="1"
+                onCreateClick={openCreatePrefilled}
+                standardLevelId={selectedLevelId as Id<"standardLevels">}
+                academicYearId={selectedYearId as Id<"academicYears">}
+              />
+            </TabsContent>
+            <TabsContent value="2">
+              <AssessmentGrid
+                grouped={grouped}
+                semester="2"
+                onCreateClick={openCreatePrefilled}
+                standardLevelId={selectedLevelId as Id<"standardLevels">}
+                academicYearId={selectedYearId as Id<"academicYears">}
+              />
+            </TabsContent>
+          </Tabs>
+        </>
       )}
 
       {/* Create dialog */}
@@ -195,28 +300,259 @@ function AssessmentsPageContent() {
         onClose={() => setCreateOpen(false)}
         standardLevelId={selectedLevelId as Id<"standardLevels">}
         academicYearId={selectedYearId as Id<"academicYears">}
+        subjects={activeSubjects}
+        defaultValues={createDefaults}
       />
     </div>
   );
 }
 
-// ── Create Assessment Dialog ──────────────────────────────���───────────────────
+// ── Level Picker Grid ─────────────────────────────────────────────────────────
+
+function LevelPickerGrid({
+  levels,
+  onSelect,
+}: {
+  levels: { _id: string; name: string; code: string }[] | undefined;
+  onSelect: (id: string) => void;
+}) {
+  if (!levels) {
+    return (
+      <div className="bg-white rounded-lg border p-8">
+        <div className="flex flex-wrap gap-2 justify-center">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-20 rounded-md" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border p-8 text-center">
+      <BookOpen className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+      <p className="text-gray-600 font-medium mb-4">Select a level to view assessments</p>
+      <div className="flex flex-wrap gap-2 justify-center">
+        {levels.map((l) => (
+          <button
+            key={l._id}
+            onClick={() => onSelect(l._id)}
+            className="px-4 py-2 rounded-md border text-sm font-medium text-gray-700 hover:border-school-green hover:text-school-green hover:bg-school-green/5 transition-colors"
+            aria-label={`Select ${l.name}`}
+          >
+            {l.code}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Summary Stats ─────────────────────────────────────────────────────────────
+
+function SummaryStats({
+  totalSubjects,
+  created,
+  possible,
+  withQuestions,
+}: {
+  totalSubjects: number;
+  created: number;
+  possible: number;
+  withQuestions: number;
+}) {
+  return (
+    <div className="flex items-center gap-4 text-sm text-gray-500">
+      <span>{totalSubjects} subject{totalSubjects !== 1 ? "s" : ""}</span>
+      <span className="text-gray-300">|</span>
+      <span>
+        {created} of {possible} assessments created
+      </span>
+      <span className="text-gray-300">|</span>
+      <span>{withQuestions} have questions</span>
+    </div>
+  );
+}
+
+// ── Assessment Grid ───────────────────────────────────────────────────────────
+
+function AssessmentGrid({
+  grouped,
+  semester,
+  onCreateClick,
+  standardLevelId,
+  academicYearId,
+}: {
+  grouped: GroupedSubject[] | null;
+  semester: "1" | "2";
+  onCreateClick: (subjectId: string, semester: "1" | "2", assessmentNumber: "1" | "2" | "3") => void;
+  standardLevelId: Id<"standardLevels">;
+  academicYearId: Id<"academicYears">;
+}) {
+  const bulkCreate = useMutation(api.assessments.bulkCreateAssessments);
+
+  async function handleBulkCreate(subjectId: Id<"subjects">) {
+    try {
+      await bulkCreate({
+        semester: parseInt(semester, 10) as 1 | 2,
+        subjectId,
+        standardLevelId,
+        academicYearId,
+        totalMarks: 100,
+      });
+      toast.success("Created CA-1, CA-2, CA-3");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create assessments";
+      toast.error(message);
+    }
+  }
+
+  if (!grouped || grouped.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center bg-white rounded-lg border mt-2">
+        <BookOpen className="h-10 w-10 text-gray-300 mb-3" />
+        <p className="text-gray-500 font-medium">No subjects found</p>
+        <p className="text-sm text-gray-400 mt-1">Add subjects first, then create assessments.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border mt-2">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[200px]">Subject</TableHead>
+            <TableHead>CA-1</TableHead>
+            <TableHead>CA-2</TableHead>
+            <TableHead>CA-3</TableHead>
+            <TableHead className="w-[100px]" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {grouped.map((g) => {
+            const allMissing = !g.assessments[1] && !g.assessments[2] && !g.assessments[3];
+            return (
+              <TableRow key={g.subject._id}>
+                <TableCell className="font-medium text-gray-900">
+                  {g.subject.name}
+                </TableCell>
+                {([1, 2, 3] as const).map((ca) => (
+                  <TableCell key={ca}>
+                    <AssessmentCell
+                      assessment={g.assessments[ca]}
+                      onCreateClick={() => onCreateClick(g.subject._id, semester, String(ca) as "1" | "2" | "3")}
+                    />
+                  </TableCell>
+                ))}
+                <TableCell>
+                  {allMissing && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleBulkCreate(g.subject._id as Id<"subjects">)}
+                      className="text-xs"
+                      aria-label={`Create all assessments for ${g.subject.name}`}
+                    >
+                      Create All
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+// ── Assessment Cell ───────────────────────────────────────────────────────────
+
+function AssessmentCell({
+  assessment,
+  onCreateClick,
+}: {
+  assessment: EnrichedAssessment | null;
+  onCreateClick: () => void;
+}) {
+  // Not created
+  if (!assessment) {
+    return (
+      <button
+        onClick={onCreateClick}
+        className="flex flex-col items-center justify-center w-full py-3 px-2 rounded-md border border-dashed border-gray-200 hover:border-school-green hover:bg-school-green/5 text-gray-400 hover:text-school-green transition-colors"
+        aria-label="Create assessment"
+      >
+        <Plus className="h-4 w-4" />
+        <span className="text-xs mt-0.5">Create</span>
+      </button>
+    );
+  }
+
+  // Exists but no questions
+  if (assessment.questionCount === 0) {
+    return (
+      <Link
+        href={`/admin/assessments/${assessment._id}`}
+        className="block py-2 px-3 rounded-md hover:bg-amber-50 border border-dashed border-amber-200 transition-colors"
+        aria-label={`${assessment.name} — no questions yet`}
+      >
+        <div className="flex items-center gap-1.5">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+          <span className="text-sm font-medium text-amber-600">No questions</span>
+        </div>
+        <p className="text-xs text-gray-400 mt-0.5">{assessment.totalMarks} marks total</p>
+      </Link>
+    );
+  }
+
+  // Has questions
+  return (
+    <Link
+      href={`/admin/assessments/${assessment._id}`}
+      className="block py-2 px-3 rounded-md hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
+      aria-label={`${assessment.name} — ${assessment.questionCount} questions`}
+    >
+      <div className="flex items-center gap-1.5">
+        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+        <span className="text-sm font-medium text-gray-900">
+          {assessment.questionCount} question{assessment.questionCount !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <p className="text-xs text-gray-500 mt-0.5">
+        {assessment.totalQMarks}/{assessment.totalMarks} marks allocated
+      </p>
+    </Link>
+  );
+}
+
+// ── Create Assessment Dialog ──────────────────────────────────────────────────
 
 function CreateAssessmentDialog({
   open,
   onClose,
   standardLevelId,
   academicYearId,
+  subjects,
+  defaultValues,
 }: {
   open: boolean;
   onClose: () => void;
   standardLevelId: Id<"standardLevels">;
   academicYearId: Id<"academicYears">;
+  subjects: { _id: string; name: string }[];
+  defaultValues?: {
+    subjectId?: string;
+    semester?: "1" | "2";
+    assessmentNumber?: "1" | "2" | "3";
+  };
 }) {
-  const subjects = useQuery(api.subjects.list);
   const createAssessment = useMutation(api.assessments.createAssessment);
   const bulkCreate = useMutation(api.assessments.bulkCreateAssessments);
   const [bulkMode, setBulkMode] = useState(false);
+
+  const hasPrefill = !!(defaultValues?.subjectId && defaultValues?.assessmentNumber);
 
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
@@ -228,11 +564,34 @@ function CreateAssessmentDialog({
     },
   });
 
+  // Reset form when dialog opens with new defaults
+  useEffect(() => {
+    if (open) {
+      if (hasPrefill) {
+        setBulkMode(false);
+        form.reset({
+          name: `CA-${defaultValues.assessmentNumber}`,
+          assessmentNumber: defaultValues.assessmentNumber ?? "1",
+          semester: defaultValues.semester ?? "1",
+          subjectId: defaultValues.subjectId ?? "",
+          totalMarks: 100,
+        });
+      } else {
+        form.reset({
+          name: "",
+          assessmentNumber: "1",
+          semester: "1",
+          totalMarks: 100,
+        });
+      }
+    }
+  }, [open, hasPrefill, defaultValues?.subjectId, defaultValues?.semester, defaultValues?.assessmentNumber, form]);
+
   async function onSubmit(values: CreateValues) {
     try {
       if (bulkMode) {
         await bulkCreate({
-          semester: parseInt(values.semester) as 1 | 2,
+          semester: parseInt(values.semester, 10) as 1 | 2,
           subjectId: values.subjectId as Id<"subjects">,
           standardLevelId,
           academicYearId,
@@ -242,8 +601,8 @@ function CreateAssessmentDialog({
       } else {
         await createAssessment({
           name: values.name,
-          assessmentNumber: parseInt(values.assessmentNumber) as 1 | 2 | 3,
-          semester: parseInt(values.semester) as 1 | 2,
+          assessmentNumber: parseInt(values.assessmentNumber, 10) as 1 | 2 | 3,
+          semester: parseInt(values.semester, 10) as 1 | 2,
           subjectId: values.subjectId as Id<"subjects">,
           standardLevelId,
           academicYearId,
@@ -259,8 +618,6 @@ function CreateAssessmentDialog({
       toast.error(message);
     }
   }
-
-  const activeSubjects = subjects?.filter((s) => s.isActive) ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -320,7 +677,7 @@ function CreateAssessmentDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {activeSubjects.map((s) => (
+                      {subjects.map((s) => (
                         <SelectItem key={s._id} value={s._id}>
                           {s.name}
                         </SelectItem>

@@ -48,7 +48,7 @@ export const bulkCreateQuestions = mutation({
     const existingQuestions = await ctx.db
       .query("assessmentQuestions")
       .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
-      .collect();
+      .take(200);
     const existingTotal = existingQuestions.reduce((s, q) => s + q.marksAllocated, 0);
     if (existingTotal + totalNewMarks > assessment.totalMarks) {
       throw new Error(
@@ -65,7 +65,7 @@ export const bulkCreateQuestions = mutation({
         questionText: q.questionText,
         learningObjective: q.learningObjective,
         conceptTag: q.conceptTag,
-        displayOrder: i + 1,
+        displayOrder: existingQuestions.length + i + 1,
         isActive: true,
         createdAt: Date.now(),
       });
@@ -96,12 +96,33 @@ export const updateQuestion = mutation({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
+    const question = await ctx.db.get(args.questionId);
+    if (!question) throw new Error("Question not found");
+
+    // Validate marks won't exceed assessment total
+    if (args.marksAllocated !== undefined) {
+      const assessment = await ctx.db.get(question.assessmentId);
+      if (!assessment) throw new Error("Assessment not found");
+      const siblings = await ctx.db
+        .query("assessmentQuestions")
+        .withIndex("by_assessment", (q) => q.eq("assessmentId", question.assessmentId))
+        .take(200);
+      const othersTotal = siblings
+        .filter((q) => q._id !== args.questionId)
+        .reduce((sum, q) => sum + q.marksAllocated, 0);
+      if (othersTotal + args.marksAllocated > assessment.totalMarks) {
+        throw new Error(
+          `Updating to ${args.marksAllocated} marks would exceed assessment total of ${assessment.totalMarks} (other questions: ${othersTotal})`
+        );
+      }
+    }
+
     const { questionId, ...updates } = args;
     await ctx.db.patch(questionId, updates);
   },
 });
 
-/** Delete a question from an assessment. */
+/** Delete a question and cascade-delete its student answers. */
 export const deleteQuestion = mutation({
   args: {
     questionId: v.id("assessmentQuestions"),
@@ -110,6 +131,16 @@ export const deleteQuestion = mutation({
     await requireRole(ctx, ["admin", "teacher"]);
     const question = await ctx.db.get(args.questionId);
     if (!question) throw new Error("Question not found");
+
+    // Cascade-delete all student answers for this question
+    const answers = await ctx.db
+      .query("studentAssessmentAnswers")
+      .withIndex("by_question", (q) => q.eq("questionId", args.questionId))
+      .take(5000);
+    for (const answer of answers) {
+      await ctx.db.delete(answer._id);
+    }
+
     await ctx.db.delete(args.questionId);
   },
 });
@@ -125,7 +156,7 @@ async function validateQuestionTotal(
   const existing = await ctx.db
     .query("assessmentQuestions")
     .withIndex("by_assessment", (q) => q.eq("assessmentId", assessmentId))
-    .collect();
+    .take(200);
   const currentTotal = existing.reduce((s, q) => s + q.marksAllocated, 0);
   if (currentTotal + newMarks > assessment.totalMarks) {
     throw new Error(

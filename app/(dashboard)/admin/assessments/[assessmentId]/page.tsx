@@ -2,16 +2,29 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery } from "convex/react";
+import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { RoleGate } from "@/components/shared/RoleGate";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, BookOpen, Settings } from "lucide-react";
+import { ArrowLeft, BookOpen, Pencil, Settings, Trash2 } from "lucide-react";
 import { MarkEntryGrid } from "./_components/MarkEntryGrid";
 import { QuestionManager } from "./_components/QuestionManager";
+import { EditAssessmentDialog } from "./_components/EditAssessmentDialog";
 
 export default function AssessmentDetailPage({
   params,
@@ -34,11 +47,16 @@ function AssessmentDetailContent({
 }: {
   assessmentId: Id<"assessments">;
 }) {
+  const router = useRouter();
   const [questionManagerOpen, setQuestionManagerOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const assessment = useQuery(api.assessments.getAssessmentById, {
     assessmentId,
   });
+  const deleteAssessment = useMutation(api.assessments.deleteAssessment);
 
   // Loading state
   if (assessment === undefined) {
@@ -135,14 +153,33 @@ function AssessmentDetailContent({
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={() => setQuestionManagerOpen(true)}
-            aria-label="Manage questions for this assessment"
-          >
-            <Settings className="h-4 w-4 mr-1.5" />
-            Manage Questions
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setEditDialogOpen(true)}
+              aria-label="Edit assessment"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setQuestionManagerOpen(true)}
+              aria-label="Manage questions for this assessment"
+            >
+              <Settings className="h-4 w-4 mr-1.5" />
+              Manage Questions
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+              onClick={() => setDeleteDialogOpen(true)}
+              aria-label="Delete assessment"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -194,6 +231,69 @@ function AssessmentDetailContent({
           questionText: q.questionText,
         }))}
       />
+
+      {/* Edit Assessment Dialog */}
+      <EditAssessmentDialog
+        key={`${assessment._id}-${assessment.totalMarks}-${assessment.passingMarks}`}
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        assessment={{
+          _id: assessment._id,
+          name: assessment.name,
+          totalMarks: assessment.totalMarks,
+          passingMarks: assessment.passingMarks,
+          assessmentDate: assessment.assessmentDate,
+          allocatedMarks: assessment.questions.reduce(
+            (sum, q) => sum + q.marksAllocated,
+            0,
+          ),
+        }}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Assessment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{assessment.name}</strong> along
+              with {assessment.questions.length} question
+              {assessment.questions.length !== 1 ? "s" : ""} and all associated
+              student answers. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={isDeleting}
+              onClick={async (e) => {
+                e.preventDefault();
+                setIsDeleting(true);
+                try {
+                  const result = await deleteAssessment({
+                    assessmentId: assessment._id,
+                  });
+                  toast.success(
+                    `Deleted assessment with ${result.deletedQuestions} question${result.deletedQuestions !== 1 ? "s" : ""} and ${result.deletedAnswers} student answer${result.deletedAnswers !== 1 ? "s" : ""}`,
+                  );
+                  router.push("/admin/assessments");
+                } catch (err: unknown) {
+                  const message =
+                    err instanceof Error
+                      ? err.message
+                      : "Failed to delete assessment";
+                  toast.error(message);
+                  setIsDeleting(false);
+                  setDeleteDialogOpen(false);
+                }
+              }}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
