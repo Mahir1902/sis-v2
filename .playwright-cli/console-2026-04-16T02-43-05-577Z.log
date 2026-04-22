@@ -1,0 +1,128 @@
+[     450ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[     531ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[     832ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[     836ms] [LOG] [Fast Refresh] done in 106ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   10682ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   10860ms] [LOG] [Fast Refresh] done in 278ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   12228ms] [ERROR] %o
+
+%s Error: [CONVEX Q(students:getAllStudents)] [Request ID: 1106b407b5556bbb] Server Error
+Uncaught Error: Unauthenticated
+    at requireRole (../../convex/lib/permissions.ts:19:21)
+    at async handler (../convex/students.ts:103:4)
+
+  Called by client
+    at requireRole (../../convex/lib/permissions.ts:19:21)
+    at async handler (../convex/students.ts:103:4)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:2697:19)
+    at BaseConvexClient.localQueryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:4546:44)
+    at Object.localQueryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6301:44)
+    at QueriesObserver.getLocalResults (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6678:31)
+    at useQueriesHelper.useMemo[subscription] (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6810:41)
+    at useSubscription.useEffect.checkForUpdates (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6050:43)
+    at basicStateReducer (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4797:47)
+    at updateReducerImpl (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4879:79)
+    at updateReducer (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4829:16)
+    at Object.useState (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15492:24)
+    at exports.useState (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_0rpq4pf._.js:1754:36)
+    at useSubscription (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6021:205)
+    at useQueriesHelper (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6824:201)
+    at useQueries (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6790:12)
+    at usePaginatedQueryInternal (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6996:206)
+    at usePaginatedQuery (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6937:22)
+    at StudentsPage (http://localhost:3000/_next/static/chunks/_00zso_s._.js:4858:237)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15037:24)
+    at renderWithHooks (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4620:24)
+    at updateFunctionComponent (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6081:21)
+    at beginWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6691:24)
+    at runWithFiberInDEV (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:965:74)
+    at performUnitOfWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9555:97)
+    at workLoopSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9449:40)
+    at renderRootSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9433:13)
+    at performWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9098:47)
+    at performWorkOnRootViaSchedulerTask (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10255:9)
+    at MessagePort.performWorkUntilDeadline (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_0rpq4pf._.js:2647:64) The above error occurred in the <StudentsPage> component. It was handled by the <ErrorBoundaryHandler> error boundary. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0fhqo1d._.js:1998
+[   12571ms] [ERROR] %o
+
+%s Error: [CONVEX Q(students:getAllStudents)] [Request ID: 0bd64714883b7b25] Server Error
+Uncaught Error: Unauthenticated
+    at requireRole (../../convex/lib/permissions.ts:19:21)
+    at async handler (../convex/students.ts:103:4)
+
+  Called by client
+    at requireRole (../../convex/lib/permissions.ts:19:21)
+    at async handler (../convex/students.ts:103:4)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:2697:19)
+    at BaseConvexClient.localQueryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:4546:44)
+    at Object.localQueryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6301:44)
+    at QueriesObserver.getLocalResults (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6678:31)
+    at useQueriesHelper.useMemo[subscription] (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6810:41)
+    at useSubscription.useEffect.checkForUpdates (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6050:43)
+    at basicStateReducer (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4797:47)
+    at updateReducerImpl (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4879:79)
+    at updateReducer (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4829:16)
+    at Object.useState (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15492:24)
+    at exports.useState (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_0rpq4pf._.js:1754:36)
+    at useSubscription (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6021:205)
+    at useQueriesHelper (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6824:201)
+    at useQueries (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6790:12)
+    at usePaginatedQueryInternal (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6996:206)
+    at usePaginatedQuery (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6937:22)
+    at StudentsPage (http://localhost:3000/_next/static/chunks/_00zso_s._.js:4858:237)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15037:24)
+    at renderWithHooks (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4620:24)
+    at updateFunctionComponent (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6081:21)
+    at beginWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6691:24)
+    at runWithFiberInDEV (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:965:74)
+    at performUnitOfWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9555:97)
+    at workLoopSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9449:40)
+    at renderRootSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9433:13)
+    at performWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9098:47)
+    at performWorkOnRootViaSchedulerTask (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10255:9)
+    at MessagePort.performWorkUntilDeadline (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_0rpq4pf._.js:2647:64) The above error occurred in the <StudentsPage> component. It was handled by the <ErrorBoundaryHandler> error boundary. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0fhqo1d._.js:1998
+[   12934ms] [ERROR] %o
+
+%s Error: [CONVEX Q(students:getAllStudents)] [Request ID: 5d3cd0a526aeedc6] Server Error
+Uncaught Error: Unauthenticated
+    at requireRole (../../convex/lib/permissions.ts:19:21)
+    at async handler (../convex/students.ts:103:4)
+
+  Called by client
+    at requireRole (../../convex/lib/permissions.ts:19:21)
+    at async handler (../convex/students.ts:103:4)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:2697:19)
+    at BaseConvexClient.localQueryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:4546:44)
+    at Object.localQueryResult (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6301:44)
+    at QueriesObserver.getLocalResults (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6678:31)
+    at useQueriesHelper.useMemo[subscription] (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6810:41)
+    at useSubscription.useEffect.checkForUpdates (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6050:43)
+    at basicStateReducer (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4797:47)
+    at updateReducerImpl (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4879:79)
+    at updateReducer (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4829:16)
+    at Object.useState (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15492:24)
+    at exports.useState (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_0rpq4pf._.js:1754:36)
+    at useSubscription (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6021:205)
+    at useQueriesHelper (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6824:201)
+    at useQueries (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6790:12)
+    at usePaginatedQueryInternal (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6996:206)
+    at usePaginatedQuery (http://localhost:3000/_next/static/chunks/node_modules_convex_dist_esm_06wz46z._.js:6937:22)
+    at StudentsPage (http://localhost:3000/_next/static/chunks/_00zso_s._.js:4858:237)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15037:24)
+    at renderWithHooks (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4620:24)
+    at updateFunctionComponent (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6081:21)
+    at beginWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6691:24)
+    at runWithFiberInDEV (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:965:74)
+    at performUnitOfWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9555:97)
+    at workLoopSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9449:40)
+    at renderRootSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9433:13)
+    at performWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9061:186)
+    at performWorkOnRootViaSchedulerTask (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10255:9)
+    at MessagePort.performWorkUntilDeadline (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_0rpq4pf._.js:2647:64) The above error occurred in the <StudentsPage> component. It was handled by the <ErrorBoundaryHandler> error boundary. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0fhqo1d._.js:1998
+[   95288ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   95372ms] [LOG] [Fast Refresh] done in 160ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
