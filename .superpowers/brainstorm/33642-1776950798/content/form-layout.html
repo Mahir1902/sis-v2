@@ -1,0 +1,40 @@
+<h2>Admission Form Layout</h2>
+<p class="subtitle">The current form is a 3-step modal dialog (max-height 60vh). With 30+ fields, it's cramped. Which approach feels right?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Full Page (Dedicated Route)</h3>
+      <p>A standalone page at <code>/students/admit</code> with a stepper/wizard layout. Full screen width, no scrolling constraints. Back button returns to student list. Best for complex, data-heavy forms.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Maximum space for fields</li><li>No scroll constraints</li><li>Can show progress sidebar</li><li>Feels like a proper workflow</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Navigates away from student list</li><li>Slightly more navigation overhead</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Side Panel (Slide-over Sheet)</h3>
+      <p>A wide sheet sliding in from the right (~60-70% width). Student list stays visible behind. Steps shown as vertical tabs on the left side of the panel.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Context preserved (list visible)</li><li>More space than modal</li><li>Modern SaaS feel</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Still constrained width on smaller screens</li><li>Can feel cluttered with many fields</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Improved Modal (Keep Current, Enhance)</h3>
+      <p>Keep the dialog but make it larger (max-width ~900px, taller), improve field grouping with collapsible sections, and add a visual stepper bar at the top.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Minimal code changes</li><li>Familiar pattern</li><li>Quick to implement</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Still fundamentally constrained</li><li>Many fields in limited space</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

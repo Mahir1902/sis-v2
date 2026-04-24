@@ -1,0 +1,196 @@
+<h2>Full Design Preview</h2>
+<p class="subtitle">Here's how both changes come together. Review each section below.</p>
+
+<!-- PART 1: Admission Form Redesign -->
+<div class="section">
+  <h3>1. Redesigned Admission Form — Step 1 (Student Info)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Enhanced Modal (~900px wide)</div>
+    <div class="mockup-body" style="padding: 0; font-size: 13px; max-width: 900px; background: white;">
+      <!-- Modal Header -->
+      <div style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0;">
+        <div style="font-size: 16px; font-weight: 700; color: #0f172a;">Student Admission</div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Fill in the required information to admit a new student</div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div style="padding: 12px 20px 8px;">
+        <div style="position: relative; margin-bottom: 8px;">
+          <div style="height: 3px; background: #e2e8f0; border-radius: 2px; width: 100%;"></div>
+          <div style="height: 3px; background: #018737; border-radius: 2px; width: 33%; position: absolute; top: 0; left: 0; transition: width 0.3s;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px;">
+          <span style="color: #018737; font-weight: 600;">1. Student Info</span>
+          <span style="color: #94a3b8;">2. Family Info</span>
+          <span style="color: #94a3b8;">3. Fees</span>
+        </div>
+      </div>
+
+      <!-- Scrollable Content -->
+      <div style="padding: 12px 20px 16px; max-height: 55vh; overflow-y: auto;">
+        <!-- Photo + Identity Card -->
+        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 600; font-size: 12px; color: #334155; margin-bottom: 10px;">Identity</div>
+          <div style="display: flex; gap: 16px;">
+            <!-- Photo -->
+            <div style="flex-shrink: 0;">
+              <div style="width: 80px; height: 80px; border-radius: 10px; background: #f1f5f9; border: 2px dashed #cbd5e1; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 10px; text-align: center; cursor: pointer;">
+                📷<br>Upload<br>Photo
+              </div>
+            </div>
+            <!-- Fields -->
+            <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div>
+                <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Student Number *</div>
+                <div class="mock-input" style="font-size: 11px; padding: 6px 8px;">STU-2025-001</div>
+              </div>
+              <div>
+                <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Full Name *</div>
+                <div class="mock-input" style="font-size: 11px; padding: 6px 8px;"></div>
+              </div>
+              <div>
+                <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Gender *</div>
+                <div class="mock-input" style="font-size: 11px; padding: 6px 8px;">Select...</div>
+              </div>
+              <div>
+                <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Date of Birth *</div>
+                <div class="mock-input" style="font-size: 11px; padding: 6px 8px;">dd/mm/yyyy</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Personal Details Card -->
+        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 600; font-size: 12px; color: #334155; margin-bottom: 10px;">Personal Details</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Place of Birth *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;"></div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Citizenship *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;"></div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Religion *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;"></div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Blood Group *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;">Select...</div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Birth Certificate No. *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;"></div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Passport No.</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Academic Placement Card -->
+        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 600; font-size: 12px; color: #334155; margin-bottom: 10px;">Academic Placement</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Standard Level *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;">Select...</div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Academic Year *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;">Select...</div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Campus *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px;">Select...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Address Card -->
+        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 600; font-size: 12px; color: #334155; margin-bottom: 10px;">Address</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Present Address *</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px; min-height: 36px;"></div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Permanent Address</div>
+              <div class="mock-input" style="font-size: 11px; padding: 6px 8px; min-height: 36px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Health Card -->
+        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;">
+          <div style="font-weight: 600; font-size: 12px; color: #334155; margin-bottom: 10px;">Health</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div style="width: 16px; height: 16px; border: 2px solid #cbd5e1; border-radius: 3px;"></div>
+            <span style="font-size: 12px; color: #475569;">Student has health issues</span>
+          </div>
+          <div style="display: none;">
+            <div style="font-size: 10px; color: #64748b; margin-bottom: 3px;">Health Issue Description *</div>
+            <div class="mock-input" style="font-size: 11px; padding: 6px 8px; min-height: 48px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="padding: 12px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
+        <div style="padding: 8px 20px; background: #018737; color: white; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+          Next →
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PART 2: Health Card Fix -->
+<div class="section">
+  <h3>2. Health Card Fix (Student Detail Sidebar)</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header" style="color: #dc2626;">Before (Truncated)</div>
+      <div class="mockup-body" style="padding: 12px; font-size: 12px;">
+        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; color: #64748b;">Health</span>
+            <span style="font-size: 9px; color: #dc2626; font-weight: 500;">Has issues</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 11px; color: #64748b;">Has Issues</span>
+            <span style="font-size: 11px; font-weight: 500;">Yes</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="font-size: 11px; color: #64748b;">Description</span>
+            <span style="font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">Student has severe peanut allergy and as...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header" style="color: #018737;">After (Fixed)</div>
+      <div class="mockup-body" style="padding: 12px; font-size: 12px;">
+        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; color: #64748b;">Health</span>
+            <span style="font-size: 9px; color: #dc2626; font-weight: 500;">Has issues</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 11px; color: #64748b;">Has Issues</span>
+            <span style="font-size: 11px; font-weight: 500;">Yes</span>
+          </div>
+          <div>
+            <span style="font-size: 11px; color: #64748b; display: block; margin-bottom: 2px;">Description</span>
+            <span style="font-size: 11px; font-weight: 500; color: #334155; line-height: 1.4;">Student has severe peanut allergy and asthma. Requires EpiPen on-site. Emergency contact for health issues is Dr. Rahman (01712-345678).</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="margin-top: 8px; font-size: 13px; color: #64748b;"><strong>Fix:</strong> Remove <code>truncate</code> class from the health description's InfoRow. Switch from side-by-side layout to stacked (label on top, text below) so the description can wrap freely.</p>
+</div>

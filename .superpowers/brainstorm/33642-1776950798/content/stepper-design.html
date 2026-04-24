@@ -1,0 +1,79 @@
+<h2>Step Indicator Design</h2>
+<p class="subtitle">How should the progress stepper look at the top of the modal?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Numbered Circle Stepper</h3>
+      <p>Classic horizontal stepper with numbered circles connected by lines. Active step is highlighted in school-green, completed steps show a checkmark.</p>
+      <div class="mockup">
+        <div class="mockup-body" style="padding: 20px; display: flex; align-items: center; justify-content: center; gap: 0;">
+          <div style="display: flex; align-items: center; gap: 0;">
+            <!-- Step 1 - completed -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: #018737; color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600;">✓</div>
+              <span style="font-size: 11px; color: #018737; font-weight: 500;">Student Info</span>
+            </div>
+            <div style="width: 60px; height: 2px; background: #018737; margin: 0 4px; margin-bottom: 20px;"></div>
+            <!-- Step 2 - active -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: #018737; color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600;">2</div>
+              <span style="font-size: 11px; color: #018737; font-weight: 600;">Family Info</span>
+            </div>
+            <div style="width: 60px; height: 2px; background: #e2e8f0; margin: 0 4px; margin-bottom: 20px;"></div>
+            <!-- Step 3 - pending -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: white; border: 2px solid #e2e8f0; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600;">3</div>
+              <span style="font-size: 11px; color: #94a3b8;">Fees</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Pill / Segmented Tabs</h3>
+      <p>Horizontal pill-style tabs. Active step fills with school-green, completed steps have a subtle green tint, upcoming steps are gray. Compact and modern.</p>
+      <div class="mockup">
+        <div class="mockup-body" style="padding: 20px; display: flex; justify-content: center;">
+          <div style="display: flex; background: #f1f5f9; border-radius: 8px; padding: 3px; gap: 2px; width: 100%; max-width: 500px;">
+            <div style="flex: 1; padding: 8px 12px; background: #018737; color: white; border-radius: 6px; text-align: center; font-size: 12px; font-weight: 600;">
+              ✓ Student Info
+            </div>
+            <div style="flex: 1; padding: 8px 12px; background: white; color: #334155; border-radius: 6px; text-align: center; font-size: 12px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+              2. Family Info
+            </div>
+            <div style="flex: 1; padding: 8px 12px; color: #94a3b8; border-radius: 6px; text-align: center; font-size: 12px;">
+              3. Fees
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Progress Bar with Labels</h3>
+      <p>A thin progress bar across the top with step labels underneath. Minimal and clean. Progress fills proportionally as you advance.</p>
+      <div class="mockup">
+        <div class="mockup-body" style="padding: 20px;">
+          <div style="position: relative; margin-bottom: 12px;">
+            <div style="height: 4px; background: #e2e8f0; border-radius: 2px; width: 100%;"></div>
+            <div style="height: 4px; background: #018737; border-radius: 2px; width: 50%; position: absolute; top: 0; left: 0;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span style="color: #018737; font-weight: 500;">✓ Student Info</span>
+            <span style="color: #334155; font-weight: 600;">Family Info</span>
+            <span style="color: #94a3b8;">Fees</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,227 @@
+<h2>3 Design Directions</h2>
+<p class="subtitle">Each takes a different approach to making the student page feel more polished. Click the one that resonates.</p>
+
+<!-- OPTION A -->
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)" style="width: 100%;">
+    <div class="card-image" style="padding: 0; overflow: hidden;">
+      <div style="background: #f9fafb; padding: 0;">
+        <!-- Profile Hero -->
+        <div style="background: linear-gradient(135deg, #018737 0%, #015f28 100%); padding: 28px 24px 20px; color: white; border-radius: 8px 8px 0 0;">
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <div style="width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 3px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700;">MH</div>
+            <div style="flex: 1;">
+              <div style="font-size: 22px; font-weight: 700;">Mahir Haque</div>
+              <div style="opacity: 0.85; font-size: 13px; margin-top: 2px;">STU-2024-0001 &middot; Grade 5 &middot; Section A</div>
+            </div>
+            <span style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;">Active</span>
+          </div>
+          <!-- Quick Stats Row -->
+          <div style="display: flex; gap: 24px; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.15);">
+            <div><div style="font-size: 20px; font-weight: 700;">82%</div><div style="font-size: 11px; opacity: 0.7;">Avg Grade</div></div>
+            <div><div style="font-size: 20px; font-weight: 700;">15,000</div><div style="font-size: 11px; opacity: 0.7;">Fees Due</div></div>
+            <div><div style="font-size: 20px; font-weight: 700;">96%</div><div style="font-size: 11px; opacity: 0.7;">Attendance</div></div>
+          </div>
+        </div>
+        <!-- Quick Contact Bar -->
+        <div style="background: white; padding: 12px 24px; border-bottom: 1px solid #e5e7eb; display: flex; gap: 20px; align-items: center; font-size: 13px;">
+          <span style="color: #6b7280; font-size: 11px; text-transform: uppercase; font-weight: 600;">Quick Contact</span>
+          <span style="color: #018737; cursor: pointer;">&#128222; Father: +880 171-234-5678</span>
+          <span style="color: #018737; cursor: pointer;">&#128222; Mother: +880 189-876-5432</span>
+          <span style="color: #018737; cursor: pointer;">&#128222; Guardian: +880 191-111-2222</span>
+        </div>
+        <!-- Tabs -->
+        <div style="background: white; display: flex; border-bottom: 1px solid #e5e7eb; padding: 0 24px;">
+          <div style="padding: 12px 16px; font-size: 13px; color: #018737; border-bottom: 2px solid #018737; font-weight: 500;">Overview</div>
+          <div style="padding: 12px 16px; font-size: 13px; color: #6b7280;">Fees</div>
+          <div style="padding: 12px 16px; font-size: 13px; color: #6b7280;">Academics</div>
+          <div style="padding: 12px 16px; font-size: 13px; color: #6b7280;">Report Cards</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A &mdash; Profile Hero with Stats Banner</h3>
+      <p>Green gradient header with student photo, key metrics at a glance, and a <strong>quick-contact bar</strong> always visible. Tabs below for detail sections. Feels like a modern CRM profile.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 24px;"></div>
+
+<!-- OPTION B -->
+<div class="cards">
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="width: 100%;">
+    <div class="card-image" style="padding: 0; overflow: hidden;">
+      <div style="display: flex; background: #f9fafb; min-height: 320px; border-radius: 8px 8px 0 0; overflow: hidden;">
+        <!-- Left Sidebar -->
+        <div style="width: 260px; background: white; border-right: 1px solid #e5e7eb; padding: 24px; flex-shrink: 0;">
+          <!-- Avatar & Name -->
+          <div style="text-align: center; margin-bottom: 20px;">
+            <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #018737, #02a847); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 28px; font-weight: 700;">MH</div>
+            <div style="font-size: 17px; font-weight: 600;">Mahir Haque</div>
+            <div style="color: #6b7280; font-size: 12px; margin-top: 2px;">STU-2024-0001</div>
+            <span style="display: inline-block; margin-top: 8px; background: rgba(74,222,128,0.3); color: #15803d; padding: 2px 12px; border-radius: 12px; font-size: 11px; font-weight: 500;">Active</span>
+          </div>
+          <!-- Quick Info -->
+          <div style="font-size: 12px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #f3f4f6; padding-top: 16px;">
+            <div><div style="color: #9ca3af; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Level</div><div style="font-weight: 500;">Grade 5 &middot; Sec A</div></div>
+            <div><div style="color: #9ca3af; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Campus</div><div style="font-weight: 500;">Main Campus</div></div>
+            <div style="border-top: 1px solid #f3f4f6; padding-top: 10px;">
+              <div style="color: #9ca3af; font-size: 10px; text-transform: uppercase; margin-bottom: 6px;">Family Contacts</div>
+              <div style="font-weight: 500;">Abdul Haque <span style="color: #018737; font-size: 11px;">(Father)</span></div>
+              <div style="color: #6b7280;">+880 171-234-5678</div>
+              <div style="font-weight: 500; margin-top: 6px;">Fatima Haque <span style="color: #018737; font-size: 11px;">(Mother)</span></div>
+              <div style="color: #6b7280;">+880 189-876-5432</div>
+            </div>
+          </div>
+        </div>
+        <!-- Right Content -->
+        <div style="flex: 1; padding: 20px;">
+          <!-- Mini Metric Cards -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px;">
+              <div style="font-size: 10px; text-transform: uppercase; color: #9ca3af; font-weight: 600;">Avg Grade</div>
+              <div style="font-size: 22px; font-weight: 700; color: #111;">82%</div>
+              <div style="font-size: 11px; color: #16a34a;">&#9650; 3% from last sem</div>
+            </div>
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px;">
+              <div style="font-size: 10px; text-transform: uppercase; color: #9ca3af; font-weight: 600;">Fees Due</div>
+              <div style="font-size: 22px; font-weight: 700; color: #dc2626;">&#2547;15,000</div>
+              <div style="font-size: 11px; color: #dc2626;">2 unpaid</div>
+            </div>
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px;">
+              <div style="font-size: 10px; text-transform: uppercase; color: #9ca3af; font-weight: 600;">Report Cards</div>
+              <div style="font-size: 22px; font-weight: 700; color: #111;">3</div>
+              <div style="font-size: 11px; color: #6b7280;">uploaded</div>
+            </div>
+          </div>
+          <!-- Tab Content Area -->
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+            <div style="display: flex; border-bottom: 1px solid #e5e7eb;">
+              <div style="padding: 10px 16px; font-size: 12px; color: #018737; border-bottom: 2px solid #018737; font-weight: 500;">Personal</div>
+              <div style="padding: 10px 16px; font-size: 12px; color: #6b7280;">Fees</div>
+              <div style="padding: 10px 16px; font-size: 12px; color: #6b7280;">Grades</div>
+              <div style="padding: 10px 16px; font-size: 12px; color: #6b7280;">Documents</div>
+            </div>
+            <div style="padding: 16px; font-size: 13px; color: #6b7280; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between;"><span>Gender</span><span style="color: #111;">Male</span></div>
+              <div style="display: flex; justify-content: space-between;"><span>Date of Birth</span><span style="color: #111;">15 Mar 2010</span></div>
+              <div style="display: flex; justify-content: space-between;"><span>Citizenship</span><span style="color: #111;">Bangladeshi</span></div>
+              <div style="display: flex; justify-content: space-between;"><span>Religion</span><span style="color: #111;">Islam</span></div>
+              <div style="display: flex; justify-content: space-between;"><span>Blood Group</span><span style="color: #111;">O+</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B &mdash; Sidebar + Content Split</h3>
+      <p>Persistent left sidebar with student identity &amp; contacts always visible. Right side has metric cards + tabbed detail content. Contact info <strong>never scrolls away</strong>. Feels like a professional admin panel.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 24px;"></div>
+
+<!-- OPTION C -->
+<div class="cards">
+  <div class="card" data-choice="c" onclick="toggleSelect(this)" style="width: 100%;">
+    <div class="card-image" style="padding: 0; overflow: hidden;">
+      <div style="background: #f9fafb; border-radius: 8px 8px 0 0;">
+        <!-- Clean Header -->
+        <div style="background: white; padding: 24px; border-bottom: 1px solid #e5e7eb;">
+          <div style="display: flex; align-items: flex-start; gap: 20px;">
+            <div style="width: 64px; height: 64px; border-radius: 12px; background: linear-gradient(135deg, #018737, #02a847); display: flex; align-items: center; justify-content: center; color: white; font-size: 22px; font-weight: 700;">MH</div>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 20px; font-weight: 700;">Mahir Haque</span>
+                <span style="background: rgba(74,222,128,0.3); color: #15803d; padding: 2px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">Active</span>
+              </div>
+              <div style="color: #6b7280; font-size: 13px; margin-top: 4px;">STU-2024-0001 &middot; Grade 5 &middot; Section A &middot; Main Campus</div>
+              <!-- Contact chips -->
+              <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+                <span style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">&#128222; Abdul Haque (Father)</span>
+                <span style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">&#128222; Fatima Haque (Mother)</span>
+              </div>
+            </div>
+            <!-- Action buttons -->
+            <div style="display: flex; gap: 8px;">
+              <button style="padding: 6px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; background: white; cursor: pointer; color: #374151;">Edit</button>
+              <button style="padding: 6px 14px; border: none; border-radius: 6px; font-size: 12px; background: #018737; color: white; cursor: pointer;">Collect Fee</button>
+            </div>
+          </div>
+        </div>
+        <!-- Bento Grid -->
+        <div style="padding: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 14px;">
+          <!-- Metric 1 -->
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 11px; text-transform: uppercase; color: #9ca3af; font-weight: 600;">Average Grade</div>
+                <div style="font-size: 28px; font-weight: 700; margin-top: 4px;">82%</div>
+              </div>
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: #f0fdf4; display: flex; align-items: center; justify-content: center; font-size: 18px;">&#127891;</div>
+            </div>
+            <div style="font-size: 11px; color: #16a34a; margin-top: 6px;">&#9650; 3% improvement</div>
+          </div>
+          <!-- Metric 2 -->
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 11px; text-transform: uppercase; color: #9ca3af; font-weight: 600;">Outstanding Fees</div>
+                <div style="font-size: 28px; font-weight: 700; margin-top: 4px; color: #dc2626;">&#2547;15K</div>
+              </div>
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: #fef2f2; display: flex; align-items: center; justify-content: center; font-size: 18px;">&#128176;</div>
+            </div>
+            <div style="font-size: 11px; color: #dc2626; margin-top: 6px;">2 fees unpaid</div>
+          </div>
+          <!-- Metric 3 -->
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 11px; text-transform: uppercase; color: #9ca3af; font-weight: 600;">Enrollment</div>
+                <div style="font-size: 28px; font-weight: 700; margin-top: 4px;">2nd</div>
+              </div>
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: #eff6ff; display: flex; align-items: center; justify-content: center; font-size: 18px;">&#128218;</div>
+            </div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">Year at this school</div>
+          </div>
+          <!-- Personal Details Card - spans 2 cols -->
+          <div style="grid-column: span 2; background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px;">
+            <div style="font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 12px;">Personal Details</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+              <div><span style="color: #9ca3af;">Gender</span> <span style="margin-left: 8px;">Male</span></div>
+              <div><span style="color: #9ca3af;">DOB</span> <span style="margin-left: 8px;">15 Mar 2010</span></div>
+              <div><span style="color: #9ca3af;">Citizenship</span> <span style="margin-left: 8px;">Bangladeshi</span></div>
+              <div><span style="color: #9ca3af;">Religion</span> <span style="margin-left: 8px;">Islam</span></div>
+              <div><span style="color: #9ca3af;">Blood Group</span> <span style="margin-left: 8px;">O+</span></div>
+              <div><span style="color: #9ca3af;">Admission</span> <span style="margin-left: 8px;">01 Jan 2024</span></div>
+            </div>
+          </div>
+          <!-- Family Card -->
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px;">
+            <div style="font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 12px;">Family</div>
+            <div style="font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+              <div><div style="font-weight: 500;">Abdul Haque</div><div style="color: #9ca3af; font-size: 11px;">Father &middot; Business</div></div>
+              <div><div style="font-weight: 500;">Fatima Haque</div><div style="color: #9ca3af; font-size: 11px;">Mother &middot; Teacher</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C &mdash; Bento Grid Dashboard</h3>
+      <p>Clean header with contact chips, followed by a <strong>bento-style grid</strong> mixing metrics, personal details, and family info on one scrollable page. Less tab-heavy, more visual. Feels like a modern dashboard.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 16px; padding: 16px; background: #f9fafb; border-radius: 8px; font-size: 13px; color: #6b7280;">
+  <strong>Key improvements all 3 share over your current design:</strong>
+  <ul style="margin-top: 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 4px;">
+    <li>Family contact info promoted to header level (always visible)</li>
+    <li>Key metrics (grades, fees) shown as visual summary cards</li>
+    <li>Stronger visual hierarchy with better typography and spacing</li>
+    <li>Rounded avatar with gradient instead of flat circle</li>
+  </ul>
+</div>

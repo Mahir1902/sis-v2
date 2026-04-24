@@ -1,0 +1,269 @@
+<h2>Final Design &mdash; C1 Two-Column Bento</h2>
+<p class="subtitle">Complete layout with color-coded chips, collapsible sections, and all schema fields</p>
+
+<div class="mockup">
+  <div class="mockup-header">Final: /students/[studentId]</div>
+  <div class="mockup-body" style="padding: 0;">
+
+    <!-- ═══ HEADER ═══ -->
+    <div style="background: white; padding: 18px 20px; border-bottom: 1px solid #e5e7eb;">
+      <div style="display: flex; align-items: flex-start; gap: 14px;">
+        <div style="position: relative; flex-shrink: 0;">
+          <div style="width: 50px; height: 50px; border-radius: 12px; background: linear-gradient(135deg, #018737, #02a847); display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; font-weight: 700; box-shadow: 0 2px 8px rgba(1,135,55,0.25);">MH</div>
+          <div style="position: absolute; bottom: -1px; right: -1px; width: 12px; height: 12px; border-radius: 50%; background: #22c55e; border: 2px solid white;"></div>
+        </div>
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px; font-weight: 700; color: #0f172a;">Mahir Haque</span>
+            <span style="background: #dcfce7; color: #15803d; padding: 2px 10px; border-radius: 6px; font-size: 10px; font-weight: 600;">Active</span>
+          </div>
+          <!-- Color-coded chips -->
+          <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+            <span style="background: #f1f5f9; color: #475569; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">STU-2024-0001</span>
+            <span style="background: #f0fdf4; color: #15803d; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">Grade 5 &middot; Sec A</span>
+            <span style="background: #eff6ff; color: #1d4ed8; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">Main Campus</span>
+            <span style="background: #faf5ff; color: #7c3aed; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">2024-2025</span>
+          </div>
+        </div>
+        <!-- Quick contact + actions -->
+        <div style="display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end;">
+          <span style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 5px 10px; border-radius: 7px; font-size: 10px; cursor: pointer; font-weight: 500;">&#128222; Father</span>
+          <span style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 5px 10px; border-radius: 7px; font-size: 10px; cursor: pointer; font-weight: 500;">&#128222; Mother</span>
+          <span style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 5px 10px; border-radius: 7px; font-size: 10px; cursor: pointer; font-weight: 500;">&#128222; Guardian</span>
+          <div style="width: 1px; background: #e5e7eb; margin: 0 2px;"></div>
+          <button style="padding: 5px 12px; border: 1px solid #e5e7eb; border-radius: 7px; font-size: 10px; background: white; cursor: pointer; color: #374151; font-weight: 500;">Edit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TWO COLUMN BODY ═══ -->
+    <div style="display: grid; grid-template-columns: 310px 1fr; min-height: 640px; background: #f8fafc;">
+
+      <!-- ─── LEFT COLUMN ─── -->
+      <div style="border-right: 1px solid #e5e7eb; padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; background: #fafbfc;">
+
+        <!-- Metrics -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Avg Grade</div>
+            <div style="font-size: 20px; font-weight: 700; margin-top: 2px;">82%</div>
+            <div style="font-size: 9px; color: #16a34a; margin-top: 1px;">&#9650; 3%</div>
+          </div>
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Fees Due</div>
+            <div style="font-size: 20px; font-weight: 700; margin-top: 2px; color: #dc2626;">&#2547;15K</div>
+            <div style="font-size: 9px; color: #dc2626; margin-top: 1px;">2 unpaid</div>
+          </div>
+        </div>
+
+        <!-- Personal Info (expanded) -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; cursor: pointer;">
+            <span style="font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Personal Info</span>
+            <span style="color: #94a3b8; font-size: 10px;">&#9660;</span>
+          </div>
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; font-size: 11px;">
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Gender</span><span style="font-weight: 500;">Male</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Date of Birth</span><span style="font-weight: 500;">15 Mar 2010</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Birthplace</span><span style="font-weight: 500;">Dhaka</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Citizenship</span><span style="font-weight: 500;">Bangladeshi</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Religion</span><span style="font-weight: 500;">Islam</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Blood Group</span><span style="font-weight: 500;">O+</span></div>
+          </div>
+        </div>
+
+        <!-- Enrollment (expanded) -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; cursor: pointer;">
+            <span style="font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Enrollment</span>
+            <span style="color: #94a3b8; font-size: 10px;">&#9660;</span>
+          </div>
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; font-size: 11px;">
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Level</span><span style="font-weight: 500;">Grade 5</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Section / Roll</span><span style="font-weight: 500;">A / #12</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Campus</span><span style="font-weight: 500;">Main Campus</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Type</span><span style="font-weight: 500;">New Admission</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Admitted</span><span style="font-weight: 500;">01 Jan 2024</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Class Start</span><span style="font-weight: 500;">15 Jan 2024</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Consultant</span><span style="font-weight: 500;">Mr. Rahman</span></div>
+          </div>
+        </div>
+
+        <!-- Family & Contacts (expanded) -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; cursor: pointer;">
+            <span style="font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Family &amp; Contacts</span>
+            <span style="color: #94a3b8; font-size: 10px;">&#9660;</span>
+          </div>
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 11px;">
+            <div style="padding: 10px; background: #f8fafc; border-radius: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <div style="width: 28px; height: 28px; border-radius: 6px; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;">AH</div>
+                <div><div style="font-weight: 600;">Abdul Haque</div><div style="color: #018737; font-size: 10px;">Father</div></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 3px; padding-left: 36px;">
+                <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Occupation</span><span style="font-weight: 500;">Business</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Phone</span><span style="font-weight: 500; color: #018737;">+880 171-234-5678</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">NID</span><span style="font-weight: 500;">*****1234</span></div>
+              </div>
+            </div>
+            <div style="padding: 10px; background: #f8fafc; border-radius: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <div style="width: 28px; height: 28px; border-radius: 6px; background: #fce7f3; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;">FH</div>
+                <div><div style="font-weight: 600;">Fatima Haque</div><div style="color: #018737; font-size: 10px;">Mother</div></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 3px; padding-left: 36px;">
+                <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Occupation</span><span style="font-weight: 500;">Teacher</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Phone</span><span style="font-weight: 500; color: #018737;">+880 189-876-5432</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">NID</span><span style="font-weight: 500;">*****5678</span></div>
+              </div>
+            </div>
+            <div style="padding: 10px; background: #f8fafc; border-radius: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <div style="width: 28px; height: 28px; border-radius: 6px; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;">KH</div>
+                <div><div style="font-weight: 600;">Karim Haque</div><div style="color: #018737; font-size: 10px;">Guardian &middot; Uncle</div></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 3px; padding-left: 36px;">
+                <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">Phone</span><span style="font-weight: 500; color: #018737;">+880 191-111-2222</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color: #94a3b8;">NID</span><span style="font-weight: 500;">*****9012</span></div>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid #f1f5f9; padding-top: 8px;">
+              <span style="color: #94a3b8;">Annual Income</span><span style="font-weight: 500;">&#2547;5,00,000</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Addresses (expanded) -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; cursor: pointer;">
+            <span style="font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Addresses</span>
+            <span style="color: #94a3b8; font-size: 10px;">&#9660;</span>
+          </div>
+          <div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
+            <div><div style="color: #94a3b8; font-size: 10px; margin-bottom: 2px;">Present</div><div style="font-weight: 500;">123 Main St, Dhanmondi, Dhaka-1205</div></div>
+            <div style="border-top: 1px solid #f1f5f9; padding-top: 8px;"><div style="color: #94a3b8; font-size: 10px; margin-bottom: 2px;">Permanent</div><div style="font-weight: 500;">45 Village Road, Sylhet-3100</div></div>
+          </div>
+        </div>
+
+        <!-- Documents (collapsed) -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+            <span style="font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Documents</span>
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="color: #94a3b8; font-size: 9px;">3 docs</span><span style="color: #94a3b8; font-size: 10px;">&#9654;</span></span>
+          </div>
+        </div>
+
+        <!-- Health (collapsed) -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+            <span style="font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Health</span>
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="color: #16a34a; font-size: 9px; font-weight: 500;">No issues</span><span style="color: #94a3b8; font-size: 10px;">&#9654;</span></span>
+          </div>
+        </div>
+
+        <!-- Previous School (collapsed) -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+            <span style="font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Previous School</span>
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="color: #94a3b8; font-size: 9px;">ABC Primary</span><span style="color: #94a3b8; font-size: 10px;">&#9654;</span></span>
+          </div>
+        </div>
+
+        <!-- Siblings (collapsed) -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+            <span style="font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Siblings</span>
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="color: #94a3b8; font-size: 9px;">1 linked</span><span style="color: #94a3b8; font-size: 10px;">&#9654;</span></span>
+          </div>
+        </div>
+
+        <div style="font-size: 9px; color: #cbd5e1; text-align: center; padding: 2px;">Created 01 Jan 2024</div>
+      </div>
+
+      <!-- ─── RIGHT COLUMN ─── -->
+      <div style="display: flex; flex-direction: column;">
+        <div style="display: flex; border-bottom: 1px solid #e5e7eb; background: white; padding: 0 16px;">
+          <div style="padding: 12px 16px; font-size: 12px; color: #018737; border-bottom: 2px solid #018737; font-weight: 600;">Fees <span style="background: #fef2f2; color: #dc2626; padding: 0 6px; border-radius: 10px; font-size: 9px; margin-left: 4px;">2</span></div>
+          <div style="padding: 12px 16px; font-size: 12px; color: #94a3b8; font-weight: 500;">Grades</div>
+          <div style="padding: 12px 16px; font-size: 12px; color: #94a3b8; font-weight: 500;">Academic History</div>
+          <div style="padding: 12px 16px; font-size: 12px; color: #94a3b8; font-weight: 500;">Report Cards <span style="color: #94a3b8; font-size: 9px; margin-left: 2px;">3</span></div>
+        </div>
+        <div style="padding: 16px; flex: 1; overflow-y: auto;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px;">
+              <div style="font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Total Fees</div>
+              <div style="font-size: 18px; font-weight: 700; margin-top: 2px;">&#2547;45,000</div>
+            </div>
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px;">
+              <div style="font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Total Paid</div>
+              <div style="font-size: 18px; font-weight: 700; margin-top: 2px; color: #16a34a;">&#2547;30,000</div>
+            </div>
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px;">
+              <div style="font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Outstanding</div>
+              <div style="font-size: 18px; font-weight: 700; margin-top: 2px; color: #dc2626;">&#2547;15,000</div>
+            </div>
+          </div>
+          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 80px; font-size: 10px;">
+              <div style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; text-transform: uppercase;">Fee Type</div>
+              <div style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; text-align: right; text-transform: uppercase;">Amount</div>
+              <div style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; text-align: right; text-transform: uppercase;">Paid</div>
+              <div style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; text-align: right; text-transform: uppercase;">Balance</div>
+              <div style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; text-align: center; text-transform: uppercase;">Status</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc;">Tuition</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc; text-align: right;">&#2547;30,000</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc; text-align: right; color: #16a34a;">&#2547;30,000</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc; text-align: right;">&#2547;0</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc; text-align: center;"><span style="background: #dcfce7; color: #15803d; padding: 1px 8px; border-radius: 4px; font-size: 9px;">Paid</span></div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc;">Admission</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc; text-align: right;">&#2547;10,000</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc; text-align: right; color: #16a34a;">&#2547;5,000</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc; text-align: right; color: #dc2626;">&#2547;5,000</div>
+              <div style="padding: 10px 14px; font-size: 11px; border-bottom: 1px solid #f8fafc; text-align: center;"><span style="background: #fef9c3; color: #a16207; padding: 1px 8px; border-radius: 4px; font-size: 9px;">Partial</span></div>
+              <div style="padding: 10px 14px; font-size: 11px;">Lab Fee</div>
+              <div style="padding: 10px 14px; font-size: 11px; text-align: right;">&#2547;5,000</div>
+              <div style="padding: 10px 14px; font-size: 11px; text-align: right; color: #94a3b8;">&#2547;0</div>
+              <div style="padding: 10px 14px; font-size: 11px; text-align: right; color: #dc2626;">&#2547;5,000</div>
+              <div style="padding: 10px 14px; font-size: 11px; text-align: center;"><span style="background: #fef2f2; color: #dc2626; padding: 1px 8px; border-radius: 4px; font-size: 9px;">Unpaid</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 24px;"></div>
+
+<h3>Design Decisions Summary</h3>
+<div style="padding: 16px 20px; background: #f1f5f9; border-radius: 10px; font-size: 12px; color: #475569; display: flex; flex-direction: column; gap: 6px;">
+  <div><strong>Layout:</strong> Two-column bento &mdash; info stack left, tabbed content right</div>
+  <div><strong>Header:</strong> Avatar + name + status badge + color-coded chips (ID, class, campus, year)</div>
+  <div><strong>Quick contacts:</strong> Father/Mother/Guardian phone chips in header row</div>
+  <div><strong>Left column:</strong> Metrics &rarr; Personal &rarr; Enrollment &rarr; Family &rarr; Addresses (expanded) + Documents, Health, Previous School, Siblings (collapsed)</div>
+  <div><strong>Right tabs:</strong> Fees (with badge count), Grades, Academic History, Report Cards</div>
+  <div><strong>Mobile:</strong> Stacks to single column &mdash; header, metrics, tabs, then collapsible info sections below</div>
+  <div><strong>All 30+ schema fields</strong> accounted for across sections</div>
+</div>
+
+<div style="margin-top: 16px;"></div>
+
+<h3>Anything else to tweak?</h3>
+<div class="options">
+  <div class="option" data-choice="finalize" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Looks great &mdash; finalize this design</h3>
+      <p>I'm happy with the layout, hierarchy, and visual style. Write the spec and let's build it.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="more-tweaks" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>A few more tweaks</h3>
+      <p>Almost there but I want to adjust some details. I'll explain in the terminal.</p>
+    </div>
+  </div>
+</div>

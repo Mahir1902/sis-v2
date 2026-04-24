@@ -25,9 +25,10 @@ export function AddStudentButton() {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl border-t-4 border-school-green">
+        <DialogContent className="sm:max-w-[900px] border-t-4 border-school-green">
           <DialogHeader>
-            <DialogTitle className="text-xl">Student Admission Form</DialogTitle>
+            <DialogTitle className="text-xl">Student Admission</DialogTitle>
+            <p className="text-sm text-muted-foreground">Fill in the required information to admit a new student</p>
           </DialogHeader>
           <AddStudentForm onSuccess={() => setOpen(false)} />
         </DialogContent>

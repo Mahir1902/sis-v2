@@ -1,0 +1,114 @@
+<h2>Progress Bar Options</h2>
+<p class="subtitle">More stepper variations — all minimal, all showing Step 2 of 3 as active state.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Thin Bar + Labels (Original Pick)</h3>
+      <p>Simple progress bar with step labels underneath.</p>
+      <div class="mockup">
+        <div class="mockup-body" style="padding: 16px 20px; background: white;">
+          <div style="position: relative; margin-bottom: 8px;">
+            <div style="height: 3px; background: #e2e8f0; border-radius: 2px;"></div>
+            <div style="height: 3px; background: #018737; border-radius: 2px; width: 50%; position: absolute; top: 0; left: 0;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px;">
+            <span style="color: #018737; font-weight: 500;">✓ Student Info</span>
+            <span style="color: #334155; font-weight: 600;">Family Info</span>
+            <span style="color: #94a3b8;">Fees</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Segmented Bar</h3>
+      <p>Three distinct segments instead of one continuous bar. Each step has its own segment that fills when completed.</p>
+      <div class="mockup">
+        <div class="mockup-body" style="padding: 16px 20px; background: white;">
+          <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+            <div style="flex: 1; height: 3px; background: #018737; border-radius: 2px;"></div>
+            <div style="flex: 1; height: 3px; background: linear-gradient(to right, #018737 50%, #e2e8f0 50%); border-radius: 2px;"></div>
+            <div style="flex: 1; height: 3px; background: #e2e8f0; border-radius: 2px;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px;">
+            <span style="color: #018737; font-weight: 500;">✓ Student Info</span>
+            <span style="color: #334155; font-weight: 600;">Family Info</span>
+            <span style="color: #94a3b8;">Fees</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Dots + Line</h3>
+      <p>Small dots on a connecting line. Active dot is larger with a ring effect. Completed dots are solid green.</p>
+      <div class="mockup">
+        <div class="mockup-body" style="padding: 16px 20px; background: white;">
+          <div style="display: flex; align-items: center; justify-content: space-between; position: relative; margin-bottom: 8px;">
+            <div style="position: absolute; top: 50%; left: 24px; right: 24px; height: 2px; background: #e2e8f0; z-index: 0;"></div>
+            <div style="position: absolute; top: 50%; left: 24px; width: calc(50% - 24px); height: 2px; background: #018737; z-index: 0;"></div>
+            <div style="width: 10px; height: 10px; border-radius: 50%; background: #018737; z-index: 1; position: relative;"></div>
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: #018737; z-index: 1; position: relative; box-shadow: 0 0 0 3px rgba(1,135,55,0.2);"></div>
+            <div style="width: 10px; height: 10px; border-radius: 50%; background: #e2e8f0; z-index: 1; position: relative;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px;">
+            <span style="color: #018737; font-weight: 500;">✓ Student Info</span>
+            <span style="color: #334155; font-weight: 600;">Family Info</span>
+            <span style="color: #94a3b8;">Fees</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Step Chips</h3>
+      <p>Compact pill-shaped chips in a row. Completed chip is green with checkmark, active chip has green outline, upcoming is gray.</p>
+      <div class="mockup">
+        <div class="mockup-body" style="padding: 16px 20px; background: white;">
+          <div style="display: flex; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 4px; padding: 5px 12px; background: #dcfce7; border-radius: 999px; font-size: 11px; color: #166534; font-weight: 500;">
+              <span>✓</span> Student Info
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; padding: 5px 12px; background: white; border: 1.5px solid #018737; border-radius: 999px; font-size: 11px; color: #018737; font-weight: 600;">
+              <span style="font-size: 10px;">2.</span> Family Info
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; padding: 5px 12px; background: #f1f5f9; border-radius: 999px; font-size: 11px; color: #94a3b8;">
+              <span style="font-size: 10px;">3.</span> Fees
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="e" onclick="toggleSelect(this)">
+    <div class="letter">E</div>
+    <div class="content">
+      <h3>Minimal Counter</h3>
+      <p>Ultra-minimal — just a "Step 2 of 3" label with a thin accent bar. No per-step labels in the bar itself, just the current step name.</p>
+      <div class="mockup">
+        <div class="mockup-body" style="padding: 16px 20px; background: white;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-size: 12px; font-weight: 600; color: #334155;">Family Info</span>
+            <span style="font-size: 11px; color: #64748b;">Step 2 of 3</span>
+          </div>
+          <div style="position: relative;">
+            <div style="height: 2px; background: #e2e8f0; border-radius: 1px;"></div>
+            <div style="height: 2px; background: #018737; border-radius: 1px; width: 66%; position: absolute; top: 0; left: 0;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

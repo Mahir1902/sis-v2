@@ -6,12 +6,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
-function ParentSection({ prefix, label }: { prefix: string; label: string }) {
+function ParentCard({ prefix, label }: { prefix: string; label: string }) {
   const form = useFormContext();
   return (
-    <div className="space-y-3">
-      <h3 className="font-semibold text-gray-700 border-b pb-1">{label}</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div className="border rounded-xl p-4">
+      <h4 className="text-xs font-semibold text-slate-700 mb-3">{label}</h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <FormField control={form.control} name={`${prefix}Name`} render={({ field }) => (
           <FormItem>
             <FormLabel>Full Name *</FormLabel>
@@ -48,14 +48,14 @@ function ParentSection({ prefix, label }: { prefix: string; label: string }) {
 export function FamilyInfoStep() {
   const form = useFormContext();
   return (
-    <div className="space-y-6">
-      <ParentSection prefix="father" label="Father's Information" />
-      <ParentSection prefix="mother" label="Mother's Information" />
+    <div className="space-y-3">
+      <ParentCard prefix="father" label="Father's Information" />
+      <ParentCard prefix="mother" label="Mother's Information" />
 
-      {/* Guardian */}
-      <div className="space-y-3">
-        <h3 className="font-semibold text-gray-700 border-b pb-1">Guardian Information</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* Guardian & Financial Card */}
+      <div className="border rounded-xl p-4">
+        <h4 className="text-xs font-semibold text-slate-700 mb-3">Guardian & Financial</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField control={form.control} name="guardianName" render={({ field }) => (
             <FormItem>
               <FormLabel>Guardian Name *</FormLabel>
@@ -84,16 +84,17 @@ export function FamilyInfoStep() {
               <FormMessage />
             </FormItem>
           )} />
+          <div className="sm:col-span-2">
+            <FormField control={form.control} name="familyAnnualIncome" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Family Annual Income *</FormLabel>
+                <FormControl><Input placeholder="e.g. 500,000 BDT" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </div>
         </div>
       </div>
-
-      <FormField control={form.control} name="familyAnnualIncome" render={({ field }) => (
-        <FormItem>
-          <FormLabel>Family Annual Income *</FormLabel>
-          <FormControl><Input placeholder="e.g. 500,000 BDT" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
     </div>
   );
 }

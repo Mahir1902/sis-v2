@@ -1,0 +1,80 @@
+<h2>Field Layout Inside the Modal</h2>
+<p class="subtitle">How should fields be organized within each step? The modal will be wider (~900px) and taller.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Grouped Sections with Headers</h3>
+      <p>Fields grouped under labeled section headers (e.g., "Personal Details", "Academic Placement", "Health"). Two-column grid within each section. Clear visual separation between groups with subtle borders or spacing.</p>
+      <div class="mockup">
+        <div class="mockup-header">Step 1 — Student Info</div>
+        <div class="mockup-body" style="padding: 16px; font-size: 13px;">
+          <div style="margin-bottom: 16px;">
+            <div style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">Personal Details</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div><div class="mock-input" style="font-size:11px">Full Name</div></div>
+              <div><div class="mock-input" style="font-size:11px">Student Number</div></div>
+              <div><div class="mock-input" style="font-size:11px">Gender</div></div>
+              <div><div class="mock-input" style="font-size:11px">Date of Birth</div></div>
+              <div><div class="mock-input" style="font-size:11px">Place of Birth</div></div>
+              <div><div class="mock-input" style="font-size:11px">Citizenship</div></div>
+            </div>
+          </div>
+          <div style="margin-bottom: 16px;">
+            <div style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">Academic Placement</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+              <div><div class="mock-input" style="font-size:11px">Standard Level</div></div>
+              <div><div class="mock-input" style="font-size:11px">Academic Year</div></div>
+              <div><div class="mock-input" style="font-size:11px">Campus</div></div>
+            </div>
+          </div>
+          <div>
+            <div style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">Health</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div><div class="mock-input" style="font-size:11px">☐ Has Health Issues</div></div>
+              <div><div class="mock-input" style="font-size:11px">Description (if any)</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Card-Based Sections</h3>
+      <p>Each field group sits inside a bordered card with a title. Cards stack vertically. Two-column grid inside each card. Gives stronger visual separation and a polished feel.</p>
+      <div class="mockup">
+        <div class="mockup-header">Step 1 — Student Info</div>
+        <div class="mockup-body" style="padding: 16px; font-size: 13px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <div style="font-weight: 600; font-size: 12px; margin-bottom: 8px; color: #334155;">Personal Details</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div><div class="mock-input" style="font-size:11px">Full Name</div></div>
+              <div><div class="mock-input" style="font-size:11px">Student Number</div></div>
+              <div><div class="mock-input" style="font-size:11px">Gender</div></div>
+              <div><div class="mock-input" style="font-size:11px">Date of Birth</div></div>
+            </div>
+          </div>
+          <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <div style="font-weight: 600; font-size: 12px; margin-bottom: 8px; color: #334155;">Academic Placement</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+              <div><div class="mock-input" style="font-size:11px">Standard Level</div></div>
+              <div><div class="mock-input" style="font-size:11px">Academic Year</div></div>
+              <div><div class="mock-input" style="font-size:11px">Campus</div></div>
+            </div>
+          </div>
+          <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <div style="font-weight: 600; font-size: 12px; margin-bottom: 8px; color: #334155;">Health</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div><div class="mock-input" style="font-size:11px">☐ Has Health Issues</div></div>
+              <div><div class="mock-input" style="font-size:11px">Description</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

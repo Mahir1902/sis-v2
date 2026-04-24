@@ -1,0 +1,127 @@
+<h2>Header Subtitle &mdash; 3 Options</h2>
+<p class="subtitle">Different ways to present the info below the student name</p>
+
+<!-- Current -->
+<div class="section">
+  <div class="label">Current (for reference)</div>
+  <div style="background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px 24px;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #018737, #02a847); display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; font-weight: 700; box-shadow: 0 2px 8px rgba(1,135,55,0.25);">MH</div>
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px; font-weight: 700;">Mahir Haque</span>
+          <span style="background: #dcfce7; color: #15803d; padding: 2px 10px; border-radius: 6px; font-size: 10px; font-weight: 600;">Active</span>
+        </div>
+        <div style="color: #94a3b8; font-size: 12px; margin-top: 3px;">STU-2024-0001 &middot; Grade 5, Section A &middot; Main Campus &middot; 2024-2025</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 28px;"></div>
+
+<!-- Option A: Labeled Chips -->
+<div class="cards">
+  <div class="card" data-choice="chips" onclick="toggleSelect(this)" style="width: 100%;">
+    <div class="card-image" style="padding: 20px 24px; background: white;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #018737, #02a847); display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; font-weight: 700; box-shadow: 0 2px 8px rgba(1,135,55,0.25);">MH</div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px; font-weight: 700;">Mahir Haque</span>
+            <span style="background: #dcfce7; color: #15803d; padding: 2px 10px; border-radius: 6px; font-size: 10px; font-weight: 600;">Active</span>
+          </div>
+          <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+            <span style="background: #f1f5f9; color: #475569; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">STU-2024-0001</span>
+            <span style="background: #f0fdf4; color: #15803d; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">Grade 5 &middot; Sec A</span>
+            <span style="background: #eff6ff; color: #1d4ed8; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">Main Campus</span>
+            <span style="background: #faf5ff; color: #7c3aed; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">2024-2025</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A &mdash; Color-Coded Chips</h3>
+      <p>Each piece of info gets its own pill with a distinct color. Easy to scan, visually rich. Student ID is neutral gray, academic info green, campus blue, year purple.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 16px;"></div>
+
+<!-- Option B: Two-line with labels -->
+<div class="cards">
+  <div class="card" data-choice="labeled" onclick="toggleSelect(this)" style="width: 100%;">
+    <div class="card-image" style="padding: 20px 24px; background: white;">
+      <div style="display: flex; align-items: flex-start; gap: 14px;">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #018737, #02a847); display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; font-weight: 700; box-shadow: 0 2px 8px rgba(1,135,55,0.25);">MH</div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px; font-weight: 700;">Mahir Haque</span>
+            <span style="background: #dcfce7; color: #15803d; padding: 2px 10px; border-radius: 6px; font-size: 10px; font-weight: 600;">Active</span>
+          </div>
+          <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 12px;">
+            <div>
+              <div style="color: #94a3b8; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">ID</div>
+              <div style="color: #374151; font-weight: 500; margin-top: 1px;">STU-2024-0001</div>
+            </div>
+            <div style="width: 1px; background: #e5e7eb;"></div>
+            <div>
+              <div style="color: #94a3b8; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Class</div>
+              <div style="color: #374151; font-weight: 500; margin-top: 1px;">Grade 5, Section A</div>
+            </div>
+            <div style="width: 1px; background: #e5e7eb;"></div>
+            <div>
+              <div style="color: #94a3b8; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Campus</div>
+              <div style="color: #374151; font-weight: 500; margin-top: 1px;">Main Campus</div>
+            </div>
+            <div style="width: 1px; background: #e5e7eb;"></div>
+            <div>
+              <div style="color: #94a3b8; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Year</div>
+              <div style="color: #374151; font-weight: 500; margin-top: 1px;">2024-2025</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B &mdash; Labeled Columns with Dividers</h3>
+      <p>Tiny uppercase labels above each value, separated by vertical dividers. Clean and structured. Feels like a professional record header.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 16px;"></div>
+
+<!-- Option C: Mixed - ID line + chips -->
+<div class="cards">
+  <div class="card" data-choice="mixed" onclick="toggleSelect(this)" style="width: 100%;">
+    <div class="card-image" style="padding: 20px 24px; background: white;">
+      <div style="display: flex; align-items: flex-start; gap: 14px;">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #018737, #02a847); display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; font-weight: 700; box-shadow: 0 2px 8px rgba(1,135,55,0.25);">MH</div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px; font-weight: 700;">Mahir Haque</span>
+            <span style="background: #dcfce7; color: #15803d; padding: 2px 10px; border-radius: 6px; font-size: 10px; font-weight: 600;">Active</span>
+            <span style="color: #94a3b8; font-size: 12px; margin-left: 2px;">STU-2024-0001</span>
+          </div>
+          <div style="display: flex; gap: 6px; margin-top: 8px;">
+            <span style="border: 1px solid #e2e8f0; color: #475569; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+              <span style="color: #94a3b8; font-size: 9px;">&#9650;</span> Grade 5 &middot; Sec A
+            </span>
+            <span style="border: 1px solid #e2e8f0; color: #475569; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+              <span style="color: #94a3b8; font-size: 9px;">&#9679;</span> Main Campus
+            </span>
+            <span style="border: 1px solid #e2e8f0; color: #475569; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+              <span style="color: #94a3b8; font-size: 9px;">&#128197;</span> 2024-2025
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C &mdash; ID Inline + Outlined Chips</h3>
+      <p>Student ID stays on the name line (it's an identifier, not metadata). Below: outlined chips with subtle icons for class, campus, and year. Minimal color, clean borders.</p>
+    </div>
+  </div>
+</div>

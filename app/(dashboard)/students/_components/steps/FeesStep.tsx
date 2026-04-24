@@ -23,40 +23,47 @@ export function FeesStep() {
   const isLoading = standardLevel && feeStructures === undefined;
 
   return (
-    <div className="space-y-6">
-      {/* Read-only summary */}
-      <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-        <p><span className="text-gray-500">Student Number:</span> <span className="font-medium">{form.watch("studentNumber") || "—"}</span></p>
-        <p><span className="text-gray-500">Academic Year:</span> <span className="font-medium">{academicYear || "—"}</span></p>
+    <div className="space-y-3">
+      {/* Enrollment Details Card */}
+      <div className="border rounded-xl p-4">
+        <h4 className="text-xs font-semibold text-slate-700 mb-3">Enrollment Details</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground mb-1">Student Number</p>
+            <p className="text-sm font-medium bg-slate-50 rounded-md px-3 py-2">{form.watch("studentNumber") || "—"}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground mb-1">Academic Year</p>
+            <p className="text-sm font-medium bg-slate-50 rounded-md px-3 py-2">{academicYear || "—"}</p>
+          </div>
+          <FormField control={form.control} name="classStartDate" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Class Start Date *</FormLabel>
+              <FormControl><Input type="date" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+          <FormField control={form.control} name="consultantName" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Consultant Name *</FormLabel>
+              <FormControl><Input placeholder="Staff member name" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+        </div>
       </div>
 
-      <FormField control={form.control} name="classStartDate" render={({ field }) => (
-        <FormItem>
-          <FormLabel>Class Start Date *</FormLabel>
-          <FormControl><Input type="date" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
-
-      <FormField control={form.control} name="consultantName" render={({ field }) => (
-        <FormItem>
-          <FormLabel>Consultant Name *</FormLabel>
-          <FormControl><Input placeholder="Staff member name" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
-
-      {/* Fee amounts */}
-      <div className="space-y-3">
-        <h3 className="font-semibold text-gray-700">Fee Assignment</h3>
+      {/* Fee Assignment Card */}
+      <div className="border rounded-xl p-4">
+        <h4 className="text-xs font-semibold text-slate-700 mb-3">Fee Assignment</h4>
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {(["admission", "tuition", "registration"] as const).map((type) => {
               const structure = feeStructures?.find((f) => f.feeType === type);
               const isAutoFilled = !!structure;
@@ -66,7 +73,6 @@ export function FeesStep() {
                   control={form.control}
                   name={`${type}Fee`}
                   render={({ field }) => {
-                    // Auto-fill from fee structure
                     if (isAutoFilled && field.value === undefined) {
                       field.onChange(structure.baseAmount);
                     }
