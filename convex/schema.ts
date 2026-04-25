@@ -50,7 +50,7 @@ export default defineSchema({
     role: v.union(
       v.literal("admin"),
       v.literal("teacher"),
-      v.literal("student")
+      v.literal("student"),
     ),
     isActive: v.boolean(),
     studentId: v.optional(v.id("students")), // links student-role users to their record
@@ -141,13 +141,16 @@ export default defineSchema({
       v.literal("transferred"),
       v.literal("withdrawn"),
       v.literal("suspended"),
-      v.literal("expelled")
+      v.literal("expelled"),
     ),
 
     // Admin
     consultantName: v.string(),
     createdAt: v.string(), // ISO string
-  }),
+  })
+    .index("by_standard_level", ["standardLevel"])
+    .index("by_status", ["status"])
+    .index("by_academic_year", ["academicYear"]),
 
   enrollments: defineTable({
     studentId: v.id("students"),
@@ -198,7 +201,7 @@ export default defineSchema({
     frequency: v.union(
       v.literal("one-time"),
       v.literal("monthly"),
-      v.literal("yearly")
+      v.literal("yearly"),
     ),
     feeType: v.union(
       v.literal("admission"),
@@ -206,7 +209,7 @@ export default defineSchema({
       v.literal("registration"),
       v.literal("library"),
       v.literal("sports"),
-      v.literal("computer")
+      v.literal("computer"),
     ),
     standardLevel: v.id("standardLevels"),
     isActive: v.boolean(),
@@ -218,7 +221,7 @@ export default defineSchema({
         maxAmount: v.optional(v.float64()),
         maxDays: v.optional(v.float64()),
         amount: v.optional(v.float64()),
-      })
+      }),
     ),
   }).index("by_standard", ["standardLevel"]),
 
@@ -245,14 +248,14 @@ export default defineSchema({
     status: v.union(
       v.literal("unpaid"),
       v.literal("partial"),
-      v.literal("paid")
+      v.literal("paid"),
     ),
     appliedDiscounts: v.array(
       v.object({
         discountId: v.id("discountRules"),
         type: v.string(),
         amount: v.float64(),
-      })
+      }),
     ),
     paymentDetails: v.array(
       v.object({
@@ -260,7 +263,7 @@ export default defineSchema({
         date: v.string(),
         amount: v.float64(),
         mode: v.string(),
-      })
+      }),
     ),
     lateFeeAmount: v.optional(v.float64()),
   }).index("by_student_year", ["studentId", "academicYear"]),
@@ -275,7 +278,7 @@ export default defineSchema({
       v.literal("Bank Transfer"),
       v.literal("Cheque"),
       v.literal("UPI"),
-      v.literal("Online")
+      v.literal("Online"),
     ),
     transactionDate: v.float64(),
     referenceNumber: v.optional(v.string()),

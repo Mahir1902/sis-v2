@@ -1,12 +1,17 @@
 "use client";
 
-import { useConvexAuth, usePaginatedQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
-import { api } from "@/convex/_generated/api";
+import { useMemo, useState } from "react";
 import { DataTable } from "@/components/DataTable";
-import { columns, StudentRow } from "./columns";
-import { AddStudentButton } from "./_components/AddStudentButton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/convex/_generated/api";
+import { AddStudentButton } from "./_components/AddStudentButton";
+import {
+  type StudentsFilters,
+  StudentsFilterToolbar,
+} from "./_components/StudentsFilterToolbar";
+import { columns, type StudentRow } from "./columns";
 
 function StudentsTableSkeleton() {
   return (
@@ -14,7 +19,10 @@ function StudentsTableSkeleton() {
       <Skeleton className="h-10 w-64" />
       <div className="rounded-md border bg-white">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 p-4 border-b last:border-0">
+          <div
+            key={i}
+            className="flex items-center gap-4 p-4 border-b last:border-0"
+          >
             <Skeleton className="h-10 w-10 rounded-full" />
             <div className="space-y-1.5 flex-1">
               <Skeleton className="h-4 w-40" />
@@ -34,13 +42,37 @@ function StudentsTableSkeleton() {
 export default function StudentsPage() {
   const router = useRouter();
   const { isAuthenticated } = useConvexAuth();
-  const { results, status, loadMore } = usePaginatedQuery(
+  const [filters, setFilters] = useState<StudentsFilters>({
+    standardLevel: new Set(),
+    status: new Set(),
+    gender: new Set(),
+    academicYear: new Set(),
+  });
+
+  // Convert Sets to sorted arrays for stable Convex query args
+  const queryArgs = useMemo(() => {
+    const args: Record<string, string[]> = {};
+    if (filters.standardLevel.size > 0)
+      args.standardLevel = [...filters.standardLevel].sort();
+    if (filters.status.size > 0) args.status = [...filters.status].sort();
+    if (filters.gender.size > 0) args.gender = [...filters.gender].sort();
+    if (filters.academicYear.size > 0)
+      args.academicYear = [...filters.academicYear].sort();
+    return args;
+  }, [filters]);
+
+  const students = useQuery(
     api.students.getAllStudents,
-    isAuthenticated ? {} : "skip",
-    { initialNumItems: 20 }
+    isAuthenticated ? queryArgs : "skip",
   );
 
-  const isLoading = status === "LoadingFirstPage";
+  const isLoading = students === undefined;
+
+  const hasActiveFilters =
+    filters.standardLevel.size > 0 ||
+    filters.status.size > 0 ||
+    filters.gender.size > 0 ||
+    filters.academicYear.size > 0;
 
   return (
     <div className="space-y-6">
@@ -49,7 +81,9 @@ export default function StudentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">All Students</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {isLoading ? "Loading…" : `${results.length} student${results.length !== 1 ? "s" : ""}`}
+            {isLoading
+              ? "Loading…"
+              : `${students.length} student${students.length !== 1 ? "s" : ""}${hasActiveFilters ? " (filtered)" : ""}`}
           </p>
         </div>
         <AddStudentButton />
@@ -58,7 +92,7 @@ export default function StudentsPage() {
       {/* Table */}
       {isLoading ? (
         <StudentsTableSkeleton />
-      ) : results.length === 0 ? (
+      ) : students.length === 0 && !hasActiveFilters ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <p className="text-lg font-medium text-gray-900">No students yet</p>
           <p className="text-sm text-gray-500 mt-1 mb-6">
@@ -69,22 +103,16 @@ export default function StudentsPage() {
       ) : (
         <DataTable
           columns={columns}
-          data={results as StudentRow[]}
+          data={students as unknown as StudentRow[]}
           searchPlaceholder="Search students…"
           onRowClick={(row) => router.push(`/students/${row._id}`)}
+          toolbar={
+            <StudentsFilterToolbar
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+          }
         />
-      )}
-
-      {/* Load more */}
-      {status === "CanLoadMore" && (
-        <div className="flex justify-center pt-2">
-          <button
-            onClick={() => loadMore(20)}
-            className="text-sm text-school-green hover:underline"
-          >
-            Load more students
-          </button>
-        </div>
       )}
     </div>
   );

@@ -260,6 +260,19 @@ All checklist items pass. No `any` types. No hardcoded hex. `suggestNextYear` co
 
 ---
 
+## DataTable Enhancement + Faceted Filter (2026-04-25)
+**Status**: Complete — awaiting FRONTEND REVIEW
+**Active Agent**: FRONTEND AGENT
+
+### Sub-tasks
+- [x] TF-1 Update DataTable.tsx — added `toolbar` prop, `pageSizeOptions` prop, page size Select dropdown, useEffect for page index reset on data length change — COMPLETE
+- [x] TF-2 Create DataTableFacetedFilter.tsx — new component with Popover+Command multi-select, checkbox UI, badge count, clear filters — COMPLETE
+
+### Build Verification
+- TypeScript: 0 errors in modified/new files (5 pre-existing errors in student-fees/page.tsx and students/page.tsx are unrelated)
+
+---
+
 ## Current Build Status
 - `npm run build`: PASSING (11 routes)
 - `npx convex dev --once`: PASSING

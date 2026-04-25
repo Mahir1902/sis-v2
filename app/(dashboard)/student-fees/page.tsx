@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DollarSign, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { RoleGate } from "@/components/shared/RoleGate";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -22,13 +24,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useRouter } from "next/navigation";
-import { DollarSign, Search } from "lucide-react";
-import { RoleGate } from "@/components/shared/RoleGate";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 
 function getInitials(name: string) {
-  return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 }
 
 const statusStyles: Record<string, string> = {
@@ -54,7 +59,7 @@ function StudentFeesPageContent() {
   const years = useQuery(api.academicYears.list);
   const levels = useQuery(api.standardLevels.list);
   // Get all students with fee summary
-  const studentsResult = useQuery(api.students.getAllStudents, { paginationOpts: { numItems: 200, cursor: null } });
+  const studentsResult = useQuery(api.students.getAllStudents, {});
 
   if (!studentsResult || years === undefined || levels === undefined) {
     return (
@@ -69,7 +74,7 @@ function StudentFeesPageContent() {
     );
   }
 
-  const students = studentsResult.page;
+  const students = studentsResult;
 
   // Filter students
   const filtered = students.filter((s) => {
@@ -77,8 +82,10 @@ function StudentFeesPageContent() {
       !search ||
       s.studentFullName.toLowerCase().includes(search.toLowerCase()) ||
       s.studentNumber.toLowerCase().includes(search.toLowerCase());
-    const matchesYear = selectedYearId === "all" || s.academicYear === selectedYearId;
-    const matchesLevel = selectedLevelId === "all" || s.standardLevel === selectedLevelId;
+    const matchesYear =
+      selectedYearId === "all" || s.academicYear === selectedYearId;
+    const matchesLevel =
+      selectedLevelId === "all" || s.standardLevel === selectedLevelId;
     return matchesSearch && matchesYear && matchesLevel;
   });
 
@@ -150,7 +157,9 @@ function StudentFeesPageContent() {
                 <StudentFeeRow
                   key={student._id}
                   student={student}
-                  onClick={() => router.push(`/students/${student._id}?tab=fees`)}
+                  onClick={() =>
+                    router.push(`/students/${student._id}?tab=fees`)
+                  }
                 />
               ))}
             </TableBody>
@@ -172,12 +181,14 @@ function StudentFeeRow({
     studentFullName: string;
     studentNumber: string;
     studentPhotoUrl?: string | null;
-    standardLevelDoc?: { name: string } | null;
-    academicYearDoc?: { name: string } | null;
+    standardLevelName?: string;
+    academicYearName?: string;
   };
   onClick: () => void;
 }) {
-  const fees = useQuery(api.studentFees.getByStudent, { studentId: student._id });
+  const fees = useQuery(api.studentFees.getByStudent, {
+    studentId: student._id,
+  });
 
   const totalFees = fees?.reduce((s, f) => s + f.originalAmount, 0) ?? 0;
   const totalPaid = fees?.reduce((s, f) => s + f.paidAmount, 0) ?? 0;
@@ -187,10 +198,10 @@ function StudentFeeRow({
     fees === undefined
       ? "loading"
       : totalBalance <= 0
-      ? "paid"
-      : totalPaid > 0
-      ? "partial"
-      : "unpaid";
+        ? "paid"
+        : totalPaid > 0
+          ? "partial"
+          : "unpaid";
 
   return (
     <TableRow
@@ -201,7 +212,11 @@ function StudentFeeRow({
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8">
             <AvatarImage
-              src={typeof student.studentPhotoUrl === "string" ? student.studentPhotoUrl : undefined}
+              src={
+                typeof student.studentPhotoUrl === "string"
+                  ? student.studentPhotoUrl
+                  : undefined
+              }
               alt={student.studentFullName}
             />
             <AvatarFallback className="text-xs bg-school-green/10 text-school-green">
@@ -209,16 +224,18 @@ function StudentFeeRow({
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-medium text-sm text-gray-900">{student.studentFullName}</p>
+            <p className="font-medium text-sm text-gray-900">
+              {student.studentFullName}
+            </p>
             <p className="text-xs text-gray-500">{student.studentNumber}</p>
           </div>
         </div>
       </TableCell>
       <TableCell className="text-sm text-gray-600">
-        {student.standardLevelDoc?.name ?? "—"}
+        {student.standardLevelName ?? "—"}
       </TableCell>
       <TableCell className="text-sm text-gray-600">
-        {student.academicYearDoc?.name ?? "—"}
+        {student.academicYearName ?? "—"}
       </TableCell>
       <TableCell className="text-right text-sm">
         {fees === undefined ? "—" : `৳${totalFees.toLocaleString()}`}
@@ -226,7 +243,9 @@ function StudentFeeRow({
       <TableCell className="text-right text-sm text-green-700">
         {fees === undefined ? "—" : `৳${totalPaid.toLocaleString()}`}
       </TableCell>
-      <TableCell className={`text-right text-sm font-medium ${totalBalance > 0 ? "text-red-600" : "text-gray-900"}`}>
+      <TableCell
+        className={`text-right text-sm font-medium ${totalBalance > 0 ? "text-red-600" : "text-gray-900"}`}
+      >
         {fees === undefined ? "—" : `৳${totalBalance.toLocaleString()}`}
       </TableCell>
       <TableCell>

@@ -1,4 +1,3 @@
-import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
@@ -94,38 +93,92 @@ export const createStudent = mutation({
 });
 
 /**
- * Get all students with pagination. Resolves photo URLs and refs.
- * Use paginationOpts from usePaginatedQuery on the client.
+ * Get all students with optional server-side filters.
+ * Pre-fetches lookup tables to avoid N+1 reads.
+ * Returns a slim projection for the list view.
  */
 export const getAllStudents = query({
-  args: { paginationOpts: paginationOptsValidator },
+  args: {
+    standardLevel: v.optional(v.array(v.id("standardLevels"))),
+    academicYear: v.optional(v.array(v.id("academicYears"))),
+    gender: v.optional(
+      v.array(v.union(v.literal("Male"), v.literal("Female"))),
+    ),
+    status: v.optional(
+      v.array(
+        v.union(
+          v.literal("active"),
+          v.literal("graduated"),
+          v.literal("transferred"),
+          v.literal("withdrawn"),
+          v.literal("suspended"),
+          v.literal("expelled"),
+        ),
+      ),
+    ),
+  },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
 
-    const result = await ctx.db.query("students").paginate(args.paginationOpts);
+    // Pre-fetch ALL lookup tables (3 reads total, not 4 per student)
+    const [allLevels, allYears] = await Promise.all([
+      ctx.db.query("standardLevels").collect(),
+      ctx.db.query("academicYears").collect(),
+    ]);
+    const levelMap = new Map(allLevels.map((l) => [l._id, l.name]));
+    const yearMap = new Map(allYears.map((y) => [y._id, y.name]));
 
+    // Build query with server-side filters
+    let q = ctx.db.query("students");
+
+    // Guard: only apply filter if array is non-empty (qb.or() with 0 args is undefined)
+    if (args.standardLevel && args.standardLevel.length > 0) {
+      const levels = args.standardLevel;
+      q = q.filter((qb) =>
+        qb.or(...levels.map((id) => qb.eq(qb.field("standardLevel"), id))),
+      );
+    }
+    if (args.academicYear && args.academicYear.length > 0) {
+      const years = args.academicYear;
+      q = q.filter((qb) =>
+        qb.or(...years.map((id) => qb.eq(qb.field("academicYear"), id))),
+      );
+    }
+    if (args.gender && args.gender.length > 0) {
+      const genders = args.gender;
+      q = q.filter((qb) =>
+        qb.or(...genders.map((g) => qb.eq(qb.field("gender"), g))),
+      );
+    }
+    if (args.status && args.status.length > 0) {
+      const statuses = args.status;
+      q = q.filter((qb) =>
+        qb.or(...statuses.map((s) => qb.eq(qb.field("status"), s))),
+      );
+    }
+
+    const students = await q.take(2000);
+
+    // Resolve photo URLs + return slim projection
     const enriched = await Promise.all(
-      result.page.map(async (student) => {
-        const [standardLevel, academicYear, campus, photoUrl] =
-          await Promise.all([
-            ctx.db.get(student.standardLevel),
-            ctx.db.get(student.academicYear),
-            ctx.db.get(student.campus),
-            student.studentPhotoUrl
-              ? ctx.storage.getUrl(student.studentPhotoUrl)
-              : null,
-          ]);
-        return {
-          ...student,
-          studentPhotoUrl: photoUrl,
-          standardLevelName: standardLevel?.name ?? "Unknown",
-          academicYearName: academicYear?.name ?? "Unknown",
-          campusName: campus?.name ?? "Unknown",
-        };
-      }),
+      students.map(async (s) => ({
+        _id: s._id,
+        studentNumber: s.studentNumber,
+        studentFullName: s.studentFullName,
+        studentPhotoUrl: s.studentPhotoUrl
+          ? await ctx.storage.getUrl(s.studentPhotoUrl)
+          : null,
+        standardLevel: s.standardLevel,
+        academicYear: s.academicYear,
+        standardLevelName: levelMap.get(s.standardLevel) ?? "Unknown",
+        academicYearName: yearMap.get(s.academicYear) ?? "Unknown",
+        gender: s.gender,
+        classStartDate: s.classStartDate,
+        status: s.status,
+      })),
     );
 
-    return { ...result, page: enriched };
+    return enriched;
   },
 });
 
@@ -348,7 +401,7 @@ export const deleteStudent = mutation({
       await Promise.all(
         student.siblingIds.map(async (siblingId) => {
           const sibling = await ctx.db.get(siblingId);
-          if (sibling && sibling.siblingIds) {
+          if (sibling?.siblingIds) {
             await ctx.db.patch(siblingId, {
               siblingIds: sibling.siblingIds.filter(
                 (id) => id !== args.studentId,
@@ -454,7 +507,7 @@ export const updateStudent = mutation({
       await Promise.all([
         ...removedSiblings.map(async (sibId) => {
           const sib = await ctx.db.get(sibId);
-          if (sib && sib.siblingIds) {
+          if (sib?.siblingIds) {
             await ctx.db.patch(sibId, {
               siblingIds: sib.siblingIds.filter((id) => id !== studentId),
             });
