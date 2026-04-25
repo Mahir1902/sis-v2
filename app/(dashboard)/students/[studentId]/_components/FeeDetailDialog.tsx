@@ -44,6 +44,11 @@ interface AppliedDiscount {
   amount: number;
 }
 
+interface EnrichedDiscount extends AppliedDiscount {
+  ruleName: string;
+  ruleValue?: number;
+}
+
 interface PaymentDetail {
   paymentId: Id<"feeTransactions">;
   date: string;
@@ -63,6 +68,7 @@ interface FeeRecord {
   paymentDetails: PaymentDetail[];
   feeStructureDoc?: { feeType?: string; name?: string } | null;
   academicYearDoc?: { name?: string } | null;
+  enrichedDiscounts: EnrichedDiscount[];
 }
 
 interface FeeDetailDialogProps {
@@ -92,7 +98,7 @@ export function FeeDetailDialog({
 }: FeeDetailDialogProps) {
   const [showDiscountDialog, setShowDiscountDialog] = useState(false);
 
-  const totalDiscounts = fee.appliedDiscounts.reduce(
+  const totalDiscounts = fee.enrichedDiscounts.reduce(
     (sum, d) => sum + d.amount,
     0,
   );
@@ -132,17 +138,24 @@ export function FeeDetailDialog({
               </div>
 
               {/* Applied discounts */}
-              {fee.appliedDiscounts.length > 0 && (
+              {fee.enrichedDiscounts.length > 0 && (
                 <>
-                  {fee.appliedDiscounts.map((discount, idx) => (
+                  {fee.enrichedDiscounts.map((discount, idx) => (
                     <div
                       key={`${String(discount.discountId)}-${idx}`}
                       className="flex justify-between text-sm"
                     >
-                      <span className="text-green-600 capitalize">
-                        {discount.type === "percentage"
-                          ? "Percentage Discount"
-                          : "Fixed Discount"}
+                      <span className="text-green-600">
+                        {discount.ruleName}
+                        {discount.ruleValue != null && (
+                          <span className="text-green-500 ml-1 text-xs">
+                            (
+                            {discount.type === "percentage"
+                              ? `${discount.ruleValue}%`
+                              : `৳${discount.ruleValue.toLocaleString()}`}
+                            )
+                          </span>
+                        )}
                       </span>
                       <span className="text-green-600 font-medium">
                         -৳{discount.amount.toLocaleString()}
