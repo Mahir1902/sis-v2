@@ -44,9 +44,22 @@ export const getByStudent = query({
 
     return await Promise.all(
       fees.map(async (fee) => {
-        const structure = await ctx.db.get(fee.feeStructureId);
-        const year = await ctx.db.get(fee.academicYear);
-        return { ...fee, feeStructureDoc: structure, academicYearDoc: year };
+        const [structure, year, ...discountRules] = await Promise.all([
+          ctx.db.get(fee.feeStructureId),
+          ctx.db.get(fee.academicYear),
+          ...fee.appliedDiscounts.map((d) => ctx.db.get(d.discountId)),
+        ]);
+        const enrichedDiscounts = fee.appliedDiscounts.map((d, i) => ({
+          ...d,
+          ruleName: discountRules[i]?.name ?? "Discount",
+          ruleValue: discountRules[i]?.amount,
+        }));
+        return {
+          ...fee,
+          feeStructureDoc: structure,
+          academicYearDoc: year,
+          enrichedDiscounts,
+        };
       }),
     );
   },
