@@ -1,6 +1,26 @@
 {
   "version": 1,
   "skills": {
+    "agents-md": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "computedHash": "2c9df6461b050a8010354c5c41aaf1c93487363d8fd0e04121e91829d0007201"
+    },
+    "code-review": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "computedHash": "f0604d278cfd4eac4dac29eb297a5c6b6ebfb9f020235e8aafbe2eff0e42a147"
+    },
+    "code-simplifier": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "computedHash": "ff9cb10181e31daf1f1644754c491601a7849dff4b4536a1d0ec4f97f680348e"
+    },
+    "commit": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "computedHash": "4fa90a8da375e651dc9d7514ce79ea2c3eaa069a86be366c61b0c4f9d11c97cf"
+    },
     "convex": {
       "source": "waynesutton/convexskills",
       "sourceType": "github",
@@ -31,6 +51,11 @@
       "sourceType": "github",
       "computedHash": "92a5c170cf238f45f08439d9d5d7947af490b880ee8f15306183240483cbed02"
     },
+    "find-bugs": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "computedHash": "7bf00be700d1d205b747126aa96d3587bbc2855cd09897614676e179eebe35ed"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
@@ -41,6 +66,11 @@
       "sourceType": "github",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
     },
+    "iterate-pr": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "computedHash": "bc7a26e084f18e477d624a201fd8f69b283632decef2eb92f8966d67d2b3627f"
+    },
     "next-best-practices": {
       "source": "vercel-labs/next-skills",
       "sourceType": "github",
@@ -50,6 +80,16 @@
       "source": "microsoft/playwright-cli",
       "sourceType": "github",
       "computedHash": "45b90b409fb80cf08ee4e8b72377bddacfac3d1c1fac69bff5fd5342fad26adf"
+    },
+    "security-review": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "computedHash": "ec9792f5fd065e020c48ab5a57707c83435c286c449ba98dfa726d7b1842c868"
+    },
+    "sentry-nextjs-sdk": {
+      "source": "getsentry/sentry-for-ai",
+      "sourceType": "github",
+      "computedHash": "b93586def3b25da6ce39079bdd5c665be4e024a212bc751cda1ad2a280e757d3"
     },
     "shadcn": {
       "source": "shadcn/ui",

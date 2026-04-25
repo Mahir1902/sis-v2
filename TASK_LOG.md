@@ -273,8 +273,30 @@ All checklist items pass. No `any` types. No hardcoded hex. `suggestNextYear` co
 
 ---
 
+## Security Hardening (2026-04-25)
+**Status**: Complete
+**Active Agent**: CODING AGENT
+
+### Sub-tasks
+- [x] SH-1 Fix proxy.ts redirect — changed authenticated user redirect from `/students` to `/dashboard` — COMPLETE
+- [x] SH-2 Add security headers to next.config.ts — X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy, X-XSS-Protection — COMPLETE
+- [x] SH-3 Fix hardcoded Convex URL in next.config.ts — replaced `hushed-bass-123.convex.cloud` with dynamic `new URL(process.env.NEXT_PUBLIC_CONVEX_URL)` — COMPLETE
+
+### Verification
+- `npm run build`: PASSING (12 routes + Proxy Middleware)
+- `npm run lint`: PASSING (122 files, 0 errors)
+- Playwright smoke tests: 6/6 PASSING
+- Manual curl verification:
+  - `/dashboard` → 307 redirect to `/login` (unauthenticated) ✓
+  - `/admin/settings` → 307 redirect to `/login` (unauthenticated) ✓
+  - `/students` → 307 redirect to `/login` (unauthenticated) ✓
+  - `/fees` → 307 redirect to `/login` (unauthenticated) ✓
+  - All 5 security headers present on every response ✓
+
+---
+
 ## Current Build Status
-- `npm run build`: PASSING (11 routes)
+- `npm run build`: PASSING (12 routes + Proxy Middleware)
 - `npx convex dev --once`: PASSING
 - Playwright smoke tests: 6/6 PASSING
 

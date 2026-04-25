@@ -13,7 +13,7 @@ export const proxy = convexAuthNextjsMiddleware(
       return nextjsMiddlewareRedirect(request, "/login");
     }
     if (isPublicPage(request) && isAuthenticated) {
-      return nextjsMiddlewareRedirect(request, "/students");
+      return nextjsMiddlewareRedirect(request, "/dashboard");
     }
   },
   {
