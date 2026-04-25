@@ -1,0 +1,4 @@
+- [Patterns: Touch target sizes](feedback_touch_targets.md) — Sign-out and collapse buttons are below 44px; flag this in any new interactive buttons in the sidebar
+- [Patterns: Convex null candidates](project_convex_null_filter.md) — getPromotionCandidates returns (T | null)[] from filter(Boolean); page uses custom isNonNull guard for type narrowing — this is the approved pattern
+- [Patterns: AlertDialog during submission](project_alert_dialog_submit.md) — AlertDialogCancel must be disabled during isSubmitting to prevent double-submit; AlertDialogAction is the submit trigger
+- [Patterns: SelectContent custom button keyboard a11y](feedback_selectcontent_keyboard.md) — div[role="button"] inside SelectContent needs tabIndex="0" + onKeyDown for keyboard users; non-blocking but flag in every review

@@ -2,6 +2,7 @@
 
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
+  ArrowUpCircle,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -69,6 +70,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/fees", label: "Fee Structures", icon: BookOpen },
       { href: "/admin/assessments", label: "Assessments", icon: GraduationCap },
+      { href: "/admin/promotions", label: "Promotions", icon: ArrowUpCircle },
       { href: "/admin/subjects", label: "Subjects", icon: BookOpen },
       { href: "/admin/settings", label: "Settings", icon: Settings },
     ],

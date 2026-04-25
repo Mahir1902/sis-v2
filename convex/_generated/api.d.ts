@@ -22,6 +22,7 @@ import type * as feeStructure from "../feeStructure.js";
 import type * as feeTransactions from "../feeTransactions.js";
 import type * as http from "../http.js";
 import type * as lib_permissions from "../lib/permissions.js";
+import type * as promotions from "../promotions.js";
 import type * as reportCards from "../reportCards.js";
 import type * as seed from "../seed.js";
 import type * as seedAdmin from "../seedAdmin.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   feeTransactions: typeof feeTransactions;
   http: typeof http;
   "lib/permissions": typeof lib_permissions;
+  promotions: typeof promotions;
   reportCards: typeof reportCards;
   seed: typeof seed;
   seedAdmin: typeof seedAdmin;

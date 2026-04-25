@@ -189,6 +189,77 @@ new feature work begins.
 
 ---
 
+## Bulk Student Promotion Feature (2026-04-25)
+**Status**: In Progress
+**Active Agent**: CODING AGENT (orchestrating)
+
+### Sub-tasks
+- [x] BP-1 convex/promotions.ts — getPromotionCandidates query + bulkPromote mutation — DONE
+- [x] BP-2 Backend Review — APPROVED by BACKEND REVIEW AGENT (2026-04-25)
+- [x] BP-3 Sidebar nav update + app/(dashboard)/admin/promotions/page.tsx — COMPLETE, awaiting FRONTEND REVIEW
+- [x] BP-4 Frontend Review — APPROVED by FRONTEND REVIEW AGENT (2026-04-25)
+
+### Review Notes
+**Backend Review (BP-2) — REJECTED 2026-04-25, then APPROVED on re-review 2026-04-25:**
+All 3 blocking issues resolved: (1) exitDate convention at idempotency guard, (2) duplicate enrollment guard via by_student_academic_year index in promote+hold_back, (3) duplicate fee guard via by_student_year index + Set dedup in promote+hold_back. Full checklist passed.
+
+**Frontend Review (BP-3 / BP-4) — APPROVED 2026-04-25:**
+promotions/page.tsx and Sidebar.tsx both pass all checklist items. Loading skeleton, empty state, and filter-not-selected state handled correctly. No `any` types — `Id` imports from dataModel, `as const` casts only on PromotionAction literals. RoleGate wraps admin content. All interactive elements have aria-label. Table has overflow-x-auto for mobile. Brand colors use Tailwind tokens only. Sonner toasts on success and error. AlertDialog cancel correctly disabled during submission. Non-blocking suggestions recorded in approval notes.
+
+---
+
+## Academic Year Creation Feature (2026-04-25)
+**Status**: Planning
+**Active Agent**: PLANNING AGENT
+
+### Summary
+Admins need to create new academic years from the Promotions page without navigating away. Two entry points: a "+ New Academic Year" option inside the Target Year dropdown, and a helper message when no valid target year exists. After creation the new year is auto-selected. Backend validates name uniqueness and date order. No schema changes required.
+
+### Files in scope
+- `convex/academicYears.ts` — add validation to existing `create` mutation (name uniqueness + startDate < endDate)
+- `app/(dashboard)/admin/promotions/page.tsx` — add `CreateAcademicYearDialog` component + wire two entry points
+
+### Sub-tasks
+
+| # | Task | Agent | Status | Notes |
+|---|------|-------|--------|-------|
+| AY-1 | Add name-uniqueness check and startDate < endDate guard to the `create` mutation in `convex/academicYears.ts`. Return the inserted Id (already present). No new functions. | BACKEND AGENT | [x] DONE | |
+| AY-2 | Backend review of AY-1: verify requireRole present, no unbounded collect, uniqueness query uses `.take(100)` (already the list pattern), error messages safe, no N+1. | BACKEND REVIEW AGENT | [x] APPROVED | APPROVED by BACKEND REVIEW AGENT (2026-04-25) |
+| AY-3 | Add `CreateAcademicYearDialog` to `app/(dashboard)/admin/promotions/page.tsx`. New state: `createYearOpen`. New mutation: `useMutation(api.academicYears.create)`. Dialog fields: Name (pre-filled via `suggestNextYear`), Start Date, End Date. Zod schema (inline, consistent with assessments/page.tsx pattern). Submit handler: call mutation → toast success + auto-select new Id → close; toast error on duplicate. Entry point 1: separator + clickable div (not SelectItem) inside Target Year SelectContent with a Plus icon. Entry point 2: helper message below filter bar when no target year exists. | FRONTEND AGENT | [x] COMPLETE | Awaiting FRONTEND REVIEW (AY-4) |
+| AY-4 | Frontend review of AY-3: loading state, empty state, error toast, no `any`, no hardcoded hex, aria-labels on new interactive elements, mobile layout, RHF+Zod form, inline validation messages, Sonner toasts. | FRONTEND REVIEW AGENT | [x] APPROVED | APPROVED by FRONTEND REVIEW AGENT (2026-04-25) — see review notes |
+| AY-5 | Run `npm run build` and `npm run lint` (Biome) on the two modified files. Confirm 0 errors. Update TASK_LOG.md with result. | CODING AGENT | [ ] Pending | Blocked by AY-4 |
+
+### Dependencies and Blockers
+- AY-1 has no external blockers (no schema change, mutation already exists and has `requireRole`).
+- AY-2 is gated on AY-1; frontend cannot begin until AY-2 is approved.
+- AY-3 depends on AY-2 approval. The `createYear` mutation call signature is already known from the spec: `{ name: string, startDate: float64, endDate: float64 }`.
+- AY-5 is the integration check; only marks the feature complete when build + lint both pass.
+
+### Agent Notes — AY-1 (BACKEND AGENT)
+- The existing `list` query uses `.take(100)` — the uniqueness check inside `create` must also use `.take(100)` (not `.collect()`) then filter client-side, OR use a `by_name` index if one exists. Check schema before deciding; if no index exists, `.take(100)` + JS `.find()` is acceptable for academic years (low cardinality table, max ~20 rows).
+- Error strings must not mention table names: "An academic year with this name already exists" and "Start date must be before end date" are the exact messages per the spec — use these verbatim.
+- `requireRole(ctx, ["admin"])` is already present in the bare mutation; the validation code must be added AFTER this line.
+
+### Agent Notes — AY-3 (FRONTEND AGENT)
+- The `suggestNextYear(sourceYearName)` pure function must be extracted above the component — not inside the render body or a `useMemo` (no DOM access needed, pure string parsing).
+- The "+ New Academic Year" trigger inside SelectContent must be a `div` with `onClick` — NOT a `SelectItem`. Clicking it must call `e.preventDefault()` to prevent the Select from closing and changing its value.
+- The `createYearOpen` state, `createYear` mutation, and `CreateAcademicYearDialog` should all live inside `PromotionsPageContent` (not in the outer `PromotionsPage` shell which is only the RoleGate wrapper).
+- Date fields use `input type="date"` — convert to Unix ms with `new Date(value).getTime()` before calling the mutation.
+- Auto-suggest logic depends on `selectedSourceYearId`: find the year object from `years` array, pass its `name` to `suggestNextYear`. If no source year is selected yet, pass an empty string (suggestNextYear returns empty fields gracefully).
+- After `createYear` resolves successfully, call `setSelectedTargetYearId(newId)` where `newId` is the returned `Id<"academicYears">`.
+- No new Zod validation file — define the inline `createAcademicYearSchema` at the top of the page file, consistent with the pattern in `assessments/page.tsx`.
+
+### Review Notes
+**Frontend Review (AY-4) — APPROVED 2026-04-25:**
+All checklist items pass. No `any` types. No hardcoded hex. `suggestNextYear` correctly extracted as pure function above component. `onMouseDown` + `e.preventDefault()` used for the SelectContent button (correct pattern). Warning banner condition (`years.filter(y => y._id !== selectedSourceYearId).length === 0 && selectedSourceYearId`) is correct. Zod schema has `.refine()` for date order with error on `endDate` path. `FormMessage` on all three fields. Submit button disabled on `formState.isSubmitting`. Auto-select works via `setSelectedTargetYearId(newId)`. `onOpenChange` resets form with suggestions on open. Dialog responsive: `max-w-sm sm:max-w-md`, date grid `grid-cols-1 sm:grid-cols-2`. `AlertDialogCancel` disabled during `isSubmitting`. Sonner toasts on all success and error paths. Non-blocking: the `div[role="button"]` inside SelectContent lacks `tabIndex="0"` and an `onKeyDown` handler for Enter/Space — keyboard users may be unable to activate it. Acceptable for now given shadcn Select manages focus internally.
+
+### Decisions Made
+- 2026-04-25: No schema change for this feature — the `academicYears` table already has the required fields.
+- 2026-04-25: `CreateAcademicYearDialog` lives inline in `promotions/page.tsx` (not a separate file) because it is small (3 fields) and only used in one place. If reuse is needed in future, extract then.
+- 2026-04-25: No `by_name` index added to `academicYears` — cardinality is too low to justify an index; `.take(100)` + `.find()` is the chosen uniqueness check approach.
+
+---
+
 ## Current Build Status
 - `npm run build`: PASSING (11 routes)
 - `npx convex dev --once`: PASSING
