@@ -74,6 +74,7 @@ export function AssessmentDetailDialog({
         {detail === undefined ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>

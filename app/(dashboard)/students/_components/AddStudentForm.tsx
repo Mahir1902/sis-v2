@@ -1,19 +1,19 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Form } from "@/components/ui/form";
+import type { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { FormStepIndicator } from "./FormStepIndicator";
-import { StudentInfoStep } from "./steps/StudentInfoStep";
-import { FamilyInfoStep } from "./steps/FamilyInfoStep";
-import { FeesStep } from "./steps/FeesStep";
-import { studentInfoBaseSchema } from "@/lib/validations/studentInfoSchema";
+import { Form } from "@/components/ui/form";
+import { useStudentAdmission } from "@/hooks/useStudentAdmission";
 import { familyInfoSchema } from "@/lib/validations/familyInfoSchema";
 import { feesSchema } from "@/lib/validations/feesSchema";
-import { useStudentAdmission } from "@/hooks/useStudentAdmission";
+import { studentInfoBaseSchema } from "@/lib/validations/studentInfoSchema";
+import { FormStepIndicator } from "./FormStepIndicator";
+import { FamilyInfoStep } from "./steps/FamilyInfoStep";
+import { FeesStep } from "./steps/FeesStep";
+import { StudentInfoStep } from "./steps/StudentInfoStep";
 
 // Combined schema for full form — use merge (ZodObject) then add refine
 const admissionSchema = studentInfoBaseSchema
@@ -22,8 +22,12 @@ const admissionSchema = studentInfoBaseSchema
   .refine(
     (data) =>
       !data.hasHealthIssues ||
-      (data.healthIssueDescription && data.healthIssueDescription.trim().length > 0),
-    { message: "Please describe the health issue", path: ["healthIssueDescription"] }
+      (data.healthIssueDescription &&
+        data.healthIssueDescription.trim().length > 0),
+    {
+      message: "Please describe the health issue",
+      path: ["healthIssueDescription"],
+    },
   );
 type AdmissionValues = z.infer<typeof admissionSchema>;
 
@@ -71,7 +75,11 @@ export function AddStudentForm({ onSuccess }: AddStudentFormProps) {
 
         <div className="flex justify-between pt-4 border-t">
           {step > 1 ? (
-            <Button type="button" variant="outline" onClick={() => setStep((s) => s - 1)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStep((s) => s - 1)}
+            >
               Back
             </Button>
           ) : (

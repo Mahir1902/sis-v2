@@ -17,7 +17,7 @@ export const getSummaryStats = query({
     const fees = await ctx.db.query("studentFees").take(10000);
     const totalOutstanding = fees.reduce((sum, f) => sum + f.balance, 0);
     const overdueCount = fees.filter(
-      (f) => f.status !== "paid" && f.dueDate < Date.now()
+      (f) => f.status !== "paid" && f.dueDate < Date.now(),
     ).length;
 
     const assessments = await ctx.db

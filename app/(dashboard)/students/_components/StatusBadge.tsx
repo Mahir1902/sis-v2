@@ -1,16 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { ChevronDown } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +14,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 
 type Status =
@@ -56,7 +56,11 @@ interface StatusBadgeProps {
   readonly?: boolean;
 }
 
-export function StatusBadge({ studentId, status, readonly = false }: StatusBadgeProps) {
+export function StatusBadge({
+  studentId,
+  status,
+  readonly = false,
+}: StatusBadgeProps) {
   const [pendingStatus, setPendingStatus] = useState<Status | null>(null);
   const updateStatus = useMutation(api.students.updateStudentStatus);
 
@@ -76,7 +80,7 @@ export function StatusBadge({ studentId, status, readonly = false }: StatusBadge
     <span
       className={cn(
         "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium capitalize",
-        statusStyles[status] ?? "bg-gray-100 text-gray-600"
+        statusStyles[status] ?? "bg-gray-100 text-gray-600",
       )}
     >
       {status}
@@ -90,7 +94,9 @@ export function StatusBadge({ studentId, status, readonly = false }: StatusBadge
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="focus:outline-none">{badge}</button>
+          <button type="button" className="focus:outline-none">
+            {badge}
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           {allStatuses.map((s) => (
@@ -114,7 +120,10 @@ export function StatusBadge({ studentId, status, readonly = false }: StatusBadge
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <AlertDialog open={!!pendingStatus} onOpenChange={() => setPendingStatus(null)}>
+      <AlertDialog
+        open={!!pendingStatus}
+        onOpenChange={() => setPendingStatus(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>

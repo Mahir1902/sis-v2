@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface InfoRow {
   label: string;
@@ -14,9 +14,21 @@ interface InfoCardProps {
   borderColor?: string;
 }
 
-export function InfoCard({ title, info, children, className, borderColor }: InfoCardProps) {
+export function InfoCard({
+  title,
+  info,
+  children,
+  className,
+  borderColor,
+}: InfoCardProps) {
   return (
-    <Card className={cn("h-full", borderColor && `border-l-4 ${borderColor}`, className)}>
+    <Card
+      className={cn(
+        "h-full",
+        borderColor && `border-l-4 ${borderColor}`,
+        className,
+      )}
+    >
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
           {title}

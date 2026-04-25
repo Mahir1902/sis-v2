@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /** Create a student fee record (called during admission). */
@@ -11,7 +11,11 @@ export const createStudentFee = mutation({
     originalAmount: v.float64(),
     paidAmount: v.float64(),
     balance: v.float64(),
-    status: v.union(v.literal("unpaid"), v.literal("partial"), v.literal("paid")),
+    status: v.union(
+      v.literal("unpaid"),
+      v.literal("partial"),
+      v.literal("paid"),
+    ),
     dueDate: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
@@ -35,6 +39,7 @@ export const getByStudent = query({
     const fees = await ctx.db
       .query("studentFees")
       .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
+      .order("desc")
       .take(100);
 
     return await Promise.all(
@@ -42,7 +47,7 @@ export const getByStudent = query({
         const structure = await ctx.db.get(fee.feeStructureId);
         const year = await ctx.db.get(fee.academicYear);
         return { ...fee, feeStructureDoc: structure, academicYearDoc: year };
-      })
+      }),
     );
   },
 });
@@ -62,14 +67,18 @@ export const updateStudentFee = mutation({
     feeId: v.id("studentFees"),
     paidAmount: v.float64(),
     balance: v.float64(),
-    status: v.union(v.literal("unpaid"), v.literal("partial"), v.literal("paid")),
+    status: v.union(
+      v.literal("unpaid"),
+      v.literal("partial"),
+      v.literal("paid"),
+    ),
     paymentDetails: v.array(
       v.object({
         paymentId: v.id("feeTransactions"),
         date: v.string(),
         amount: v.float64(),
         mode: v.string(),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {

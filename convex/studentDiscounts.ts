@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /** Apply a discount to a student fee. */
@@ -34,11 +34,16 @@ export const applyDiscount = mutation({
 
     // Update fee balance
     const newBalance = fee.balance - discountAmount;
-    const newStatus = newBalance <= 0 ? "paid" : fee.paidAmount > 0 ? "partial" : "unpaid";
+    const newStatus =
+      newBalance <= 0 ? "paid" : fee.paidAmount > 0 ? "partial" : "unpaid";
 
     const updatedDiscounts = [
       ...(fee.appliedDiscounts ?? []),
-      { discountId: args.discountRuleId, amount: discountAmount, type: rule.discountType },
+      {
+        discountId: args.discountRuleId,
+        amount: discountAmount,
+        type: rule.discountType,
+      },
     ];
 
     await ctx.db.patch(args.feeId, {
@@ -69,14 +74,14 @@ export const getByStudentYear = query({
     const discounts = await ctx.db
       .query("studentDiscounts")
       .withIndex("by_student_year", (q) =>
-        q.eq("studentId", args.studentId).eq("academicYear", args.academicYear)
+        q.eq("studentId", args.studentId).eq("academicYear", args.academicYear),
       )
       .collect();
     return await Promise.all(
       discounts.map(async (d) => ({
         ...d,
         ruleDoc: await ctx.db.get(d.discountRuleId),
-      }))
+      })),
     );
   },
 });

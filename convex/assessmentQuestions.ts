@@ -1,7 +1,7 @@
-import { mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /** Create a single question for an assessment. */
@@ -37,22 +37,30 @@ export const bulkCreateQuestions = mutation({
         questionText: v.optional(v.string()),
         learningObjective: v.optional(v.string()),
         conceptTag: v.optional(v.string()),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) throw new Error("Assessment not found");
-    const totalNewMarks = args.questions.reduce((s, q) => s + q.marksAllocated, 0);
+    const totalNewMarks = args.questions.reduce(
+      (s, q) => s + q.marksAllocated,
+      0,
+    );
     const existingQuestions = await ctx.db
       .query("assessmentQuestions")
-      .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+      .withIndex("by_assessment", (q) =>
+        q.eq("assessmentId", args.assessmentId),
+      )
       .take(200);
-    const existingTotal = existingQuestions.reduce((s, q) => s + q.marksAllocated, 0);
+    const existingTotal = existingQuestions.reduce(
+      (s, q) => s + q.marksAllocated,
+      0,
+    );
     if (existingTotal + totalNewMarks > assessment.totalMarks) {
       throw new Error(
-        `Adding ${totalNewMarks} marks would exceed assessment total of ${assessment.totalMarks} (currently allocated: ${existingTotal})`
+        `Adding ${totalNewMarks} marks would exceed assessment total of ${assessment.totalMarks} (currently allocated: ${existingTotal})`,
       );
     }
     const ids = [];
@@ -82,7 +90,9 @@ export const getByAssessment = query({
     await requireRole(ctx, ["admin", "teacher"]);
     return await ctx.db
       .query("assessmentQuestions")
-      .withIndex("by_assessment_order", (q) => q.eq("assessmentId", args.assessmentId))
+      .withIndex("by_assessment_order", (q) =>
+        q.eq("assessmentId", args.assessmentId),
+      )
       .take(200);
   },
 });
@@ -105,14 +115,16 @@ export const updateQuestion = mutation({
       if (!assessment) throw new Error("Assessment not found");
       const siblings = await ctx.db
         .query("assessmentQuestions")
-        .withIndex("by_assessment", (q) => q.eq("assessmentId", question.assessmentId))
+        .withIndex("by_assessment", (q) =>
+          q.eq("assessmentId", question.assessmentId),
+        )
         .take(200);
       const othersTotal = siblings
         .filter((q) => q._id !== args.questionId)
         .reduce((sum, q) => sum + q.marksAllocated, 0);
       if (othersTotal + args.marksAllocated > assessment.totalMarks) {
         throw new Error(
-          `Updating to ${args.marksAllocated} marks would exceed assessment total of ${assessment.totalMarks} (other questions: ${othersTotal})`
+          `Updating to ${args.marksAllocated} marks would exceed assessment total of ${assessment.totalMarks} (other questions: ${othersTotal})`,
         );
       }
     }
@@ -149,7 +161,7 @@ export const deleteQuestion = mutation({
 async function validateQuestionTotal(
   ctx: MutationCtx,
   assessmentId: Id<"assessments">,
-  newMarks: number
+  newMarks: number,
 ) {
   const assessment = await ctx.db.get(assessmentId);
   if (!assessment) throw new Error("Assessment not found");
@@ -160,7 +172,7 @@ async function validateQuestionTotal(
   const currentTotal = existing.reduce((s, q) => s + q.marksAllocated, 0);
   if (currentTotal + newMarks > assessment.totalMarks) {
     throw new Error(
-      `Adding ${newMarks} marks would exceed assessment total of ${assessment.totalMarks} (current: ${currentTotal})`
+      `Adding ${newMarks} marks would exceed assessment total of ${assessment.totalMarks} (current: ${currentTotal})`,
     );
   }
 }

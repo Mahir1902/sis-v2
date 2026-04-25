@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /** List all fee structures. */
@@ -30,7 +30,9 @@ export const getFormFees = query({
     await requireRole(ctx, ["admin"]);
     const structures = await ctx.db
       .query("feeStructure")
-      .withIndex("by_standard", (q) => q.eq("standardLevel", args.standardLevel))
+      .withIndex("by_standard", (q) =>
+        q.eq("standardLevel", args.standardLevel),
+      )
       .take(50);
 
     const result = { admission: 0, tuition: 0, registration: 0 };
@@ -53,7 +55,9 @@ export const getFormFeeStructure = query({
     await requireRole(ctx, ["admin"]);
     return await ctx.db
       .query("feeStructure")
-      .withIndex("by_standard", (q) => q.eq("standardLevel", args.standardLevel))
+      .withIndex("by_standard", (q) =>
+        q.eq("standardLevel", args.standardLevel),
+      )
       .take(50);
   },
 });
@@ -66,7 +70,7 @@ export const createFee = mutation({
     frequency: v.union(
       v.literal("one-time"),
       v.literal("monthly"),
-      v.literal("yearly")
+      v.literal("yearly"),
     ),
     feeType: v.union(
       v.literal("admission"),
@@ -74,7 +78,7 @@ export const createFee = mutation({
       v.literal("registration"),
       v.literal("library"),
       v.literal("sports"),
-      v.literal("computer")
+      v.literal("computer"),
     ),
     standardLevel: v.id("standardLevels"),
     dueDate: v.optional(v.float64()),
@@ -85,7 +89,7 @@ export const createFee = mutation({
         amountPerDay: v.optional(v.float64()),
         maxAmount: v.optional(v.float64()),
         maxDays: v.optional(v.float64()),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {

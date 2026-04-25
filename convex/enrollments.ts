@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -38,7 +38,7 @@ export const getEnrollmentHistory = query({
     const enrollments = await ctx.db
       .query("enrollments")
       .withIndex("by_student_academic_year", (q) =>
-        q.eq("studentId", args.studentId)
+        q.eq("studentId", args.studentId),
       )
       .take(100);
 
@@ -53,7 +53,7 @@ export const getEnrollmentHistory = query({
           academicYearDoc: academicYear,
           standardLevelDoc: standardLevel,
         };
-      })
+      }),
     );
 
     // Sort newest first (by enrollmentDate descending)
@@ -73,7 +73,7 @@ export const getCurrentEnrollment = query({
     const enrollments = await ctx.db
       .query("enrollments")
       .withIndex("by_student_academic_year", (q) =>
-        q.eq("studentId", args.studentId)
+        q.eq("studentId", args.studentId),
       )
       .take(100);
 
@@ -85,7 +85,11 @@ export const getCurrentEnrollment = query({
       ctx.db.get(current.standardLevelId),
     ]);
 
-    return { ...current, academicYearDoc: academicYear, standardLevelDoc: standardLevel };
+    return {
+      ...current,
+      academicYearDoc: academicYear,
+      standardLevelDoc: standardLevel,
+    };
   },
 });
 
@@ -103,13 +107,13 @@ export const getEnrollmentsByLevelYear = query({
     const enrollments = await ctx.db
       .query("enrollments")
       .withIndex("by_standard_level", (q) =>
-        q.eq("standardLevelId", args.standardLevelId)
+        q.eq("standardLevelId", args.standardLevelId),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("academicYear"), args.academicYearId),
-          q.eq(q.field("status"), "active")
-        )
+          q.eq(q.field("status"), "active"),
+        ),
       )
       .take(200);
 
@@ -121,7 +125,7 @@ export const getEnrollmentsByLevelYear = query({
           studentName: student?.studentFullName ?? "Unknown",
           studentNumber: student?.studentNumber ?? "",
         };
-      })
+      }),
     );
   },
 });
@@ -163,7 +167,15 @@ export const updateEnrollmentExit = mutation({
     };
     const newStatus = statusMap[args.exitReason];
     if (newStatus) {
-      await ctx.db.patch(enrollment.studentId, { status: newStatus as "active" | "graduated" | "transferred" | "withdrawn" | "suspended" | "expelled" });
+      await ctx.db.patch(enrollment.studentId, {
+        status: newStatus as
+          | "active"
+          | "graduated"
+          | "transferred"
+          | "withdrawn"
+          | "suspended"
+          | "expelled",
+      });
     }
 
     return args.enrollmentId;

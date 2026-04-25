@@ -9,7 +9,9 @@ export const studentInfoBaseSchema = z.object({
   citizenship: z.string().min(1, "Citizenship is required"),
   religion: z.string().min(1, "Religion is required"),
   bloodGroup: z.string().min(1, "Blood group is required"),
-  birthCertificateNumber: z.string().min(1, "Birth certificate number is required"),
+  birthCertificateNumber: z
+    .string()
+    .min(1, "Birth certificate number is required"),
   passportNumber: z.string().optional(),
   passportValidTill: z.string().optional(),
   standardLevel: z.string().min(1, "Standard level is required"),
@@ -27,11 +29,12 @@ export const studentInfoBaseSchema = z.object({
 export const studentInfoSchema = studentInfoBaseSchema.refine(
   (data) =>
     !data.hasHealthIssues ||
-    (data.healthIssueDescription && data.healthIssueDescription.trim().length > 0),
+    (data.healthIssueDescription &&
+      data.healthIssueDescription.trim().length > 0),
   {
     message: "Please describe the health issue",
     path: ["healthIssueDescription"],
-  }
+  },
 );
 
 export type StudentInfoValues = z.infer<typeof studentInfoSchema>;

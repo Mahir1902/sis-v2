@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 const EQUAL_THIRDS = { ca1Weight: 1 / 3, ca2Weight: 1 / 3, ca3Weight: 1 / 3 };
@@ -19,7 +19,7 @@ export const getWeightingRuleOrDefault = query({
         q
           .eq("standardLevelId", args.standardLevelId)
           .eq("subjectId", args.subjectId)
-          .eq("semester", args.semester)
+          .eq("semester", args.semester),
       )
       .filter((q) => q.eq(q.field("isActive"), true))
       .first();
@@ -44,14 +44,14 @@ export const listByLevel = query({
     const rules = await ctx.db
       .query("assessmentWeightingRules")
       .withIndex("by_standard_subject_semester", (q) =>
-        q.eq("standardLevelId", args.standardLevelId)
+        q.eq("standardLevelId", args.standardLevelId),
       )
       .collect();
     return await Promise.all(
       rules.map(async (r) => ({
         ...r,
         subjectDoc: await ctx.db.get(r.subjectId),
-      }))
+      })),
     );
   },
 });
@@ -78,7 +78,7 @@ export const upsertWeightingRule = mutation({
         q
           .eq("standardLevelId", args.standardLevelId)
           .eq("subjectId", args.subjectId)
-          .eq("semester", args.semester)
+          .eq("semester", args.semester),
       )
       .first();
     if (existing) {

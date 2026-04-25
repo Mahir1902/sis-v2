@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /** Create a single assessment (CA-1, CA-2, or CA-3). */
@@ -21,19 +21,19 @@ export const createAssessment = mutation({
     const existing = await ctx.db
       .query("assessments")
       .withIndex("by_subject_semester", (q) =>
-        q.eq("subjectId", args.subjectId).eq("semester", args.semester)
+        q.eq("subjectId", args.subjectId).eq("semester", args.semester),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("standardLevelId"), args.standardLevelId),
           q.eq(q.field("academicYearId"), args.academicYearId),
-          q.eq(q.field("assessmentNumber"), args.assessmentNumber)
-        )
+          q.eq(q.field("assessmentNumber"), args.assessmentNumber),
+        ),
       )
       .first();
     if (existing) {
       throw new Error(
-        `CA-${args.assessmentNumber} already exists for this subject/semester/level/year`
+        `CA-${args.assessmentNumber} already exists for this subject/semester/level/year`,
       );
     }
     return await ctx.db.insert("assessments", {
@@ -61,19 +61,19 @@ export const bulkCreateAssessments = mutation({
       const existing = await ctx.db
         .query("assessments")
         .withIndex("by_subject_semester", (q) =>
-          q.eq("subjectId", args.subjectId).eq("semester", args.semester)
+          q.eq("subjectId", args.subjectId).eq("semester", args.semester),
         )
         .filter((q) =>
           q.and(
             q.eq(q.field("standardLevelId"), args.standardLevelId),
             q.eq(q.field("academicYearId"), args.academicYearId),
-            q.eq(q.field("assessmentNumber"), num)
-          )
+            q.eq(q.field("assessmentNumber"), num),
+          ),
         )
         .first();
       if (existing) {
         throw new Error(
-          `CA-${num} already exists for this subject/semester/level/year`
+          `CA-${num} already exists for this subject/semester/level/year`,
         );
       }
       const id = await ctx.db.insert("assessments", {
@@ -102,12 +102,12 @@ export const getAssessmentsByLevelYear = query({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
-    let q = ctx.db
+    const q = ctx.db
       .query("assessments")
       .withIndex("by_standard_year", (q) =>
         q
           .eq("standardLevelId", args.standardLevelId)
-          .eq("academicYearId", args.academicYearId)
+          .eq("academicYearId", args.academicYearId),
       );
     const assessments = await q.take(200);
     const filtered = args.semester
@@ -123,10 +123,15 @@ export const getAssessmentsByLevelYear = query({
           .take(200);
         const totalQMarks = questions.reduce(
           (sum, q) => sum + q.marksAllocated,
-          0
+          0,
         );
-        return { ...a, subjectDoc: subject, questionCount: questions.length, totalQMarks };
-      })
+        return {
+          ...a,
+          subjectDoc: subject,
+          questionCount: questions.length,
+          totalQMarks,
+        };
+      }),
     );
   },
 });
@@ -140,7 +145,9 @@ export const getAssessmentById = query({
     if (!assessment) return null;
     const questions = await ctx.db
       .query("assessmentQuestions")
-      .withIndex("by_assessment_order", (q) => q.eq("assessmentId", args.assessmentId))
+      .withIndex("by_assessment_order", (q) =>
+        q.eq("assessmentId", args.assessmentId),
+      )
       .take(200);
     const subject = await ctx.db.get(assessment.subjectId);
     return { ...assessment, subjectDoc: subject, questions };
@@ -160,14 +167,14 @@ export const getAssessmentsBySubjectSemester = query({
     const assessments = await ctx.db
       .query("assessments")
       .withIndex("by_subject_semester", (q) =>
-        q.eq("subjectId", args.subjectId).eq("semester", args.semester)
+        q.eq("subjectId", args.subjectId).eq("semester", args.semester),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("standardLevelId"), args.standardLevelId),
           q.eq(q.field("academicYearId"), args.academicYearId),
-          q.eq(q.field("isActive"), true)
-        )
+          q.eq(q.field("isActive"), true),
+        ),
       )
       .take(20);
     return assessments.sort((a, b) => a.assessmentNumber - b.assessmentNumber);
@@ -198,26 +205,41 @@ export const updateAssessment = mutation({
     if (!assessment) throw new Error("Assessment not found");
 
     // If lowering totalMarks, ensure it doesn't go below allocated question marks
-    if (args.totalMarks !== undefined && args.totalMarks < assessment.totalMarks) {
+    if (
+      args.totalMarks !== undefined &&
+      args.totalMarks < assessment.totalMarks
+    ) {
       const questions = await ctx.db
         .query("assessmentQuestions")
-        .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+        .withIndex("by_assessment", (q) =>
+          q.eq("assessmentId", args.assessmentId),
+        )
         .take(200);
-      const allocatedMarks = questions.reduce((sum, q) => sum + q.marksAllocated, 0);
+      const allocatedMarks = questions.reduce(
+        (sum, q) => sum + q.marksAllocated,
+        0,
+      );
       if (args.totalMarks < allocatedMarks) {
         throw new Error(
-          `Cannot reduce total marks below ${allocatedMarks} (currently allocated across ${questions.length} questions)`
+          `Cannot reduce total marks below ${allocatedMarks} (currently allocated across ${questions.length} questions)`,
         );
       }
     }
 
     const { assessmentId, ...updates } = args;
     // Remove undefined values so we only patch what was provided
-    const patch: Partial<{ name: string; totalMarks: number; passingMarks: number; assessmentDate: number }> = {};
+    const patch: Partial<{
+      name: string;
+      totalMarks: number;
+      passingMarks: number;
+      assessmentDate: number;
+    }> = {};
     if (updates.name !== undefined) patch.name = updates.name;
     if (updates.totalMarks !== undefined) patch.totalMarks = updates.totalMarks;
-    if (updates.passingMarks !== undefined) patch.passingMarks = updates.passingMarks;
-    if (updates.assessmentDate !== undefined) patch.assessmentDate = updates.assessmentDate;
+    if (updates.passingMarks !== undefined)
+      patch.passingMarks = updates.passingMarks;
+    if (updates.assessmentDate !== undefined)
+      patch.assessmentDate = updates.assessmentDate;
 
     await ctx.db.patch(assessmentId, patch);
   },
@@ -234,7 +256,9 @@ export const deleteAssessment = mutation({
     // 1. Delete all student answers for this assessment
     const answers = await ctx.db
       .query("studentAssessmentAnswers")
-      .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+      .withIndex("by_assessment", (q) =>
+        q.eq("assessmentId", args.assessmentId),
+      )
       .take(5000);
     for (const answer of answers) {
       await ctx.db.delete(answer._id);
@@ -243,7 +267,9 @@ export const deleteAssessment = mutation({
     // 2. Delete all questions for this assessment
     const questions = await ctx.db
       .query("assessmentQuestions")
-      .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+      .withIndex("by_assessment", (q) =>
+        q.eq("assessmentId", args.assessmentId),
+      )
       .take(200);
     for (const question of questions) {
       await ctx.db.delete(question._id);
@@ -252,6 +278,9 @@ export const deleteAssessment = mutation({
     // 3. Delete the assessment itself
     await ctx.db.delete(args.assessmentId);
 
-    return { deletedAnswers: answers.length, deletedQuestions: questions.length };
+    return {
+      deletedAnswers: answers.length,
+      deletedQuestions: questions.length,
+    };
   },
 });

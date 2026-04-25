@@ -1,12 +1,16 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery } from "convex/react";
+import { format } from "date-fns";
+import { Plus } from "lucide-react";
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
+import { RoleGate } from "@/components/shared/RoleGate";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +26,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -30,15 +33,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { toast } from "sonner";
-import { Plus } from "lucide-react";
-import { format } from "date-fns";
-import { RoleGate } from "@/components/shared/RoleGate";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 
-const feeTypes = ["admission", "tuition", "registration", "library", "sports", "computer"] as const;
+const feeTypes = [
+  "admission",
+  "tuition",
+  "registration",
+  "library",
+  "sports",
+  "computer",
+] as const;
 
 const frequencies = ["one-time", "monthly", "yearly"] as const;
 
@@ -73,6 +80,7 @@ function FeesPageContent() {
         <Skeleton className="h-8 w-48" />
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
             <Skeleton key={i} className="h-32 rounded-lg" />
           ))}
         </div>
@@ -86,17 +94,27 @@ function FeesPageContent() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
         {levels.map((level) => {
-          const levelFees = allFees.filter((f) => f.standardLevel === level._id);
-          const lastUpdated = levelFees.length > 0
-            ? Math.max(...levelFees.map((f) => f._creationTime))
-            : null;
+          const levelFees = allFees.filter(
+            (f) => f.standardLevel === level._id,
+          );
+          const lastUpdated =
+            levelFees.length > 0
+              ? Math.max(...levelFees.map((f) => f._creationTime))
+              : null;
 
           return (
-            <div key={level._id} className="bg-white border rounded-lg p-4 space-y-3 hover:border-gray-300 transition-colors">
+            <div
+              key={level._id}
+              className="bg-white border rounded-lg p-4 space-y-3 hover:border-gray-300 transition-colors"
+            >
               <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-sm text-gray-900">{level.name}</h3>
+                <h3 className="font-semibold text-sm text-gray-900">
+                  {level.name}
+                </h3>
                 <div className="flex-shrink-0 w-7 h-7 rounded-full bg-school-green/10 flex items-center justify-center">
-                  <span className="text-xs font-bold text-school-green">{levelFees.length}</span>
+                  <span className="text-xs font-bold text-school-green">
+                    {levelFees.length}
+                  </span>
                 </div>
               </div>
               <div className="space-y-0.5">
@@ -112,7 +130,11 @@ function FeesPageContent() {
               {levelFees.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {levelFees.map((f) => (
-                    <Badge key={f._id} variant="outline" className="text-xs capitalize">
+                    <Badge
+                      key={f._id}
+                      variant="outline"
+                      className="text-xs capitalize"
+                    >
                       {f.feeType}
                     </Badge>
                   ))}
@@ -135,7 +157,7 @@ function FeesPageContent() {
       <CreateFeeDialog
         open={!!createFor}
         onClose={() => setCreateFor(null)}
-        standardLevelId={createFor!}
+        standardLevelId={createFor as Id<"standardLevels">}
       />
     </div>
   );
@@ -175,7 +197,9 @@ function CreateFeeDialog({
         baseAmount: values.baseAmount,
         frequency: values.frequency,
         standardLevel: standardLevelId,
-        dueDate: values.dueDate ? new Date(values.dueDate).getTime() : undefined,
+        dueDate: values.dueDate
+          ? new Date(values.dueDate).getTime()
+          : undefined,
         lateFeeConfig: values.lateFeeEnabled
           ? { enabled: true, amount: values.lateFeeAmount ?? 0 }
           : undefined,
@@ -184,7 +208,8 @@ function CreateFeeDialog({
       form.reset();
       onClose();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to create fee";
+      const message =
+        err instanceof Error ? err.message : "Failed to create fee";
       toast.error(message);
     }
   }
@@ -250,11 +275,17 @@ function CreateFeeDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {["monthly", "yearly", "one-time", "semester"].map((f) => (
-                          <SelectItem key={f} value={f} className="capitalize">
-                            {f}
-                          </SelectItem>
-                        ))}
+                        {["monthly", "yearly", "one-time", "semester"].map(
+                          (f) => (
+                            <SelectItem
+                              key={f}
+                              value={f}
+                              className="capitalize"
+                            >
+                              {f}
+                            </SelectItem>
+                          ),
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -273,7 +304,9 @@ function CreateFeeDialog({
                     <Input
                       type="number"
                       {...field}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                      onChange={(e) =>
+                        field.onChange(parseFloat(e.target.value))
+                      }
                     />
                   </FormControl>
                   <FormMessage />
@@ -302,7 +335,10 @@ function CreateFeeDialog({
                 <FormItem className="flex items-center justify-between">
                   <FormLabel>Late Fee</FormLabel>
                   <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
                   </FormControl>
                 </FormItem>
               )}
@@ -319,7 +355,9 @@ function CreateFeeDialog({
                       <Input
                         type="number"
                         {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value))
+                        }
                       />
                     </FormControl>
                     <FormMessage />

@@ -23,7 +23,8 @@ export default function DashboardError({
   // "Unauthenticated" = not logged in → sign out + redirect to login
   // "Unauthorized"    = logged in but wrong role/missing account → show access denied, do NOT sign out
   const isUnauthenticated = error.message.includes("Unauthenticated");
-  const isUnauthorized = !isUnauthenticated && error.message.includes("Unauthorized");
+  const isUnauthorized =
+    !isUnauthenticated && error.message.includes("Unauthorized");
 
   useEffect(() => {
     if (!isUnauthenticated) return;

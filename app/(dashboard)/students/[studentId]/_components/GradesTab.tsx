@@ -84,6 +84,7 @@ export function GradesTab({ studentId }: GradesTabProps) {
           <Skeleton className="h-9 w-32" />
         </div>
         {Array.from({ length: 5 }).map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
           <Skeleton key={i} className="h-12 w-full" />
         ))}
       </div>
@@ -187,6 +188,7 @@ export function GradesTab({ studentId }: GradesTabProps) {
       {grades === undefined ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>

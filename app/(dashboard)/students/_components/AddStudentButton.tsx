@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Plus } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,7 +28,9 @@ export function AddStudentButton() {
         <DialogContent className="sm:max-w-[900px] border-t-4 border-school-green">
           <DialogHeader>
             <DialogTitle className="text-xl">Student Admission</DialogTitle>
-            <p className="text-sm text-muted-foreground">Fill in the required information to admit a new student</p>
+            <p className="text-sm text-muted-foreground">
+              Fill in the required information to admit a new student
+            </p>
           </DialogHeader>
           <AddStudentForm onSuccess={() => setOpen(false)} />
         </DialogContent>

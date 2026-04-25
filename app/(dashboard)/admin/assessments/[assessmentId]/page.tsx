@@ -1,12 +1,11 @@
 "use client";
 
-import { use, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { ArrowLeft, BookOpen, Pencil, Settings, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery } from "convex/react";
+import { use, useState } from "react";
 import { toast } from "sonner";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { RoleGate } from "@/components/shared/RoleGate";
 import {
   AlertDialog,
@@ -18,13 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, BookOpen, Pencil, Settings, Trash2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { EditAssessmentDialog } from "./_components/EditAssessmentDialog";
 import { MarkEntryGrid } from "./_components/MarkEntryGrid";
 import { QuestionManager } from "./_components/QuestionManager";
-import { EditAssessmentDialog } from "./_components/EditAssessmentDialog";
 
 export default function AssessmentDetailPage({
   params,
@@ -256,8 +256,8 @@ function AssessmentDetailContent({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Assessment?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <strong>{assessment.name}</strong> along
-              with {assessment.questions.length} question
+              This will permanently delete <strong>{assessment.name}</strong>{" "}
+              along with {assessment.questions.length} question
               {assessment.questions.length !== 1 ? "s" : ""} and all associated
               student answers. This action cannot be undone.
             </AlertDialogDescription>

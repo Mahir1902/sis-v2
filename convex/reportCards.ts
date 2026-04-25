@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /** Upload a report card PDF for an enrollment+semester. */
@@ -18,11 +18,13 @@ export const uploadReportCard = mutation({
     const existing = await ctx.db
       .query("reportCards")
       .withIndex("by_enrollment_semester", (q) =>
-        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester)
+        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester),
       )
       .first();
     if (existing) {
-      throw new Error("A report card for this semester already exists. Delete it first.");
+      throw new Error(
+        "A report card for this semester already exists. Delete it first.",
+      );
     }
     return await ctx.db.insert("reportCards", {
       studentId: args.studentId,
@@ -55,8 +57,13 @@ export const getByStudent = query({
           ? await ctx.db.get(enrollment.standardLevelId)
           : null;
         const fileUrl = await ctx.storage.getUrl(c.fileUrl);
-        return { ...c, resolvedUrl: fileUrl, yearName: year?.name, levelName: level?.name };
-      })
+        return {
+          ...c,
+          resolvedUrl: fileUrl,
+          yearName: year?.name,
+          levelName: level?.name,
+        };
+      }),
     );
   },
 });
@@ -68,7 +75,9 @@ export const getByEnrollment = query({
     await requireRole(ctx, ["admin", "teacher"]);
     return await ctx.db
       .query("reportCards")
-      .withIndex("by_enrollment_semester", (q) => q.eq("enrollmentId", args.enrollmentId))
+      .withIndex("by_enrollment_semester", (q) =>
+        q.eq("enrollmentId", args.enrollmentId),
+      )
       .take(20);
   },
 });

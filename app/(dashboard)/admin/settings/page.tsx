@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Shield, UserCheck, UserX } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { RoleGate } from "@/components/shared/RoleGate";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +35,6 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { RoleGate } from "@/components/shared/RoleGate";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
