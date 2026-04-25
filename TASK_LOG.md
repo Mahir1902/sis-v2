@@ -164,6 +164,31 @@ new feature work begins.
 
 ---
 
+## Student Delete & Update Mutations (2026-04-24)
+**Status**: DONE
+**Active Agent**: BACKEND AGENT
+
+### Sub-tasks
+- [x] SU-1 Add `deleteStudent` mutation — cascade deletes all 9 related tables, unlinks siblings, deletes stored photos + report card files — awaiting BACKEND REVIEW
+- [x] SU-2 Add `updateStudent` mutation — partial field update with bidirectional sibling re-linking — awaiting BACKEND REVIEW
+
+---
+
+## Student Header Enhancements (2026-04-24)
+**Status**: Complete — awaiting FRONTEND REVIEW
+**Active Agent**: FRONTEND AGENT
+
+### Sub-tasks
+- [x] SH-1 Add Delete button with AlertDialog to StudentHeader — COMPLETE
+- [x] SH-2 Replace Edit button navigation with EditStudentDialog — COMPLETE
+- [x] SH-3 Create EditStudentDialog component — COMPLETE
+
+### Build Verification
+- `npm run build`: PASSING (12 routes, 0 TypeScript errors)
+- `npx biome check` on changed files: PASSING (0 errors)
+
+---
+
 ## Current Build Status
 - `npm run build`: PASSING (11 routes)
 - `npx convex dev --once`: PASSING

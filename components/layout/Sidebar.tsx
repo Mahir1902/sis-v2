@@ -14,6 +14,12 @@ import {
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSidebar } from "@/hooks/use-sidebar";
 import { cn } from "@/lib/utils";
 import { SidebarItem } from "./SidebarItem";
@@ -37,7 +43,12 @@ const navGroups: NavGroup[] = [
   {
     label: "Overview",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"] },
+      {
+        href: "/dashboard",
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        roles: ["admin"],
+      },
     ],
   },
   {
@@ -90,73 +101,112 @@ export function Sidebar({ role, email }: SidebarProps) {
     .filter((g) => g.items.length > 0);
 
   return (
-    <div
-      className={cn(
-        "fixed left-0 top-0 h-full bg-white border-r border-gray-200 flex flex-col z-40 transition-all duration-300 overflow-hidden",
-        isCollapsed ? "w-10" : "w-[300px] max-w-[300px]",
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 h-16 border-b border-gray-200 shrink-0">
-        {!isCollapsed && (
-          <span className="font-bold text-school-green text-lg truncate">
-            SIS v2
-          </span>
+    <TooltipProvider delayDuration={0}>
+      <div
+        className={cn(
+          "fixed left-0 top-0 h-full bg-white border-r border-gray-200 flex flex-col z-40 transition-all duration-300 overflow-hidden",
+          isCollapsed ? "w-16" : "w-[300px] max-w-[300px]",
         )}
-        <button
-          type="button"
-          onClick={onToggle}
-          className="ml-auto p-1 rounded hover:bg-gray-100 text-gray-500"
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
+      >
+        {/* Header */}
+        <div
+          className={cn(
+            "flex items-center h-16 border-b border-gray-200 shrink-0",
+            isCollapsed ? "justify-center px-2" : "justify-between px-4",
           )}
-        </button>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 space-y-4">
-        {visibleGroups.map((group) => (
-          <div key={group.label}>
-            {!isCollapsed && (
-              <p className="px-4 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                {group.label}
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => (
-                <SidebarItem
-                  key={item.href}
-                  href={item.href}
-                  label={item.label}
-                  icon={item.icon}
-                  isCollapsed={isCollapsed}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* Sign-out footer */}
-      <div className="shrink-0 border-t border-gray-200 p-3 flex items-center gap-2">
-        {!isCollapsed && (
-          <span className="flex-1 truncate text-xs text-gray-500" title={email}>
-            {email ?? ""}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={handleSignOut}
-          aria-label="Sign out"
-          className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-red-500 transition-colors shrink-0"
         >
-          <LogOut className="h-4 w-4" />
-        </button>
+          {!isCollapsed && (
+            <span className="font-bold text-school-green text-lg truncate">
+              SIS v2
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onToggle}
+            className={cn(
+              "p-1 rounded hover:bg-gray-100 text-gray-500",
+              !isCollapsed && "ml-auto",
+            )}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+
+        {/* Navigation */}
+        <nav
+          className={cn(
+            "flex-1 overflow-y-auto py-4 space-y-4",
+            isCollapsed && "px-2",
+          )}
+        >
+          {visibleGroups.map((group) => (
+            <div key={group.label}>
+              {!isCollapsed && (
+                <p className="px-4 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  {group.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <SidebarItem
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    isCollapsed={isCollapsed}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {/* Sign-out footer */}
+        <div
+          className={cn(
+            "shrink-0 border-t border-gray-200 flex items-center",
+            isCollapsed ? "justify-center p-2" : "p-3 gap-2",
+          )}
+        >
+          {!isCollapsed && (
+            <span
+              className="flex-1 truncate text-xs text-gray-500"
+              title={email}
+            >
+              {email ?? ""}
+            </span>
+          )}
+          {isCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  aria-label="Sign out"
+                  className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-red-500 transition-colors shrink-0"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Sign out</TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-red-500 transition-colors shrink-0"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

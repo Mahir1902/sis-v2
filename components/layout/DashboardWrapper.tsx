@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useConvexAuth, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { api } from "@/convex/_generated/api";
 import { useSidebar } from "@/hooks/use-sidebar";
 import { cn } from "@/lib/utils";
@@ -43,7 +43,7 @@ export function DashboardWrapper({ children }: { children: React.ReactNode }) {
       <main
         className={cn(
           "transition-all duration-300 min-h-screen",
-          isCollapsed ? "pl-10" : "pl-[300px]",
+          isCollapsed ? "pl-16" : "pl-[300px]",
         )}
       >
         <div className="p-6">{children}</div>

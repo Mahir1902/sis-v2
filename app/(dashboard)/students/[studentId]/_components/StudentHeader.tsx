@@ -1,11 +1,27 @@
 "use client";
 
-import { Phone } from "lucide-react";
+import { useMutation } from "convex/react";
+import { Phone, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { StatusBadge } from "../../_components/StatusBadge";
+import { EditStudentDialog } from "./EditStudentDialog";
 
 type Status =
   | "active"
@@ -52,6 +68,9 @@ export function StudentHeader({
   currentEnrollment,
 }: StudentHeaderProps) {
   const router = useRouter();
+  const deleteStudent = useMutation(api.students.deleteStudent);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const levelWithSection = [
     student.standardLevelDoc?.name,
@@ -153,13 +172,63 @@ export function StudentHeader({
             variant="outline"
             size="sm"
             className="text-xs h-7"
-            onClick={() => router.push(`/students/${studentId}/edit`)}
+            onClick={() => setEditOpen(true)}
             aria-label="Edit student"
           >
             Edit
           </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-7 text-red-600 border-red-200 hover:bg-red-50"
+                aria-label="Delete student"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Student</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete {student.studentFullName} and all
+                  associated records (enrollments, fees, grades, report cards).
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-600 hover:bg-red-700"
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      await deleteStudent({ studentId });
+                      toast.success("Student deleted successfully");
+                      router.push("/students");
+                    } catch {
+                      toast.error("Failed to delete student");
+                      setIsDeleting(false);
+                    }
+                  }}
+                >
+                  {isDeleting ? "Deleting\u2026" : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
+
+      <EditStudentDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        studentId={studentId}
+      />
     </div>
   );
 }
