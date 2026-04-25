@@ -35,6 +35,7 @@ export const getByStudent = query({
     const fees = await ctx.db
       .query("studentFees")
       .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
+      .order("desc")
       .take(100);
 
     return await Promise.all(
