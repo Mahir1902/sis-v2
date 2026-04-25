@@ -20,6 +20,7 @@ function StudentsTableSkeleton() {
       <div className="rounded-md border bg-white">
         {Array.from({ length: 5 }).map((_, i) => (
           <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
             key={i}
             className="flex items-center gap-4 p-4 border-b last:border-0"
           >

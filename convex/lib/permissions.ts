@@ -1,4 +1,4 @@
-import { Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 type Role = "admin" | "teacher" | "student";

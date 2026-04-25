@@ -60,12 +60,12 @@ export function EditAssessmentDialog({
           .min(1, "Total marks must be at least 1")
           .refine(
             (val) => val >= assessment.allocatedMarks,
-            `Cannot be less than ${assessment.allocatedMarks} (currently allocated)`
+            `Cannot be less than ${assessment.allocatedMarks} (currently allocated)`,
           ),
         passingMarks: z.number().min(0).optional(),
         assessmentDate: z.string().optional(),
       }),
-    [assessment.allocatedMarks]
+    [assessment.allocatedMarks],
   );
   type EditAssessmentValues = z.infer<typeof editAssessmentSchema>;
 
@@ -120,10 +120,7 @@ export function EditAssessmentDialog({
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      aria-label="Assessment name"
-                    />
+                    <Input {...field} aria-label="Assessment name" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -149,7 +146,8 @@ export function EditAssessmentDialog({
                   </FormControl>
                   {assessment.allocatedMarks > 0 && (
                     <p className="text-xs text-gray-500">
-                      {assessment.allocatedMarks} marks currently allocated across questions (minimum value)
+                      {assessment.allocatedMarks} marks currently allocated
+                      across questions (minimum value)
                     </p>
                   )}
                   <FormMessage />
@@ -171,7 +169,9 @@ export function EditAssessmentDialog({
                       value={field.value ?? ""}
                       onChange={(e) => {
                         const val = e.target.value;
-                        field.onChange(val === "" ? undefined : parseFloat(val));
+                        field.onChange(
+                          val === "" ? undefined : parseFloat(val),
+                        );
                       }}
                       aria-label="Passing marks"
                     />

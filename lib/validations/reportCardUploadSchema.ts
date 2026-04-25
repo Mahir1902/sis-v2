@@ -6,10 +6,7 @@ export const reportCardUploadSchema = z.object({
   file: z
     .instanceof(File)
     .refine((f) => f.type === "application/pdf", "Only PDF files are allowed")
-    .refine(
-      (f) => f.size <= 5 * 1024 * 1024,
-      "File must be 5MB or smaller"
-    ),
+    .refine((f) => f.size <= 5 * 1024 * 1024, "File must be 5MB or smaller"),
   notes: z.string().optional(),
 });
 

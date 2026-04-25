@@ -1,6 +1,6 @@
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
 
 const ADMIN_EMAIL = "admin@school.edu";
 
@@ -75,9 +75,18 @@ export const seedReferenceData = mutation({
     }
 
     // ── Campuses ──────────────────────────────────────────────────────────
-    await ctx.db.insert("campuses", { name: "Main Campus", address: "123 Education Street" });
-    await ctx.db.insert("campuses", { name: "East Campus", address: "456 East Avenue" });
-    await ctx.db.insert("campuses", { name: "West Campus", address: "789 West Boulevard" });
+    await ctx.db.insert("campuses", {
+      name: "Main Campus",
+      address: "123 Education Street",
+    });
+    await ctx.db.insert("campuses", {
+      name: "East Campus",
+      address: "456 East Avenue",
+    });
+    await ctx.db.insert("campuses", {
+      name: "West Campus",
+      address: "789 West Boulevard",
+    });
 
     // ── Standard Levels ───────────────────────────────────────────────────
     const levelDefs = [
@@ -100,7 +109,9 @@ export const seedReferenceData = mutation({
     ];
     const levelIds: Promise<Id<"standardLevels">>[] = [];
     for (const l of levelDefs) {
-      levelIds.push(ctx.db.insert("standardLevels", { name: l.name, code: l.code }));
+      levelIds.push(
+        ctx.db.insert("standardLevels", { name: l.name, code: l.code }),
+      );
     }
     const insertedIds = await Promise.all(levelIds);
     // Set nextLevelId chain
@@ -110,12 +121,48 @@ export const seedReferenceData = mutation({
 
     // ── Grade Mapping ─────────────────────────────────────────────────────
     const gradeMappings = [
-      { letterGrade: "A+", minPercentage: 90, maxPercentage: 100, order: 1, description: "Outstanding" },
-      { letterGrade: "A", minPercentage: 80, maxPercentage: 89, order: 2, description: "Excellent" },
-      { letterGrade: "B", minPercentage: 70, maxPercentage: 79, order: 3, description: "Good" },
-      { letterGrade: "C", minPercentage: 60, maxPercentage: 69, order: 4, description: "Satisfactory" },
-      { letterGrade: "D", minPercentage: 50, maxPercentage: 59, order: 5, description: "Pass" },
-      { letterGrade: "F", minPercentage: 0, maxPercentage: 49, order: 6, description: "Fail" },
+      {
+        letterGrade: "A+",
+        minPercentage: 90,
+        maxPercentage: 100,
+        order: 1,
+        description: "Outstanding",
+      },
+      {
+        letterGrade: "A",
+        minPercentage: 80,
+        maxPercentage: 89,
+        order: 2,
+        description: "Excellent",
+      },
+      {
+        letterGrade: "B",
+        minPercentage: 70,
+        maxPercentage: 79,
+        order: 3,
+        description: "Good",
+      },
+      {
+        letterGrade: "C",
+        minPercentage: 60,
+        maxPercentage: 69,
+        order: 4,
+        description: "Satisfactory",
+      },
+      {
+        letterGrade: "D",
+        minPercentage: 50,
+        maxPercentage: 59,
+        order: 5,
+        description: "Pass",
+      },
+      {
+        letterGrade: "F",
+        minPercentage: 0,
+        maxPercentage: 49,
+        order: 6,
+        description: "Fail",
+      },
     ];
     for (const g of gradeMappings) {
       await ctx.db.insert("gradeMapping", { ...g, isActive: true });
@@ -151,10 +198,31 @@ export const seedReferenceData = mutation({
       description: string;
       maxDiscountAmount?: number;
     }> = [
-      { name: "Sibling Discount", discountType: "percentage", amount: 10, description: "10% discount for siblings" },
-      { name: "Early Admission Discount", discountType: "percentage", amount: 5, description: "5% discount for early admission" },
-      { name: "Merit Scholarship", discountType: "percentage", amount: 15, maxDiscountAmount: 5000, description: "15% merit scholarship, max 5000" },
-      { name: "Staff Child Discount", discountType: "percentage", amount: 25, description: "25% discount for staff children" },
+      {
+        name: "Sibling Discount",
+        discountType: "percentage",
+        amount: 10,
+        description: "10% discount for siblings",
+      },
+      {
+        name: "Early Admission Discount",
+        discountType: "percentage",
+        amount: 5,
+        description: "5% discount for early admission",
+      },
+      {
+        name: "Merit Scholarship",
+        discountType: "percentage",
+        amount: 15,
+        maxDiscountAmount: 5000,
+        description: "15% merit scholarship, max 5000",
+      },
+      {
+        name: "Staff Child Discount",
+        discountType: "percentage",
+        amount: 25,
+        description: "25% discount for staff children",
+      },
     ];
     for (const d of discountDefs) {
       await ctx.db.insert("discountRules", { ...d, isActive: true });

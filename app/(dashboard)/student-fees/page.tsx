@@ -67,6 +67,7 @@ function StudentFeesPageContent() {
         <Skeleton className="h-8 w-full max-w-sm" />
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
             <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>

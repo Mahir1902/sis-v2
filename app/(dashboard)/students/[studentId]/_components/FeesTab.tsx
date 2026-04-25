@@ -1,12 +1,12 @@
 "use client";
 
+import { useMutation, useQuery } from "convex/react";
+import { format } from "date-fns";
+import { DollarSign, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -19,14 +19,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,10 +28,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { MoreHorizontal, DollarSign } from "lucide-react";
-import { format } from "date-fns";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { FeeDetailDialog } from "./FeeDetailDialog";
 
@@ -54,8 +54,12 @@ const statusStyles: Record<string, string> = {
 };
 
 export function FeesTab({ studentId }: FeesTabProps) {
-  const [collectFeeId, setCollectFeeId] = useState<Id<"studentFees"> | null>(null);
-  const [detailFeeId, setDetailFeeId] = useState<Id<"studentFees"> | null>(null);
+  const [collectFeeId, setCollectFeeId] = useState<Id<"studentFees"> | null>(
+    null,
+  );
+  const [detailFeeId, setDetailFeeId] = useState<Id<"studentFees"> | null>(
+    null,
+  );
 
   const fees = useQuery(api.studentFees.getByStudent, { studentId });
 
@@ -63,6 +67,7 @@ export function FeesTab({ studentId }: FeesTabProps) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 4 }).map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
           <Skeleton key={i} className="h-14 w-full" />
         ))}
       </div>
@@ -96,12 +101,20 @@ export function FeesTab({ studentId }: FeesTabProps) {
         {[
           { label: "Total Fees", value: totalFees, color: "text-gray-900" },
           { label: "Total Paid", value: totalPaid, color: "text-green-700" },
-          { label: "Outstanding", value: totalBalance, color: totalBalance > 0 ? "text-red-600" : "text-green-700" },
+          {
+            label: "Outstanding",
+            value: totalBalance,
+            color: totalBalance > 0 ? "text-red-600" : "text-green-700",
+          },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-gray-50 rounded-lg p-3 border">
             <p className="text-xs text-gray-500 font-medium">{label}</p>
             <p className={`text-lg font-bold mt-0.5 ${color}`}>
-              {value.toLocaleString("en-US", { style: "currency", currency: "BDT", minimumFractionDigits: 0 })}
+              {value.toLocaleString("en-US", {
+                style: "currency",
+                currency: "BDT",
+                minimumFractionDigits: 0,
+              })}
             </p>
           </div>
         ))}
@@ -128,7 +141,7 @@ export function FeesTab({ studentId }: FeesTabProps) {
                 key={fee._id}
                 className={cn(
                   "cursor-pointer hover:bg-gray-50 transition-colors",
-                  fee.status === "unpaid" && "bg-red-50/50"
+                  fee.status === "unpaid" && "bg-red-50/50",
                 )}
                 onClick={() => setDetailFeeId(fee._id)}
               >
@@ -144,7 +157,12 @@ export function FeesTab({ studentId }: FeesTabProps) {
                 <TableCell className="text-right text-sm text-green-700">
                   ৳{fee.paidAmount.toLocaleString()}
                 </TableCell>
-                <TableCell className={cn("text-right text-sm font-medium", fee.balance > 0 && "text-red-600")}>
+                <TableCell
+                  className={cn(
+                    "text-right text-sm font-medium",
+                    fee.balance > 0 && "text-red-600",
+                  )}
+                >
                   ৳{fee.balance.toLocaleString()}
                 </TableCell>
                 <TableCell>
@@ -170,7 +188,9 @@ export function FeesTab({ studentId }: FeesTabProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setCollectFeeId(fee._id)}>
+                        <DropdownMenuItem
+                          onClick={() => setCollectFeeId(fee._id)}
+                        >
                           Collect Fee
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -236,7 +256,7 @@ function CollectFeeDialog({
   const [amount, setAmount] = useState<string>(String(fee.balance));
   const [paymentMode, setPaymentMode] = useState<string>("Cash");
   const [paymentDate, setPaymentDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [remarks, setRemarks] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -244,7 +264,7 @@ function CollectFeeDialog({
   const createTxn = useMutation(api.feeTransactions.createTransaction);
 
   const parsedAmount = parseFloat(amount) || 0;
-  const isAdvance = parsedAmount > fee.balance;
+  const _isAdvance = parsedAmount > fee.balance;
 
   async function handleSubmit() {
     if (parsedAmount <= 0) {
@@ -262,7 +282,12 @@ function CollectFeeDialog({
         feeId: fee._id,
         academicYear: fee.academicYear,
         amount: parsedAmount,
-        paymentMode: paymentMode as "Cash" | "Bank Transfer" | "Cheque" | "UPI" | "Online",
+        paymentMode: paymentMode as
+          | "Cash"
+          | "Bank Transfer"
+          | "Cheque"
+          | "UPI"
+          | "Online",
         transactionDate: new Date(paymentDate).getTime(),
         remarks: remarks || undefined,
       });
@@ -309,7 +334,9 @@ function CollectFeeDialog({
             />
             {parsedAmount > 0 && parsedAmount < fee.balance && (
               <p className="text-xs text-yellow-600">
-                Partial payment — ৳{(fee.balance - parsedAmount).toLocaleString()} will remain outstanding
+                Partial payment — ৳
+                {(fee.balance - parsedAmount).toLocaleString()} will remain
+                outstanding
               </p>
             )}
           </div>
@@ -322,11 +349,13 @@ function CollectFeeDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {["Cash", "Bank Transfer", "Cheque", "UPI", "Online"].map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {m}
-                  </SelectItem>
-                ))}
+                {["Cash", "Bank Transfer", "Cheque", "UPI", "Online"].map(
+                  (m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -358,7 +387,9 @@ function CollectFeeDialog({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={isSubmitting || parsedAmount <= 0 || parsedAmount > fee.balance}
+              disabled={
+                isSubmitting || parsedAmount <= 0 || parsedAmount > fee.balance
+              }
               className="bg-school-green hover:bg-school-green/90 text-white"
             >
               {isSubmitting ? "Processing…" : "Record Payment"}

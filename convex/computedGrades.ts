@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -23,14 +23,14 @@ export const computeGradesForStudent = mutation({
     const assessments = await ctx.db
       .query("assessments")
       .withIndex("by_subject_semester", (q) =>
-        q.eq("subjectId", args.subjectId).eq("semester", args.semester)
+        q.eq("subjectId", args.subjectId).eq("semester", args.semester),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("standardLevelId"), enrollment.standardLevelId),
           q.eq(q.field("academicYearId"), enrollment.academicYear),
-          q.eq(q.field("isActive"), true)
-        )
+          q.eq(q.field("isActive"), true),
+        ),
       )
       .collect();
 
@@ -46,7 +46,7 @@ export const computeGradesForStudent = mutation({
         q
           .eq("standardLevelId", enrollment.standardLevelId)
           .eq("subjectId", args.subjectId)
-          .eq("semester", args.semester)
+          .eq("semester", args.semester),
       )
       .filter((q) => q.eq(q.field("isActive"), true))
       .first();
@@ -68,7 +68,9 @@ export const computeGradesForStudent = mutation({
         const answers = await ctx.db
           .query("studentAssessmentAnswers")
           .withIndex("by_student_assessment", (q) =>
-            q.eq("studentId", args.studentId).eq("assessmentId", assessment._id)
+            q
+              .eq("studentId", args.studentId)
+              .eq("assessmentId", assessment._id),
           )
           .collect();
         return {
@@ -76,19 +78,33 @@ export const computeGradesForStudent = mutation({
           marksObtained: answers.reduce((s, a) => s + a.marksObtained, 0),
           totalMarks: assessment.totalMarks,
         };
-      })
+      }),
     );
 
-    for (const { assessmentNumber, marksObtained, totalMarks } of allAnswersByAssessment) {
-      if (assessmentNumber === 1) { ca1Marks = marksObtained; ca1Total = totalMarks; }
-      else if (assessmentNumber === 2) { ca2Marks = marksObtained; ca2Total = totalMarks; }
-      else if (assessmentNumber === 3) { ca3Marks = marksObtained; ca3Total = totalMarks; }
+    for (const {
+      assessmentNumber,
+      marksObtained,
+      totalMarks,
+    } of allAnswersByAssessment) {
+      if (assessmentNumber === 1) {
+        ca1Marks = marksObtained;
+        ca1Total = totalMarks;
+      } else if (assessmentNumber === 2) {
+        ca2Marks = marksObtained;
+        ca2Total = totalMarks;
+      } else if (assessmentNumber === 3) {
+        ca3Marks = marksObtained;
+        ca3Total = totalMarks;
+      }
     }
 
     // Calculate percentages
-    const ca1Pct = ca1Total && ca1Total > 0 ? ((ca1Marks ?? 0) / ca1Total) * 100 : 0;
-    const ca2Pct = ca2Total && ca2Total > 0 ? ((ca2Marks ?? 0) / ca2Total) * 100 : 0;
-    const ca3Pct = ca3Total && ca3Total > 0 ? ((ca3Marks ?? 0) / ca3Total) * 100 : 0;
+    const ca1Pct =
+      ca1Total && ca1Total > 0 ? ((ca1Marks ?? 0) / ca1Total) * 100 : 0;
+    const ca2Pct =
+      ca2Total && ca2Total > 0 ? ((ca2Marks ?? 0) / ca2Total) * 100 : 0;
+    const ca3Pct =
+      ca3Total && ca3Total > 0 ? ((ca3Marks ?? 0) / ca3Total) * 100 : 0;
 
     const weightedAverage = ca1Pct * w1 + ca2Pct * w2 + ca3Pct * w3;
     const letterGrade = getLetterGrade(weightedAverage);
@@ -99,7 +115,7 @@ export const computeGradesForStudent = mutation({
     const existing = await ctx.db
       .query("computedGrades")
       .withIndex("by_enrollment_semester", (q) =>
-        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester)
+        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester),
       )
       .filter((q) => q.eq(q.field("subjectId"), args.subjectId))
       .first();
@@ -147,7 +163,7 @@ export const getComputedGradesByStudent = query({
       grades.map(async (g) => ({
         ...g,
         subjectDoc: await ctx.db.get(g.subjectId),
-      }))
+      })),
     );
   },
 });
@@ -163,7 +179,7 @@ export const getGradesByEnrollmentSemester = query({
     const grades = await ctx.db
       .query("computedGrades")
       .withIndex("by_enrollment_semester", (q) =>
-        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester)
+        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester),
       )
       .collect();
 
@@ -171,7 +187,7 @@ export const getGradesByEnrollmentSemester = query({
       grades.map(async (g) => ({
         ...g,
         subjectDoc: await ctx.db.get(g.subjectId),
-      }))
+      })),
     );
   },
 });
@@ -187,18 +203,24 @@ export const getEnrollmentPerformance = query({
     const grades = await ctx.db
       .query("computedGrades")
       .withIndex("by_enrollment_semester", (q) =>
-        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester)
+        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester),
       )
       .collect();
 
     if (grades.length === 0) return null;
 
     const withSubjects = await Promise.all(
-      grades.map(async (g) => ({ ...g, subjectDoc: await ctx.db.get(g.subjectId) }))
+      grades.map(async (g) => ({
+        ...g,
+        subjectDoc: await ctx.db.get(g.subjectId),
+      })),
     );
 
-    const avg = grades.reduce((s, g) => s + g.weightedAverage, 0) / grades.length;
-    const sorted = [...withSubjects].sort((a, b) => b.weightedAverage - a.weightedAverage);
+    const avg =
+      grades.reduce((s, g) => s + g.weightedAverage, 0) / grades.length;
+    const sorted = [...withSubjects].sort(
+      (a, b) => b.weightedAverage - a.weightedAverage,
+    );
     const top3 = sorted.slice(0, 3);
     const bottom3 = sorted.slice(-3).reverse();
 
@@ -208,7 +230,13 @@ export const getEnrollmentPerformance = query({
       distribution[g.letterGrade] = (distribution[g.letterGrade] ?? 0) + 1;
     }
 
-    return { averagePercentage: avg, top3, bottom3, distribution, subjectCount: grades.length };
+    return {
+      averagePercentage: avg,
+      top3,
+      bottom3,
+      distribution,
+      subjectCount: grades.length,
+    };
   },
 });
 
@@ -229,18 +257,19 @@ export const getLongitudinalSubjectPerformance = query({
     // Batch-load enrollments, then batch-load years/levels (avoid N+1)
     const uniqueEnrollmentIds = [...new Set(grades.map((g) => g.enrollmentId))];
     const enrollments = await Promise.all(
-      uniqueEnrollmentIds.map((id) => ctx.db.get(id))
+      uniqueEnrollmentIds.map((id) => ctx.db.get(id)),
     );
     const enrollmentMap = new Map(
-      enrollments.map((e, i) => [uniqueEnrollmentIds[i], e] as const)
+      enrollments.map((e, i) => [uniqueEnrollmentIds[i], e] as const),
     );
 
-    const yearIds = [...new Set(
-      [...enrollmentMap.values()].filter(Boolean).map((e) => e!.academicYear)
-    )];
-    const levelIds = [...new Set(
-      [...enrollmentMap.values()].filter(Boolean).map((e) => e!.standardLevelId)
-    )];
+    const validEnrollments = [...enrollmentMap.values()].filter(
+      (e): e is NonNullable<typeof e> => e != null,
+    );
+    const yearIds = [...new Set(validEnrollments.map((e) => e.academicYear))];
+    const levelIds = [
+      ...new Set(validEnrollments.map((e) => e.standardLevelId)),
+    ];
 
     const [years, levels] = await Promise.all([
       Promise.all(yearIds.map((id) => ctx.db.get(id))),

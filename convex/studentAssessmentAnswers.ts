@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /** Upsert a single student's answer for a question. */
@@ -18,7 +18,7 @@ export const upsertAnswer = mutation({
     const existing = await ctx.db
       .query("studentAssessmentAnswers")
       .withIndex("by_student_assessment", (q) =>
-        q.eq("studentId", args.studentId).eq("assessmentId", args.assessmentId)
+        q.eq("studentId", args.studentId).eq("assessmentId", args.assessmentId),
       )
       .filter((q) => q.eq(q.field("questionId"), args.questionId))
       .first();
@@ -51,7 +51,7 @@ export const bulkMarkEntry = mutation({
         marksObtained: v.float64(),
         isAbsent: v.optional(v.boolean()),
         remarks: v.optional(v.string()),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -61,10 +61,12 @@ export const bulkMarkEntry = mutation({
     // Pre-load all existing answers for this assessment (avoid N+1)
     const allExisting = await ctx.db
       .query("studentAssessmentAnswers")
-      .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+      .withIndex("by_assessment", (q) =>
+        q.eq("assessmentId", args.assessmentId),
+      )
       .collect();
     const existingMap = new Map(
-      allExisting.map((a) => [`${a.studentId}|${a.questionId}`, a])
+      allExisting.map((a) => [`${a.studentId}|${a.questionId}`, a]),
     );
 
     for (const entry of args.entries) {
@@ -106,18 +108,22 @@ export const markStudentAbsent = mutation({
     await requireRole(ctx, ["admin", "teacher"]);
     const questions = await ctx.db
       .query("assessmentQuestions")
-      .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+      .withIndex("by_assessment", (q) =>
+        q.eq("assessmentId", args.assessmentId),
+      )
       .collect();
 
     // Pre-load existing answers for this student+assessment (avoid N+1)
     const existingAnswers = await ctx.db
       .query("studentAssessmentAnswers")
       .withIndex("by_student_assessment", (qb) =>
-        qb.eq("studentId", args.studentId).eq("assessmentId", args.assessmentId)
+        qb
+          .eq("studentId", args.studentId)
+          .eq("assessmentId", args.assessmentId),
       )
       .collect();
     const answerMap = new Map(
-      existingAnswers.map((a) => [a.questionId.toString(), a])
+      existingAnswers.map((a) => [a.questionId.toString(), a]),
     );
 
     const now = Date.now();
@@ -125,7 +131,11 @@ export const markStudentAbsent = mutation({
       const existing = answerMap.get(q._id.toString());
 
       if (existing) {
-        await ctx.db.patch(existing._id, { marksObtained: 0, isAbsent: true, enteredAt: now });
+        await ctx.db.patch(existing._id, {
+          marksObtained: 0,
+          isAbsent: true,
+          enteredAt: now,
+        });
       } else {
         await ctx.db.insert("studentAssessmentAnswers", {
           studentId: args.studentId,
@@ -152,7 +162,7 @@ export const getStudentAnswersByAssessment = query({
     const answers = await ctx.db
       .query("studentAssessmentAnswers")
       .withIndex("by_student_assessment", (q) =>
-        q.eq("studentId", args.studentId).eq("assessmentId", args.assessmentId)
+        q.eq("studentId", args.studentId).eq("assessmentId", args.assessmentId),
       )
       .collect();
     const totalObtained = answers.reduce((s, a) => s + a.marksObtained, 0);
@@ -168,7 +178,9 @@ export const getAnswersByAssessment = query({
     await requireRole(ctx, ["admin", "teacher"]);
     return await ctx.db
       .query("studentAssessmentAnswers")
-      .withIndex("by_assessment", (q) => q.eq("assessmentId", args.assessmentId))
+      .withIndex("by_assessment", (q) =>
+        q.eq("assessmentId", args.assessmentId),
+      )
       .take(5000);
   },
 });
@@ -190,15 +202,15 @@ export const getStudentAssessmentDetail = query({
     const assessments = await ctx.db
       .query("assessments")
       .withIndex("by_subject_semester", (q) =>
-        q.eq("subjectId", args.subjectId).eq("semester", args.semester)
+        q.eq("subjectId", args.subjectId).eq("semester", args.semester),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("standardLevelId"), args.standardLevelId),
           q.eq(q.field("academicYearId"), args.academicYearId),
           q.eq(q.field("assessmentNumber"), args.assessmentNumber),
-          q.eq(q.field("isActive"), true)
-        )
+          q.eq(q.field("isActive"), true),
+        ),
       )
       .first();
 
@@ -208,19 +220,19 @@ export const getStudentAssessmentDetail = query({
     const [questions, answers] = await Promise.all([
       ctx.db
         .query("assessmentQuestions")
-        .withIndex("by_assessment_order", (q) => q.eq("assessmentId", assessments._id))
+        .withIndex("by_assessment_order", (q) =>
+          q.eq("assessmentId", assessments._id),
+        )
         .take(200),
       ctx.db
         .query("studentAssessmentAnswers")
         .withIndex("by_student_assessment", (q) =>
-          q.eq("studentId", args.studentId).eq("assessmentId", assessments._id)
+          q.eq("studentId", args.studentId).eq("assessmentId", assessments._id),
         )
         .collect(),
     ]);
 
-    const answerMap = new Map(
-      answers.map((a) => [a.questionId.toString(), a])
-    );
+    const answerMap = new Map(answers.map((a) => [a.questionId.toString(), a]));
 
     const enrichedQuestions = questions.map((q) => {
       const answer = answerMap.get(q._id.toString());
@@ -235,10 +247,12 @@ export const getStudentAssessmentDetail = query({
     });
 
     const totalObtained = enrichedQuestions.reduce(
-      (s, q) => s + (q.marksObtained ?? 0), 0
+      (s, q) => s + (q.marksObtained ?? 0),
+      0,
     );
     const totalPossible = enrichedQuestions.reduce(
-      (s, q) => s + q.marksAllocated, 0
+      (s, q) => s + q.marksAllocated,
+      0,
     );
     const isAbsent = answers.length > 0 && answers.every((a) => a.isAbsent);
 
@@ -263,7 +277,9 @@ export const getAnswersByEnrollment = query({
     await requireRole(ctx, ["admin", "teacher"]);
     return await ctx.db
       .query("studentAssessmentAnswers")
-      .withIndex("by_enrollment", (q) => q.eq("enrollmentId", args.enrollmentId))
+      .withIndex("by_enrollment", (q) =>
+        q.eq("enrollmentId", args.enrollmentId),
+      )
       .collect();
   },
 });

@@ -1,15 +1,17 @@
 "use node";
 
+import { makeFunctionReference } from "convex/server";
 import { Scrypt } from "lucia";
 import { action } from "./_generated/server";
-import { makeFunctionReference } from "convex/server";
 
 const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD;
 
 // Use makeFunctionReference to avoid circular import through _generated/api
-const checkAdminExists = makeFunctionReference<"query", Record<string, never>, boolean>(
-  "seed:checkAdminExists"
-);
+const checkAdminExists = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  boolean
+>("seed:checkAdminExists");
 const insertAdminRecords = makeFunctionReference<
   "mutation",
   { hashedPassword: string },

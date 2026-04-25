@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { useState } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
-import { studentInfoBaseSchema } from "@/lib/validations/studentInfoSchema";
+import type { z } from "zod";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { familyInfoSchema } from "@/lib/validations/familyInfoSchema";
 import { feesSchema } from "@/lib/validations/feesSchema";
+import { studentInfoBaseSchema } from "@/lib/validations/studentInfoSchema";
 
 const admissionSchema = studentInfoBaseSchema
   .merge(familyInfoSchema)
@@ -16,15 +16,19 @@ const admissionSchema = studentInfoBaseSchema
   .refine(
     (data) =>
       !data.hasHealthIssues ||
-      (data.healthIssueDescription && data.healthIssueDescription.trim().length > 0),
-    { message: "Please describe the health issue", path: ["healthIssueDescription"] }
+      (data.healthIssueDescription &&
+        data.healthIssueDescription.trim().length > 0),
+    {
+      message: "Please describe the health issue",
+      path: ["healthIssueDescription"],
+    },
   );
 
 export type AdmissionValues = z.infer<typeof admissionSchema>;
 
 async function uploadFileToStorage(
   file: File,
-  generateUrl: () => Promise<string>
+  generateUrl: () => Promise<string>,
 ): Promise<Id<"_storage"> | null> {
   if (!file) return null;
   const url = await generateUrl();
@@ -56,9 +60,15 @@ export function useStudentAdmission(onSuccess: () => void) {
     try {
       // Upload photos in parallel
       const [studentPhotoId, fatherPhotoId, motherPhotoId] = await Promise.all([
-        values.studentPhoto ? uploadFileToStorage(values.studentPhoto, generateUrl) : Promise.resolve(null),
-        values.fatherPhoto ? uploadFileToStorage(values.fatherPhoto, generateUrl) : Promise.resolve(null),
-        values.motherPhoto ? uploadFileToStorage(values.motherPhoto, generateUrl) : Promise.resolve(null),
+        values.studentPhoto
+          ? uploadFileToStorage(values.studentPhoto, generateUrl)
+          : Promise.resolve(null),
+        values.fatherPhoto
+          ? uploadFileToStorage(values.fatherPhoto, generateUrl)
+          : Promise.resolve(null),
+        values.motherPhoto
+          ? uploadFileToStorage(values.motherPhoto, generateUrl)
+          : Promise.resolve(null),
       ]);
 
       const classStartDate = new Date(values.classStartDate).getTime();
@@ -122,11 +132,15 @@ export function useStudentAdmission(onSuccess: () => void) {
       // Create student fee records for each applicable fee type
       const feeTypes = ["admission", "tuition", "registration"] as const;
       for (const feeType of feeTypes) {
-        const amount = values[`${feeType}Fee` as keyof typeof values] as number | null | undefined;
+        const amount = values[`${feeType}Fee` as keyof typeof values] as
+          | number
+          | null
+          | undefined;
         if (!amount || amount <= 0) continue;
 
         const structure = feeStructures?.find(
-          (f) => f.standardLevel === values.standardLevel && f.feeType === feeType
+          (f) =>
+            f.standardLevel === values.standardLevel && f.feeType === feeType,
         );
         if (structure) {
           await createStudentFee({

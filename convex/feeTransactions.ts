@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 /** Create a fee transaction and update the student fee in one atomic mutation. */
@@ -14,7 +14,7 @@ export const createTransaction = mutation({
       v.literal("Bank Transfer"),
       v.literal("Cheque"),
       v.literal("UPI"),
-      v.literal("Online")
+      v.literal("Online"),
     ),
     transactionDate: v.float64(),
     remarks: v.optional(v.string()),
@@ -24,8 +24,10 @@ export const createTransaction = mutation({
 
     const fee = await ctx.db.get(args.feeId);
     if (!fee) throw new Error("Fee record not found");
-    if (args.amount <= 0) throw new Error("Payment amount must be greater than 0");
-    if (args.amount > fee.balance) throw new Error("Payment amount exceeds outstanding balance");
+    if (args.amount <= 0)
+      throw new Error("Payment amount must be greater than 0");
+    if (args.amount > fee.balance)
+      throw new Error("Payment amount exceeds outstanding balance");
 
     const referenceNumber = `TXN-${Date.now()}`;
 
@@ -45,11 +47,7 @@ export const createTransaction = mutation({
     const newPaidAmount = fee.paidAmount + args.amount;
     const newBalance = fee.balance - args.amount;
     const newStatus =
-      newBalance <= 0
-        ? "paid"
-        : newPaidAmount > 0
-        ? "partial"
-        : "unpaid";
+      newBalance <= 0 ? "paid" : newPaidAmount > 0 ? "partial" : "unpaid";
 
     const updatedPaymentDetails = [
       ...(fee.paymentDetails ?? []),

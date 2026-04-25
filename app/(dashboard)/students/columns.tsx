@@ -1,10 +1,10 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
-import { Id } from "@/convex/_generated/dataModel";
-import { StatusBadge } from "./_components/StatusBadge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { Id } from "@/convex/_generated/dataModel";
+import { StatusBadge } from "./_components/StatusBadge";
 
 export type StudentRow = {
   _id: Id<"students">;
@@ -15,7 +15,13 @@ export type StudentRow = {
   standardLevelName: string;
   gender: "Male" | "Female";
   classStartDate: number;
-  status: "active" | "graduated" | "transferred" | "withdrawn" | "suspended" | "expelled";
+  status:
+    | "active"
+    | "graduated"
+    | "transferred"
+    | "withdrawn"
+    | "suspended"
+    | "expelled";
 };
 
 function getInitials(name: string): string {
@@ -44,7 +50,9 @@ export const columns: ColumnDef<StudentRow>[] = [
           </AvatarFallback>
         </Avatar>
         <div>
-          <p className="font-semibold text-gray-900">{row.original.studentFullName}</p>
+          <p className="font-semibold text-gray-900">
+            {row.original.studentFullName}
+          </p>
           <p className="text-xs text-gray-500">{row.original.studentNumber}</p>
         </div>
       </div>
@@ -54,14 +62,18 @@ export const columns: ColumnDef<StudentRow>[] = [
     accessorKey: "academicYearName",
     header: "Academic Year",
     cell: ({ row }) => (
-      <span className="text-sm text-gray-700">{row.original.academicYearName}</span>
+      <span className="text-sm text-gray-700">
+        {row.original.academicYearName}
+      </span>
     ),
   },
   {
     accessorKey: "standardLevelName",
     header: "Standard Level",
     cell: ({ row }) => (
-      <span className="text-sm text-gray-700">{row.original.standardLevelName}</span>
+      <span className="text-sm text-gray-700">
+        {row.original.standardLevelName}
+      </span>
     ),
   },
   {
@@ -86,10 +98,7 @@ export const columns: ColumnDef<StudentRow>[] = [
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => (
-      <StatusBadge
-        studentId={row.original._id}
-        status={row.original.status}
-      />
+      <StatusBadge studentId={row.original._id} status={row.original.status} />
     ),
   },
 ];

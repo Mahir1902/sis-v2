@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useCallback } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { useMutation, useQuery } from "convex/react";
+import { Save, Users, UserX } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -15,9 +16,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { toast } from "sonner";
-import { UserX, Save, Users } from "lucide-react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -57,12 +57,12 @@ export function MarkEntryGrid({
 
   const existingAnswers = useQuery(
     api.studentAssessmentAnswers.getAnswersByAssessment,
-    { assessmentId }
+    { assessmentId },
   );
 
   const bulkMark = useMutation(api.studentAssessmentAnswers.bulkMarkEntry);
   const markAbsent = useMutation(
-    api.studentAssessmentAnswers.markStudentAbsent
+    api.studentAssessmentAnswers.markStudentAbsent,
   );
 
   // Build lookup map: "studentId|questionId" -> marksObtained
@@ -94,7 +94,7 @@ export function MarkEntryGrid({
   const [changeCount, setChangeCount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [totalsByStudent, setTotalsByStudent] = useState<Map<string, number>>(
-    new Map()
+    new Map(),
   );
 
   // Calculate initial total for a student from existing answers
@@ -110,7 +110,7 @@ export function MarkEntryGrid({
       }
       return total;
     },
-    [assessment.questions, answerMap]
+    [assessment.questions, answerMap],
   );
 
   // Recalculate total for a student using defaults + changes
@@ -135,7 +135,7 @@ export function MarkEntryGrid({
         return next;
       });
     },
-    [assessment.questions, answerMap]
+    [assessment.questions, answerMap],
   );
 
   const handleBlur = useCallback(
@@ -144,7 +144,7 @@ export function MarkEntryGrid({
       enrollmentId: string,
       questionId: string,
       maxMarks: number,
-      inputElement: HTMLInputElement
+      inputElement: HTMLInputElement,
     ) => {
       const rawValue = inputElement.value.trim();
       if (rawValue === "") {
@@ -176,7 +176,7 @@ export function MarkEntryGrid({
       setChangeCount(changesRef.current.size);
       recalculateTotal(studentId);
     },
-    [recalculateTotal]
+    [recalculateTotal],
   );
 
   const handleSave = useCallback(async () => {
@@ -206,11 +206,7 @@ export function MarkEntryGrid({
   }, [assessmentId, bulkMark]);
 
   const handleMarkAbsent = useCallback(
-    async (
-      studentId: string,
-      enrollmentId: string,
-      studentName: string
-    ) => {
+    async (studentId: string, enrollmentId: string, studentName: string) => {
       try {
         await markAbsent({
           studentId: studentId as Id<"students">,
@@ -224,7 +220,7 @@ export function MarkEntryGrid({
         toast.error(message);
       }
     },
-    [assessmentId, markAbsent]
+    [assessmentId, markAbsent],
   );
 
   // Loading state
@@ -234,6 +230,7 @@ export function MarkEntryGrid({
         <Skeleton className="h-6 w-48" />
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
             <Skeleton key={`skeleton-row-${i}`} className="h-10 w-full" />
           ))}
         </div>
@@ -258,7 +255,7 @@ export function MarkEntryGrid({
 
   // Sort enrollments by student name
   const sortedEnrollments = [...enrollments].sort((a, b) =>
-    a.studentName.localeCompare(b.studentName)
+    a.studentName.localeCompare(b.studentName),
   );
 
   return (
@@ -266,9 +263,7 @@ export function MarkEntryGrid({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-b">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">
-            Mark Entry
-          </h2>
+          <h2 className="text-base font-semibold text-gray-900">Mark Entry</h2>
           <p className="text-sm text-gray-500">
             {sortedEnrollments.length} student
             {sortedEnrollments.length !== 1 ? "s" : ""} enrolled
@@ -326,8 +321,7 @@ export function MarkEntryGrid({
               const studentId = enrollment.studentId;
               const isAbsent = absentMap.get(studentId) ?? false;
               const displayTotal =
-                totalsByStudent.get(studentId) ??
-                getInitialTotal(studentId);
+                totalsByStudent.get(studentId) ?? getInitialTotal(studentId);
 
               return (
                 <TableRow
@@ -370,14 +364,14 @@ export function MarkEntryGrid({
                               enrollment._id,
                               q._id,
                               q.marksAllocated,
-                              e.target
+                              e.target,
                             )
                           }
                           className={cn(
                             "w-16 h-8 text-center text-sm border rounded-md",
                             "focus:outline-none focus:ring-2 focus:ring-school-green/30 focus:border-school-green",
                             "transition-colors",
-                            isAbsent && "bg-gray-100 text-gray-400"
+                            isAbsent && "bg-gray-100 text-gray-400",
                           )}
                           aria-label={`Marks for ${enrollment.studentName}, Question ${q.questionNumber}, max ${q.marksAllocated}`}
                         />
@@ -388,9 +382,7 @@ export function MarkEntryGrid({
                     <span
                       className={cn(
                         "font-semibold text-sm",
-                        displayTotal > 0
-                          ? "text-gray-900"
-                          : "text-gray-400"
+                        displayTotal > 0 ? "text-gray-900" : "text-gray-400",
                       )}
                     >
                       {displayTotal}
@@ -407,7 +399,7 @@ export function MarkEntryGrid({
                         handleMarkAbsent(
                           studentId,
                           enrollment._id,
-                          enrollment.studentName
+                          enrollment.studentName,
                         )
                       }
                       className="text-red-500 hover:text-red-700 hover:bg-red-50"

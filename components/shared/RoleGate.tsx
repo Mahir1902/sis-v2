@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { ShieldAlert } from "lucide-react";
+import { api } from "@/convex/_generated/api";
 
 type Role = "admin" | "teacher" | "student";
 

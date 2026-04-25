@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 /**
  * Smoke tests — verify the app routes and UI are functional.
@@ -21,32 +21,42 @@ test.describe("Authentication", () => {
     await page.waitForLoadState("networkidle");
     // CardTitle text — use first() to avoid strict mode issues with multiple matches
     await expect(
-      page.getByText("School Information System").first()
+      page.getByText("School Information System").first(),
     ).toBeVisible({ timeout: 8000 });
   });
 
-  test("login page renders email and password input fields", async ({ page }) => {
+  test("login page renders email and password input fields", async ({
+    page,
+  }) => {
     await page.goto("/login");
     await page.waitForLoadState("networkidle");
     // Target the actual input elements by role and name to avoid strict-mode violations
-    await expect(page.getByRole("textbox", { name: /email/i })).toBeVisible({ timeout: 8000 });
-    await expect(page.getByRole("textbox", { name: /password/i })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole("textbox", { name: /email/i })).toBeVisible({
+      timeout: 8000,
+    });
+    await expect(page.getByRole("textbox", { name: /password/i })).toBeVisible({
+      timeout: 8000,
+    });
   });
 
   test("login page renders Sign In button", async ({ page }) => {
     await page.goto("/login");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible({
+      timeout: 8000,
+    });
   });
 
-  test("login form shows validation errors on empty submit", async ({ page }) => {
+  test("login form shows validation errors on empty submit", async ({
+    page,
+  }) => {
     await page.goto("/login");
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: /sign in/i }).click();
     // React Hook Form + Zod validation errors — FormMessage renders as <p data-slot="form-message">
     // The fields turn aria-invalid and error messages appear
     await expect(
-      page.locator("[data-slot='form-message']").first()
+      page.locator("[data-slot='form-message']").first(),
     ).toBeVisible({ timeout: 5000 });
   });
 

@@ -9,7 +9,9 @@ export const getMe = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
     // subject = "userId|sessionId" — userId is our users table _id
-    const userId = identity.subject.split("|")[0] as import("./_generated/dataModel").Id<"users">;
+    const userId = identity.subject.split(
+      "|",
+    )[0] as import("./_generated/dataModel").Id<"users">;
     const user = await ctx.db.get(userId);
     if (!user) return null;
     return {

@@ -20,7 +20,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-school-green: #018737;
-  --color-school-yellow: #F88B0E;
+  --color-school-yellow: #f88b0e;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --radius-sm: calc(var(--radius) - 4px);

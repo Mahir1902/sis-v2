@@ -1,10 +1,23 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { useState } from "react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,24 +27,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { getLetterGradeBadgeColor, calculateLetterGrade } from "@/lib/gradeUtils";
+  calculateLetterGrade,
+  getLetterGradeBadgeColor,
+} from "@/lib/gradeUtils";
 
 interface AcademicHistoryTabProps {
   studentId: Id<"students">;
@@ -39,18 +41,26 @@ interface AcademicHistoryTabProps {
 
 export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
-  const enrollments = useQuery(api.enrollments.getEnrollmentHistory, { studentId });
-  const allGrades = useQuery(api.computedGrades.getComputedGradesByStudent, { studentId });
+  const enrollments = useQuery(api.enrollments.getEnrollmentHistory, {
+    studentId,
+  });
+  const allGrades = useQuery(api.computedGrades.getComputedGradesByStudent, {
+    studentId,
+  });
   const subjects = useQuery(api.subjects.list);
 
   const longitudinalData = useQuery(
     api.computedGrades.getLongitudinalSubjectPerformance,
     selectedSubjectId
       ? { studentId, subjectId: selectedSubjectId as Id<"subjects"> }
-      : "skip"
+      : "skip",
   );
 
-  if (enrollments === undefined || allGrades === undefined || subjects === undefined) {
+  if (
+    enrollments === undefined ||
+    allGrades === undefined ||
+    subjects === undefined
+  ) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-48 w-full" />
@@ -96,7 +106,10 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
             <CardTitle className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
               Subject Performance Trends
             </CardTitle>
-            <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
+            <Select
+              value={selectedSubjectId}
+              onValueChange={setSelectedSubjectId}
+            >
               <SelectTrigger className="w-48 h-8 text-sm">
                 <SelectValue placeholder="Select subject" />
               </SelectTrigger>
@@ -161,23 +174,25 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
         {enrollments.map((enrollment) => {
           const isCurrent = !enrollment.exitDate;
           const sem1Grades = allGrades.filter(
-            (g) => g.enrollmentId === enrollment._id && g.semester === 1
+            (g) => g.enrollmentId === enrollment._id && g.semester === 1,
           );
           const sem2Grades = allGrades.filter(
-            (g) => g.enrollmentId === enrollment._id && g.semester === 2
+            (g) => g.enrollmentId === enrollment._id && g.semester === 2,
           );
           const sem1Avg =
             sem1Grades.length > 0
-              ? sem1Grades.reduce((s, g) => s + g.weightedAverage, 0) / sem1Grades.length
+              ? sem1Grades.reduce((s, g) => s + g.weightedAverage, 0) /
+                sem1Grades.length
               : null;
           const sem2Avg =
             sem2Grades.length > 0
-              ? sem2Grades.reduce((s, g) => s + g.weightedAverage, 0) / sem2Grades.length
+              ? sem2Grades.reduce((s, g) => s + g.weightedAverage, 0) /
+                sem2Grades.length
               : null;
           const overallAvg =
             sem1Avg !== null && sem2Avg !== null
               ? (sem1Avg + sem2Avg) / 2
-              : sem1Avg ?? sem2Avg;
+              : (sem1Avg ?? sem2Avg);
           const trend = getTrend(sem1Avg, sem2Avg);
 
           return (
@@ -190,10 +205,13 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
                 <div className="flex items-center gap-3 text-left w-full">
                   <div className="flex-1">
                     <span className="font-medium text-sm text-gray-900">
-                      {enrollment.academicYearDoc?.name} &bull; {enrollment.standardLevelDoc?.name}
+                      {enrollment.academicYearDoc?.name} &bull;{" "}
+                      {enrollment.standardLevelDoc?.name}
                     </span>
                     {enrollment.section && (
-                      <span className="text-xs text-gray-500 ml-2">Section {enrollment.section}</span>
+                      <span className="text-xs text-gray-500 ml-2">
+                        Section {enrollment.section}
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mr-2">
@@ -208,7 +226,11 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
                       </span>
                     )}
                     {overallAvg !== null && (
-                      <Badge className={getLetterGradeBadgeColor(calculateLetterGrade(overallAvg))}>
+                      <Badge
+                        className={getLetterGradeBadgeColor(
+                          calculateLetterGrade(overallAvg),
+                        )}
+                      >
                         {calculateLetterGrade(overallAvg)}
                       </Badge>
                     )}
@@ -258,7 +280,9 @@ function EnrollmentPerformanceCard({
 
   if (allGrades.length === 0) {
     return (
-      <p className="text-sm text-gray-400 py-2">No grade data for this enrollment.</p>
+      <p className="text-sm text-gray-400 py-2">
+        No grade data for this enrollment.
+      </p>
     );
   }
 
@@ -267,7 +291,9 @@ function EnrollmentPerformanceCard({
     distribution[g.letterGrade] = (distribution[g.letterGrade] ?? 0) + 1;
   }
 
-  const sorted = [...allGrades].sort((a, b) => b.weightedAverage - a.weightedAverage);
+  const sorted = [...allGrades].sort(
+    (a, b) => b.weightedAverage - a.weightedAverage,
+  );
   const top3 = sorted.slice(0, 3);
   const bottom3 = sorted.slice(-3).reverse();
 
@@ -289,16 +315,24 @@ function EnrollmentPerformanceCard({
         )}
         <div className="bg-gray-50 rounded px-3 py-2 flex items-center gap-1.5">
           <TrendIcon type={trend.icon} />
-          <span className="text-xs font-medium text-gray-600">{trend.label}</span>
+          <span className="text-xs font-medium text-gray-600">
+            {trend.label}
+          </span>
         </div>
       </div>
 
       {/* Grade distribution */}
       <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Grade Distribution</p>
+        <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5">
+          Grade Distribution
+        </p>
         <div className="flex flex-wrap gap-1.5">
           {Object.entries(distribution).map(([grade, count]) => (
-            <Badge key={grade} variant="outline" className={getLetterGradeBadgeColor(grade)}>
+            <Badge
+              key={grade}
+              variant="outline"
+              className={getLetterGradeBadgeColor(grade)}
+            >
               {grade}: {count}
             </Badge>
           ))}
@@ -308,23 +342,39 @@ function EnrollmentPerformanceCard({
       {/* Top/Bottom subjects */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <p className="text-xs font-semibold text-green-600 uppercase mb-1">Top Subjects</p>
+          <p className="text-xs font-semibold text-green-600 uppercase mb-1">
+            Top Subjects
+          </p>
           <div className="space-y-0.5">
             {top3.map((g, i) => (
-              <div key={i} className="flex justify-between text-xs text-gray-700">
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
+                key={i}
+                className="flex justify-between text-xs text-gray-700"
+              >
                 <span>{g.subjectDoc?.name ?? "—"}</span>
-                <span className="font-medium">{g.weightedAverage.toFixed(1)}%</span>
+                <span className="font-medium">
+                  {g.weightedAverage.toFixed(1)}%
+                </span>
               </div>
             ))}
           </div>
         </div>
         <div>
-          <p className="text-xs font-semibold text-red-500 uppercase mb-1">Needs Improvement</p>
+          <p className="text-xs font-semibold text-red-500 uppercase mb-1">
+            Needs Improvement
+          </p>
           <div className="space-y-0.5">
             {bottom3.map((g, i) => (
-              <div key={i} className="flex justify-between text-xs text-gray-700">
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
+                key={i}
+                className="flex justify-between text-xs text-gray-700"
+              >
                 <span>{g.subjectDoc?.name ?? "—"}</span>
-                <span className="font-medium">{g.weightedAverage.toFixed(1)}%</span>
+                <span className="font-medium">
+                  {g.weightedAverage.toFixed(1)}%
+                </span>
               </div>
             ))}
           </div>
@@ -341,7 +391,10 @@ function SubjectStats({ data }: { data: { percentage: number }[] }) {
   const avg = data.reduce((s, d) => s + d.percentage, 0) / data.length;
   const max = Math.max(...data.map((d) => d.percentage));
   const min = Math.min(...data.map((d) => d.percentage));
-  const trend = getTrend(data[0]?.percentage ?? null, data[data.length - 1]?.percentage ?? null);
+  const trend = getTrend(
+    data[0]?.percentage ?? null,
+    data[data.length - 1]?.percentage ?? null,
+  );
 
   return (
     <div className="grid grid-cols-4 gap-3 mt-3">
@@ -364,7 +417,7 @@ function SubjectStats({ data }: { data: { percentage: number }[] }) {
 
 function getTrend(
   sem1: number | null,
-  sem2: number | null
+  sem2: number | null,
 ): { label: string; icon: "up" | "down" | "stable" } {
   if (sem1 === null || sem2 === null) return { label: "N/A", icon: "stable" };
   const diff = sem2 - sem1;
@@ -374,7 +427,9 @@ function getTrend(
 }
 
 function TrendIcon({ type }: { type: "up" | "down" | "stable" }) {
-  if (type === "up") return <TrendingUp className="h-3.5 w-3.5 text-green-600" />;
-  if (type === "down") return <TrendingDown className="h-3.5 w-3.5 text-red-500" />;
+  if (type === "up")
+    return <TrendingUp className="h-3.5 w-3.5 text-green-600" />;
+  if (type === "down")
+    return <TrendingDown className="h-3.5 w-3.5 text-red-500" />;
   return <Minus className="h-3.5 w-3.5 text-gray-400" />;
 }

@@ -1,16 +1,20 @@
 "use client";
 
+import { useMutation, useQuery } from "convex/react";
+import { format } from "date-fns";
+import { CreditCard, Receipt, Tag } from "lucide-react";
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -18,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -26,15 +32,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { toast } from "sonner";
-import { format } from "date-fns";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
-import { Receipt, Tag, CreditCard } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -94,7 +94,7 @@ export function FeeDetailDialog({
 
   const totalDiscounts = fee.appliedDiscounts.reduce(
     (sum, d) => sum + d.amount,
-    0
+    0,
   );
 
   const feeLabel =
@@ -175,7 +175,7 @@ export function FeeDetailDialog({
                 <span
                   className={cn(
                     "font-medium",
-                    fee.balance > 0 ? "text-red-600" : "text-green-700"
+                    fee.balance > 0 ? "text-red-600" : "text-green-700",
                   )}
                 >
                   ৳{fee.balance.toLocaleString()}
@@ -253,14 +253,13 @@ function PaymentHistorySection({ feeId }: { feeId: Id<"studentFees"> }) {
     <div>
       <div className="flex items-center gap-2 mb-3">
         <CreditCard className="h-4 w-4 text-gray-500" aria-hidden="true" />
-        <h3 className="text-sm font-semibold text-gray-700">
-          Payment History
-        </h3>
+        <h3 className="text-sm font-semibold text-gray-700">Payment History</h3>
       </div>
 
       {transactions === undefined ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
             <Skeleton key={i} className="h-10 w-full" />
           ))}
         </div>
@@ -289,10 +288,7 @@ function PaymentHistorySection({ feeId }: { feeId: Id<"studentFees"> }) {
                 .map((txn) => (
                   <TableRow key={txn._id}>
                     <TableCell className="text-sm">
-                      {format(
-                        new Date(txn.transactionDate),
-                        "dd/MM/yyyy"
-                      )}
+                      {format(new Date(txn.transactionDate), "dd/MM/yyyy")}
                     </TableCell>
                     <TableCell className="text-sm text-right font-medium text-green-700">
                       ৳{txn.amount.toLocaleString()}
@@ -347,11 +343,11 @@ function ApplyDiscountSubDialog({
   const applyDiscount = useMutation(api.studentDiscounts.applyDiscount);
 
   const activeRules: DiscountRule[] = (discountRules ?? []).filter(
-    (r): r is DiscountRule => r.isActive === true
+    (r): r is DiscountRule => r.isActive === true,
   );
 
   const selectedRule = activeRules.find(
-    (r) => String(r._id) === selectedRuleId
+    (r) => String(r._id) === selectedRuleId,
   );
 
   // Calculate preview discount amount
@@ -368,9 +364,7 @@ function ApplyDiscountSubDialog({
     return Math.min(discountAmount, fee.balance);
   }
 
-  const previewAmount = selectedRule
-    ? computeDiscountPreview(selectedRule)
-    : 0;
+  const previewAmount = selectedRule ? computeDiscountPreview(selectedRule) : 0;
 
   async function handleApplyDiscount() {
     if (!selectedRule) return;
@@ -383,7 +377,7 @@ function ApplyDiscountSubDialog({
         academicYear: fee.academicYearDoc?.name ?? "",
       });
       toast.success(
-        `Discount of ৳${discountAmount.toLocaleString()} applied successfully`
+        `Discount of ৳${discountAmount.toLocaleString()} applied successfully`,
       );
       onClose();
     } catch (err: unknown) {

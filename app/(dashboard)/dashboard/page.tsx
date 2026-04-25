@@ -1,19 +1,19 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { RoleGate } from "@/components/shared/RoleGate";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { format } from "date-fns";
 import {
-  Users,
-  UserCheck,
-  DollarSign,
-  BookOpen,
   ArrowRight,
+  BookOpen,
+  DollarSign,
+  UserCheck,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { RoleGate } from "@/components/shared/RoleGate";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/convex/_generated/api";
 
 export default function DashboardPage() {
   return (
@@ -43,6 +43,7 @@ function DashboardContent() {
       {stats === undefined ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton elements never reorder
             <Skeleton key={i} className="h-28 rounded-lg" />
           ))}
         </div>
@@ -154,9 +155,7 @@ function StatCard({
           {label}
         </p>
         <p className="text-2xl font-bold text-gray-900 mt-0.5">{value}</p>
-        {subtitle && (
-          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
-        )}
+        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
       </div>
     </div>
   );

@@ -488,7 +488,9 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
               />
               {student.healthIssue.issueDescription && (
                 <div>
-                  <span className="text-muted-foreground text-xs">Description</span>
+                  <span className="text-muted-foreground text-xs">
+                    Description
+                  </span>
                   <p className="font-medium text-sm mt-0.5 break-words">
                     {student.healthIssue.issueDescription}
                   </p>
