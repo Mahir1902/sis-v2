@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** Create a single question for an assessment. */
@@ -16,13 +17,23 @@ export const createQuestion = mutation({
     displayOrder: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     await validateQuestionTotal(ctx, args.assessmentId, args.marksAllocated);
-    return await ctx.db.insert("assessmentQuestions", {
+    const id = await ctx.db.insert("assessmentQuestions", {
       ...args,
       isActive: true,
       createdAt: Date.now(),
     });
+
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "assessmentQuestions",
+      entityId: id,
+      description: "Created question for assessment",
+    });
+
+    return id;
   },
 });
 
@@ -41,7 +52,7 @@ export const bulkCreateQuestions = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) throw new Error("Assessment not found");
     const totalNewMarks = args.questions.reduce(
@@ -79,6 +90,15 @@ export const bulkCreateQuestions = mutation({
       });
       ids.push(id);
     }
+
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "assessmentQuestions",
+      entityId: ids[0],
+      description: `Bulk created ${ids.length} questions`,
+    });
+
     return ids;
   },
 });
@@ -105,7 +125,7 @@ export const updateQuestion = mutation({
     questionText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     const question = await ctx.db.get(args.questionId);
     if (!question) throw new Error("Question not found");
 
@@ -131,6 +151,14 @@ export const updateQuestion = mutation({
 
     const { questionId, ...updates } = args;
     await ctx.db.patch(questionId, updates);
+
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "assessmentQuestions",
+      entityId: questionId,
+      description: `Updated question #${question.questionNumber}`,
+    });
   },
 });
 
@@ -140,9 +168,12 @@ export const deleteQuestion = mutation({
     questionId: v.id("assessmentQuestions"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     const question = await ctx.db.get(args.questionId);
     if (!question) throw new Error("Question not found");
+
+    // Capture question number before cascade-delete
+    const questionNumber = question.questionNumber;
 
     // Cascade-delete all student answers for this question
     const answers = await ctx.db
@@ -154,6 +185,14 @@ export const deleteQuestion = mutation({
     }
 
     await ctx.db.delete(args.questionId);
+
+    await logAudit(ctx, {
+      user,
+      action: "delete",
+      entityType: "assessmentQuestions",
+      entityId: args.questionId,
+      description: `Deleted question #${questionNumber}`,
+    });
   },
 });
 

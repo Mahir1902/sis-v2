@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** Apply a discount to a student fee. */
@@ -11,7 +12,7 @@ export const applyDiscount = mutation({
     academicYear: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
 
     const rule = await ctx.db.get(args.discountRuleId);
     if (!rule) throw new Error("Discount rule not found");
@@ -60,6 +61,14 @@ export const applyDiscount = mutation({
       reason: rule.description ?? rule.name,
       startDate: new Date().toISOString().slice(0, 10),
       status: "active",
+    });
+
+    await logAudit(ctx, {
+      user,
+      action: "apply_discount",
+      entityType: "studentDiscounts",
+      entityId: discountId,
+      description: "Applied discount to student",
     });
 
     return { discountId, discountAmount };

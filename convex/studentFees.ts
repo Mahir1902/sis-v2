@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** Create a student fee record (called during admission). */
@@ -19,15 +20,23 @@ export const createStudentFee = mutation({
     dueDate: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
-    return await ctx.db.insert("studentFees", {
+    const id = await ctx.db.insert("studentFees", {
       ...args,
       dueDate: args.dueDate ?? Date.now(),
       appliedDiscounts: [],
       paymentDetails: [],
     });
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "studentFees",
+      entityId: id,
+      description: "Assigned fee to student",
+    });
+    return id;
   },
 });
 
@@ -95,9 +104,16 @@ export const updateStudentFee = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
     const { feeId, ...updates } = args;
     await ctx.db.patch(feeId, updates);
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "studentFees",
+      entityId: feeId,
+      description: "Updated student fee",
+    });
     return feeId;
   },
 });

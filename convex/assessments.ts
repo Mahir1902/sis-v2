@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** Create a single assessment (CA-1, CA-2, or CA-3). */
@@ -16,7 +17,7 @@ export const createAssessment = mutation({
     assessmentDate: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     // Prevent duplicate CA-X for same subject/semester/level/year
     const existing = await ctx.db
       .query("assessments")
@@ -36,11 +37,21 @@ export const createAssessment = mutation({
         `CA-${args.assessmentNumber} already exists for this subject/semester/level/year`,
       );
     }
-    return await ctx.db.insert("assessments", {
+    const id = await ctx.db.insert("assessments", {
       ...args,
       isActive: true,
       createdAt: Date.now(),
     });
+
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "assessments",
+      entityId: id,
+      description: `Created assessment: ${args.name}`,
+    });
+
+    return id;
   },
 });
 
@@ -54,7 +65,7 @@ export const bulkCreateAssessments = mutation({
     totalMarks: v.float64(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     const ids = [];
     for (const num of [1, 2, 3] as const) {
       // Prevent duplicate CA-X for same subject/semester/level/year
@@ -89,6 +100,15 @@ export const bulkCreateAssessments = mutation({
       });
       ids.push(id);
     }
+
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "assessments",
+      entityId: ids[0],
+      description: `Bulk created ${ids.length} assessments`,
+    });
+
     return ids;
   },
 });
@@ -200,7 +220,7 @@ export const updateAssessment = mutation({
     assessmentDate: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) throw new Error("Assessment not found");
 
@@ -242,6 +262,14 @@ export const updateAssessment = mutation({
       patch.assessmentDate = updates.assessmentDate;
 
     await ctx.db.patch(assessmentId, patch);
+
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "assessments",
+      entityId: assessmentId,
+      description: `Updated assessment: ${updates.name ?? assessment.name}`,
+    });
   },
 });
 
@@ -249,9 +277,12 @@ export const updateAssessment = mutation({
 export const deleteAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) throw new Error("Assessment not found");
+
+    // Capture name before cascade-delete
+    const assessmentName = assessment.name;
 
     // 1. Delete all student answers for this assessment
     const answers = await ctx.db
@@ -277,6 +308,14 @@ export const deleteAssessment = mutation({
 
     // 3. Delete the assessment itself
     await ctx.db.delete(args.assessmentId);
+
+    await logAudit(ctx, {
+      user,
+      action: "delete",
+      entityType: "assessments",
+      entityId: args.assessmentId,
+      description: `Deleted assessment: ${assessmentName}`,
+    });
 
     return {
       deletedAnswers: answers.length,

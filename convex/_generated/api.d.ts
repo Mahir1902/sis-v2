@@ -12,6 +12,7 @@ import type * as academicYears from "../academicYears.js";
 import type * as assessmentQuestions from "../assessmentQuestions.js";
 import type * as assessmentWeightingRules from "../assessmentWeightingRules.js";
 import type * as assessments from "../assessments.js";
+import type * as auditLogs from "../auditLogs.js";
 import type * as auth from "../auth.js";
 import type * as campus from "../campus.js";
 import type * as computedGrades from "../computedGrades.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   assessmentQuestions: typeof assessmentQuestions;
   assessmentWeightingRules: typeof assessmentWeightingRules;
   assessments: typeof assessments;
+  auditLogs: typeof auditLogs;
   auth: typeof auth;
   campus: typeof campus;
   computedGrades: typeof computedGrades;

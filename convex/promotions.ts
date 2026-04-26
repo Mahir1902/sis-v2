@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -84,6 +85,7 @@ export const getPromotionCandidates = query({
  * For each student: closes the source enrollment, creates a new enrollment
  * (if not graduating), and patches the student record. Optionally auto-assigns
  * fee structures for the target academic year.
+ * Logs one audit entry per student inside the loop (not one for the whole batch).
  * Requires admin role.
  */
 export const bulkPromote = mutation({
@@ -105,7 +107,7 @@ export const bulkPromote = mutation({
     autoAssignFees: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
 
     // ── Validation ─────────────────────────────────────────────────────
     if (args.sourceAcademicYearId === args.targetAcademicYearId) {
@@ -204,6 +206,10 @@ export const bulkPromote = mutation({
         continue;
       }
 
+      // Look up student name for audit log descriptions
+      const student = await ctx.db.get(item.studentId);
+      const studentName = student?.studentFullName ?? "Unknown";
+
       switch (item.action) {
         case "promote": {
           if (!nextLevel) {
@@ -282,6 +288,14 @@ export const bulkPromote = mutation({
             }
           }
 
+          await logAudit(ctx, {
+            user,
+            action: "promote",
+            entityType: "students",
+            entityId: item.studentId,
+            description: `Promoted student ${studentName}`,
+          });
+
           promoted++;
           break;
         }
@@ -297,6 +311,14 @@ export const bulkPromote = mutation({
           // Mark student as graduated — no new enrollment created
           await ctx.db.patch(item.studentId, {
             status: "graduated",
+          });
+
+          await logAudit(ctx, {
+            user,
+            action: "promote",
+            entityType: "students",
+            entityId: item.studentId,
+            description: `Graduated student ${studentName}`,
           });
 
           graduated++;
@@ -373,6 +395,14 @@ export const bulkPromote = mutation({
               feesAssigned++;
             }
           }
+
+          await logAudit(ctx, {
+            user,
+            action: "promote",
+            entityType: "students",
+            entityId: item.studentId,
+            description: `Held back student ${studentName}`,
+          });
 
           heldBack++;
           break;

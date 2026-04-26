@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** Create a fee transaction and update the student fee in one atomic mutation. */
@@ -20,7 +21,7 @@ export const createTransaction = mutation({
     remarks: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
 
     const fee = await ctx.db.get(args.feeId);
     if (!fee) throw new Error("Fee record not found");
@@ -64,6 +65,15 @@ export const createTransaction = mutation({
       balance: newBalance,
       status: newStatus,
       paymentDetails: updatedPaymentDetails,
+    });
+
+    await logAudit(ctx, {
+      user,
+      action: "collect_payment",
+      entityType: "feeTransactions",
+      entityId: txnId,
+      description: `Collected payment of ${args.amount}`,
+      metadata: { amount: args.amount, paymentMode: args.paymentMode },
     });
 
     return { txnId, referenceNumber };

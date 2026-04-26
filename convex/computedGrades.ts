@@ -1,5 +1,7 @@
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -14,7 +16,7 @@ export const computeGradesForStudent = mutation({
     semester: v.union(v.literal(1), v.literal(2)),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
 
     const enrollment = await ctx.db.get(args.enrollmentId);
     if (!enrollment) throw new Error("Enrollment not found");
@@ -141,11 +143,23 @@ export const computeGradesForStudent = mutation({
       computedAt: Date.now(),
     };
 
+    let gradeId: Id<"computedGrades">;
     if (existing) {
       await ctx.db.patch(existing._id, gradeData);
-      return existing._id;
+      gradeId = existing._id;
+    } else {
+      gradeId = await ctx.db.insert("computedGrades", gradeData);
     }
-    return await ctx.db.insert("computedGrades", gradeData);
+
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "computedGrades",
+      entityId: gradeId,
+      description: "Computed grades for student",
+    });
+
+    return gradeId;
   },
 });
 

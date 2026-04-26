@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** Upload a report card PDF for an enrollment+semester. */
@@ -13,7 +14,7 @@ export const uploadReportCard = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     // Enforce uniqueness: one report card per enrollment+semester
     const existing = await ctx.db
       .query("reportCards")
@@ -26,7 +27,7 @@ export const uploadReportCard = mutation({
         "A report card for this semester already exists. Delete it first.",
       );
     }
-    return await ctx.db.insert("reportCards", {
+    const id = await ctx.db.insert("reportCards", {
       studentId: args.studentId,
       enrollmentId: args.enrollmentId,
       semester: args.semester,
@@ -35,6 +36,16 @@ export const uploadReportCard = mutation({
       uploadedAt: Date.now(),
       notes: args.notes,
     });
+
+    await logAudit(ctx, {
+      user,
+      action: "upload",
+      entityType: "reportCards",
+      entityId: id,
+      description: "Uploaded report card",
+    });
+
+    return id;
   },
 });
 
@@ -95,9 +106,17 @@ export const generateUploadUrl = mutation({
 export const deleteReportCard = mutation({
   args: { reportCardId: v.id("reportCards") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
     const card = await ctx.db.get(args.reportCardId);
     if (!card) throw new Error("Report card not found");
     await ctx.db.delete(args.reportCardId);
+
+    await logAudit(ctx, {
+      user,
+      action: "delete",
+      entityType: "reportCards",
+      entityId: args.reportCardId,
+      description: "Deleted report card",
+    });
   },
 });

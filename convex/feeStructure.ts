@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** List all fee structures. */
@@ -93,7 +94,15 @@ export const createFee = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
-    return await ctx.db.insert("feeStructure", { ...args, isActive: true });
+    const user = await requireRole(ctx, ["admin"]);
+    const id = await ctx.db.insert("feeStructure", { ...args, isActive: true });
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "feeStructures",
+      entityId: id,
+      description: `Created fee structure: ${args.name}`,
+    });
+    return id;
   },
 });

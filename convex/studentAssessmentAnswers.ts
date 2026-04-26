@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** Upsert a single student's answer for a question. */
@@ -55,7 +56,7 @@ export const bulkMarkEntry = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
     const now = Date.now();
 
     // Pre-load all existing answers for this assessment (avoid N+1)
@@ -68,6 +69,9 @@ export const bulkMarkEntry = mutation({
     const existingMap = new Map(
       allExisting.map((a) => [`${a.studentId}|${a.questionId}`, a]),
     );
+
+    // Count distinct students for the audit description
+    const distinctStudents = new Set(args.entries.map((e) => e.studentId));
 
     for (const entry of args.entries) {
       const key = `${entry.studentId}|${entry.questionId}`;
@@ -93,6 +97,15 @@ export const bulkMarkEntry = mutation({
         });
       }
     }
+
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "studentAssessmentAnswers",
+      entityId: args.assessmentId,
+      description: `Entered marks for ${distinctStudents.size} students`,
+    });
+
     return { count: args.entries.length };
   },
 });

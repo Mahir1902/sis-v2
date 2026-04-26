@@ -419,4 +419,31 @@ export default defineSchema({
     .index("by_enrollment_semester", ["enrollmentId", "semester"])
     .index("by_student", ["studentId"])
     .index("by_subject", ["subjectId"]),
+
+  // ─── Audit Logs ───────────────────────────────────────────────────────────
+
+  auditLogs: defineTable({
+    userId: v.id("users"),
+    userEmail: v.string(),
+    userName: v.string(),
+    action: v.union(
+      v.literal("create"),
+      v.literal("update"),
+      v.literal("delete"),
+      v.literal("status_change"),
+      v.literal("collect_payment"),
+      v.literal("apply_discount"),
+      v.literal("upload"),
+      v.literal("promote"),
+      v.literal("role_change"),
+    ),
+    entityType: v.string(),
+    entityId: v.string(),
+    description: v.string(),
+    metadata: v.optional(v.any()),
+    timestamp: v.float64(),
+  })
+    .index("by_timestamp", ["timestamp"])
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_user", ["userId"]),
 });
