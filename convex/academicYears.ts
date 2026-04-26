@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** List all academic years, sorted by start date descending. */
@@ -24,7 +25,7 @@ export const create = mutation({
     endDate: v.float64(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
 
     if (args.startDate >= args.endDate) {
       throw new Error("Start date must be before end date");
@@ -35,6 +36,16 @@ export const create = mutation({
       throw new Error("An academic year with this name already exists");
     }
 
-    return await ctx.db.insert("academicYears", args);
+    const id = await ctx.db.insert("academicYears", args);
+
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "academicYears",
+      entityId: id,
+      description: `Created academic year: ${args.name}`,
+    });
+
+    return id;
   },
 });

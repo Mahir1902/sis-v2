@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /** Get the currently authenticated user's profile. */
@@ -57,7 +58,17 @@ export const updateUserRole = mutation({
     }
     const target = await ctx.db.get(args.userId);
     if (!target) throw new Error("User not found");
+    const oldRole = target.role;
     await ctx.db.patch(args.userId, { role: args.role });
+
+    await logAudit(ctx, {
+      user: caller,
+      action: "role_change",
+      entityType: "users",
+      entityId: args.userId,
+      description: `Changed user ${target.email} role from ${oldRole} to ${args.role}`,
+      metadata: { oldRole, newRole: args.role },
+    });
   },
 });
 
@@ -72,6 +83,14 @@ export const deactivateUser = mutation({
     const target = await ctx.db.get(args.userId);
     if (!target) throw new Error("User not found");
     await ctx.db.patch(args.userId, { isActive: false });
+
+    await logAudit(ctx, {
+      user: caller,
+      action: "status_change",
+      entityType: "users",
+      entityId: args.userId,
+      description: `Deactivated user ${target.email}`,
+    });
   },
 });
 
@@ -79,9 +98,17 @@ export const deactivateUser = mutation({
 export const reactivateUser = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
     const target = await ctx.db.get(args.userId);
     if (!target) throw new Error("User not found");
     await ctx.db.patch(args.userId, { isActive: true });
+
+    await logAudit(ctx, {
+      user,
+      action: "status_change",
+      entityType: "users",
+      entityId: args.userId,
+      description: `Reactivated user ${target.email}`,
+    });
   },
 });

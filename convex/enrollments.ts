@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -18,11 +19,28 @@ export const createEnrollment = mutation({
     previousEnrollmentId: v.optional(v.id("enrollments")),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
-    return await ctx.db.insert("enrollments", {
+    const user = await requireRole(ctx, ["admin"]);
+
+    const enrollmentId = await ctx.db.insert("enrollments", {
       ...args,
       status: "active",
     });
+
+    // Look up level and year names for a meaningful audit description
+    const [level, year] = await Promise.all([
+      ctx.db.get(args.standardLevelId),
+      ctx.db.get(args.academicYear),
+    ]);
+
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "enrollments",
+      entityId: enrollmentId,
+      description: `Enrolled student in ${level?.name ?? "Unknown level"} for ${year?.name ?? "Unknown year"}`,
+    });
+
+    return enrollmentId;
   },
 });
 
@@ -143,7 +161,7 @@ export const updateEnrollmentExit = mutation({
     exitNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
 
     const enrollment = await ctx.db.get(args.enrollmentId);
     if (!enrollment) throw new Error("Enrollment not found");
@@ -177,6 +195,14 @@ export const updateEnrollmentExit = mutation({
           | "expelled",
       });
     }
+
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "enrollments",
+      entityId: args.enrollmentId,
+      description: `Updated enrollment exit for student`,
+    });
 
     return args.enrollmentId;
   },

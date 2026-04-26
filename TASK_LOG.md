@@ -295,9 +295,91 @@ All checklist items pass. No `any` types. No hardcoded hex. `suggestNextYear` co
 
 ---
 
+## Audit Log Feature (2026-04-26)
+**Status**: Complete
+**Active Agent**: CODING AGENT
+
+### Summary
+Add a tamper-evident, admin-only audit trail to every write operation in the system.
+Every mutation already receives the acting user from `requireRole()`, so instrumenting
+is a matter of calling a shared `logAudit()` helper at the end of each handler.
+The frontend is a single admin-only page with filtering by action type and entity type.
+
+### Devil's Advocate Review
+
+| # | Concern | Mitigation |
+|---|---------|------------|
+| 1 | Double-submission: if a user submits a form twice, two audit rows are created | Acceptable — the mutation itself should already guard idempotency; the audit log faithfully records both attempts |
+| 2 | `bulkPromote` loops over students — one `logAudit` call per student could be 30+ inserts | Per-entity logging is intentional per the spec; Convex mutations are transactional so all inserts succeed or none do. Flag in AL-3b that the loop insert count should be noted in the JSDoc |
+| 3 | `metadata` is `v.any()` — no schema enforcement | Spec deliberately keeps it flexible; the agent must use `Record<string, unknown>` in the TypeScript signature so the helper stays typed even if Convex stores it as `any` |
+| 4 | `getRecentLogs` with `.take(100)` — no cursor pagination | Acceptable for v1 per spec; flag as a future improvement if log volume grows |
+| 5 | Non-admin roles must never access audit logs | Both queries must call `requireRole(ctx, ["admin"])` as the first line |
+| 6 | Denormalized `userName`/`userEmail` may drift if user updates their name | Spec decision — records the name at time of action, which is the correct audit semantics |
+| 7 | `entityId` is `v.string()` not `v.id(...)` — accepts any string | Intentional: entityId is passed as a string from the mutation args which are already typed `Id<"table">` — the string representation is sufficient for display and filtering |
+| 8 | Instrumenting ~25+ mutations is a high-surface-area change | Split into two backend sub-tasks: (AL-2) create the file + helper + queries, (AL-3a/3b/3c) instrument mutations by domain group, each independently reviewable |
+
+### Sub-tasks
+
+| # | Task | Agent | Status | Notes |
+|---|------|-------|--------|-------|
+| AL-1 | Add `auditLogs` table to `convex/schema.ts`. Fields: `userId`, `userEmail`, `userName`, `action` (union of 9 literals), `entityType`, `entityId`, `description`, `metadata` (optional any), `timestamp` (float64). Indexes: `by_timestamp ["timestamp"]`, `by_entity ["entityType", "entityId"]`, `by_user ["userId"]`. This is the only schema change for this feature. | BACKEND AGENT | [x] DONE | |
+| AL-2 | Create `convex/auditLogs.ts`. (a) Internal helper `logAudit(ctx, params)` — inserts one row with `timestamp: Date.now()`. TypeScript signature must use `Record<string, unknown>` for `metadata`, not `any`. (b) Query `getRecentLogs({ limit?: number })` — `requireRole(ctx, ["admin"])` first, then `by_timestamp` index descending `.take(limit ?? 100)`. (c) Query `getLogsByEntity({ entityType, entityId })` — `requireRole(ctx, ["admin"])` first, then `by_entity` index. Both queries admin-only. | BACKEND AGENT | [x] DONE | |
+| AL-3a | Instrument student + enrollment mutations with `logAudit` calls. Files: `convex/students.ts` (`createStudent`, `updateStudent`, `deleteStudent`, `updateStudentStatus`), `convex/enrollments.ts` (`createEnrollment`, `updateEnrollmentExit`). Import `logAudit` from `./auditLogs`. Call after the main operation, passing the `user` object already returned by `requireRole`. | BACKEND AGENT | [x] DONE | |
+| AL-3b | Instrument fee + discount mutations with `logAudit` calls. Files: `convex/feeStructure.ts` (`createFee`), `convex/studentFees.ts` (`createStudentFee`, `updateStudentFee`), `convex/feeTransactions.ts` (`createTransaction`), `convex/discounts.ts` (`create`, `toggleActive`), `convex/studentDiscounts.ts` (`applyDiscount`). Note: `feeStructure.createFee` does not currently call `requireRole` — verify it does before instrumenting. | BACKEND AGENT | [x] DONE | `requireRole` confirmed present in all 7 mutations before instrumentation |
+| AL-3c | Instrument assessment + grade + report card + user + promotion + academic year mutations with `logAudit` calls. Files: `convex/assessments.ts` (`createAssessment`, `bulkCreateAssessments`, `updateAssessment`, `deleteAssessment`), `convex/assessmentQuestions.ts` (`createQuestion`, `bulkCreateQuestions`, `updateQuestion`, `deleteQuestion`), `convex/studentAssessmentAnswers.ts` (`bulkMarkEntry`), `convex/computedGrades.ts` (`computeGradesForStudent`), `convex/reportCards.ts` (`uploadReportCard`, `deleteReportCard`), `convex/users.ts` (`updateUserRole`, `deactivateUser`, `reactivateUser`), `convex/promotions.ts` (`bulkPromote` — one `logAudit` call per student inside the loop), `convex/academicYears.ts` (`create`). | BACKEND AGENT | [x] DONE | 17 mutations instrumented across 8 files. `bulkPromote` JSDoc updated. Biome lint: 0 errors. |
+| AL-4 | Backend review of AL-1 through AL-3c. Verify: (1) `auditLogs` schema has all 3 indexes declared correctly, (2) both queries call `requireRole(ctx, ["admin"])` as first statement, (3) `logAudit` helper is not exported as a Convex mutation — it is a plain async function, (4) every instrumented mutation still calls `requireRole` before `logAudit`, (5) no N+1 (logAudit is a single insert, not a query), (6) `metadata` TypeScript type is `Record<string, unknown>` not `any`, (7) error messages in queries don't leak schema. Full BACKEND REVIEW AGENT checklist. | BACKEND REVIEW AGENT | [x] APPROVED | APPROVED by BACKEND REVIEW AGENT (2026-04-26). All 10 checklist sections pass. Non-blocking: (1) feeStructure.createFee uses entityType "feeStructures" vs actual table name "feeStructure" — cosmetic only. (2) deleteReportCard does not delete storage file — pre-existing issue. (3) deactivateAssessment not instrumented — out of scope per task spec. |
+| AL-5 | Create `app/(dashboard)/admin/audit-log/page.tsx`. Admin-only (`RoleGate`). Use `useQuery(api.auditLogs.getRecentLogs, { limit: 200 })`. Table with columns: Timestamp, User, Action (Badge), Entity Type, Description. Two filter dropdowns (Action type, Entity type). Loading skeleton, empty state, filtered-empty state. Mobile overflow-x-auto. Filter logic in `useMemo`. | FRONTEND AGENT | [x] DONE | Awaiting FRONTEND REVIEW (AL-7) |
+| AL-6 | Add "Audit Log" entry to the Administration group in `components/layout/Sidebar.tsx`. Entry: `{ href: "/admin/audit-log", label: "Audit Log", icon: ClipboardList }`. Import `ClipboardList` from `lucide-react`. Admin-only (the entire Administration group is already `roles: ["admin"]`). | FRONTEND AGENT | [x] DONE | Awaiting FRONTEND REVIEW (AL-7) |
+| AL-7 | Frontend review of AL-5 and AL-6. | FRONTEND REVIEW AGENT | [x] REJECTED then FIXED | Initially REJECTED: filter logic was in component body. Fixed: extracted to `hooks/use-audit-log-filters.ts`, removed redundant `as AuditAction` casts. |
+| AL-7b | Frontend re-review after fixes. | FRONTEND REVIEW AGENT | [x] APPROVED | Filter logic extracted to custom hook, `as AuditAction` casts removed, import order fixed. Build: 14 routes PASSING. Lint: 125 files, 0 errors. |
+| AL-8 | Run `npm run build` and `npm run lint`. Confirm 0 errors. | CODING AGENT | [x] DONE | Build: PASSING (14 routes). Lint: PASSING (125 files, 0 errors). Playwright: 6/6 PASSING. |
+
+### Dependencies and Blockers
+- AL-1 (schema) must land before AL-2 (helper + queries) — Convex type generation depends on the table being declared.
+- AL-2 must be complete before AL-3a/AL-3b/AL-3c — the mutations import `logAudit` from `auditLogs.ts`.
+- AL-3a, AL-3b, AL-3c can be written in parallel within a single Backend Agent session since they touch different files, but all three must be complete before AL-4.
+- AL-4 (backend review) gates all frontend work — no frontend task starts until AL-4 is approved.
+- AL-5 and AL-6 can be done in a single Frontend Agent session.
+- AL-8 (build/lint check) is the final integration gate before the feature is marked complete.
+
+### Agent Notes — AL-1 (BACKEND AGENT)
+- Do not add any indexes beyond the three specified. The `by_entity` index is composite — order matters: `["entityType", "entityId"]`.
+- `metadata` field: use `v.optional(v.any())` in schema (matching the spec), but the TypeScript helper function signature should constrain to `Record<string, unknown> | undefined`.
+- `action` field must use `v.union(v.literal(...), ...)` with all 9 literal values: `create`, `update`, `delete`, `status_change`, `collect_payment`, `apply_discount`, `upload`, `promote`, `role_change`.
+
+### Agent Notes — AL-2 (BACKEND AGENT)
+- `logAudit` is a plain `export async function`, NOT `export const logAudit = mutation({...})`. It is called inside existing mutations, not from the client.
+- Descending order on `by_timestamp`: use `.order("desc")` before `.take()`.
+- `getLogsByEntity` does not need ordering — the index will return results in index order (entityType, entityId); if ordering by timestamp within an entity is desired, add `.order("desc")` — but the spec does not require it for v1.
+
+### Agent Notes — AL-3a/3b/3c (BACKEND AGENT)
+- The `user` object returned by `requireRole()` has `_id`, `name`, and `email` fields — pass these directly as `user` to `logAudit`.
+- For `deleteStudent`: capture `student.firstName` and `student.lastName` before deleting, since the record will be gone when the log is written.
+- For `bulkPromote`: inside the per-student loop, call `await logAudit(ctx, { user, action: "promote", entityType: "students", entityId: studentId, description: \`...\` })`.
+- For `feeStructure.createFee`: confirm `requireRole` is present (grep before touching the file). If missing, add it as the first line in the handler before the logAudit call.
+- Action type mapping to use: `createStudent`→`create`, `updateStudent`→`update`, `deleteStudent`→`delete`, `updateStudentStatus`→`status_change`, `createTransaction`→`collect_payment`, `applyDiscount`→`apply_discount`, `uploadReportCard`→`upload`, `bulkPromote`→`promote`, `updateUserRole`→`role_change`, all others→`create`/`update`/`delete` as appropriate.
+
+### Agent Notes — AL-5 (FRONTEND AGENT)
+- Read the `frontend-design` SKILL.md before starting.
+- Import `date-fns` `format` function — it is already a dependency in this project (used in existing components).
+- Action badge colors: suggest mapping `delete`→`destructive`, `status_change`→`secondary`, `collect_payment`→`default` (green), `role_change`→`outline`, others→`secondary`. Use shadcn `Badge` variants — no hardcoded hex.
+- Extract filter logic (filtering `logs` array by selected action/entityType) into `hooks/use-audit-log-filters.ts` returning `{ filteredLogs, actionFilter, setActionFilter, entityTypeFilter, setEntityTypeFilter }`.
+- The entity type filter options are derived from the live data — use `useMemo` to compute distinct `entityType` values from the returned logs array.
+- The page lives at `app/(dashboard)/admin/audit-log/page.tsx`, consistent with the existing `/admin/assessments` and `/admin/promotions` pattern.
+- Use `columns.tsx` pattern (separate file for TanStack Table column definitions) only if the column set is complex; for this table (5 columns, read-only), inline column definitions in the page file are acceptable.
+
+### Decisions Made
+- 2026-04-26: `logAudit` is a plain async function, not a Convex mutation, to avoid the overhead of a separate network call. It runs inside the existing mutation transaction.
+- 2026-04-26: No cursor-based pagination for v1 — `.take(100)` is sufficient; can be upgraded if log volume warrants it.
+- 2026-04-26: `entityId` is stored as `v.string()` (not `v.id()`) to support heterogeneous entity types without a union validator.
+- 2026-04-26: `metadata` stored as `v.any()` in schema but constrained to `Record<string, unknown>` in the TypeScript helper to preserve type safety at the call sites.
+- 2026-04-26: AL-3a/3b/3c split by domain group to keep each sub-task reviewable and bounded in scope.
+
+---
+
 ## Current Build Status
-- `npm run build`: PASSING (12 routes + Proxy Middleware)
-- `npx convex dev --once`: PASSING
+- `npm run build`: PASSING (14 routes + Proxy Middleware)
+- `npm run lint`: PASSING (125 files, 0 errors)
 - Playwright smoke tests: 6/6 PASSING
 
 ---

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -64,7 +65,7 @@ export const createStudent = mutation({
     consultantName: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
 
     const studentId = await ctx.db.insert("students", {
       ...args,
@@ -87,6 +88,14 @@ export const createStudent = mutation({
         }
       }
     }
+
+    await logAudit(ctx, {
+      user,
+      action: "create",
+      entityType: "students",
+      entityId: studentId,
+      description: `Created student ${args.studentFullName}`,
+    });
 
     return studentId;
   },
@@ -265,10 +274,22 @@ export const updateStudentStatus = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
+
+    const oldStatus = student.status;
     await ctx.db.patch(args.studentId, { status: args.status });
+
+    await logAudit(ctx, {
+      user,
+      action: "status_change",
+      entityType: "students",
+      entityId: args.studentId,
+      description: `Changed student ${student.studentFullName} status from ${oldStatus} to ${args.status}`,
+      metadata: { oldStatus, newStatus: args.status },
+    });
+
     return args.studentId;
   },
 });
@@ -317,10 +338,13 @@ export const getSiblingsByStudent = query({
 export const deleteStudent = mutation({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
 
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
+
+    // Capture name before deletion for the audit log
+    const studentName = student.studentFullName;
 
     // ── 1. Query all related records in parallel ────────────────────────
     const [
@@ -427,6 +451,14 @@ export const deleteStudent = mutation({
     // ── 6. Delete the student document ─────────────────────────────────
     await ctx.db.delete(args.studentId);
 
+    await logAudit(ctx, {
+      user,
+      action: "delete",
+      entityType: "students",
+      entityId: args.studentId,
+      description: `Deleted student ${studentName}`,
+    });
+
     return args.studentId;
   },
 });
@@ -482,7 +514,7 @@ export const updateStudent = mutation({
     siblingIds: v.optional(v.array(v.id("students"))),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    const user = await requireRole(ctx, ["admin"]);
 
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
@@ -529,6 +561,14 @@ export const updateStudent = mutation({
 
     // Only patch with fields that were actually provided
     await ctx.db.patch(studentId, updateFields);
+
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "students",
+      entityId: studentId,
+      description: `Updated student ${args.studentFullName ?? student.studentFullName}`,
+    });
 
     return studentId;
   },

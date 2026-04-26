@@ -1,3 +1,5 @@
 - [Project overview](project_overview.md) — SIS v2 for a real school; Next.js 15+, Convex, shadcn New York, Phases 1–5 complete as of 2026-04-05
 - [Task sequencing pattern](feedback_task_sequencing.md) — required agent order for every feature: Backend Agent → Backend Review → Frontend Agent → Frontend Review → build/lint check
 - [Inline dialog pattern](feedback_inline_dialog.md) — small dialogs (≤3 fields, single-page use) live inline in the page file; only extract when reused
+- [Audit Log Feature](project_audit_log.md) — architecture decisions for the 2026-04-26 audit log: logAudit as plain async function, 3-index schema, domain-split instrumentation
+- [Bulk mutation instrumentation](feedback_bulk_instrumentation.md) — split large cross-cutting backend changes into 2–3 domain groups; never one "instrument all N mutations" task
