@@ -76,9 +76,9 @@ export default function StudentsPage() {
     filters.academicYear.size > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 h-full min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">All Students</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -102,18 +102,20 @@ export default function StudentsPage() {
           <AddStudentButton />
         </div>
       ) : (
-        <DataTable
-          columns={columns}
-          data={students as unknown as StudentRow[]}
-          searchPlaceholder="Search students…"
-          onRowClick={(row) => router.push(`/students/${row._id}`)}
-          toolbar={
-            <StudentsFilterToolbar
-              filters={filters}
-              onFiltersChange={setFilters}
-            />
-          }
-        />
+        <div className="flex-1 min-h-0">
+          <DataTable
+            columns={columns}
+            data={students as unknown as StudentRow[]}
+            searchPlaceholder="Search students…"
+            onRowClick={(row) => router.push(`/students/${row._id}`)}
+            toolbar={
+              <StudentsFilterToolbar
+                filters={filters}
+                onFiltersChange={setFilters}
+              />
+            }
+          />
+        </div>
       )}
     </div>
   );

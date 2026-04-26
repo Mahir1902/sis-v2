@@ -38,15 +38,15 @@ export function DashboardWrapper({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen bg-gray-50 overflow-hidden">
       <Sidebar role={me?.role} email={me?.email} />
       <main
         className={cn(
-          "transition-all duration-300 min-h-screen",
+          "transition-all duration-300 h-full flex flex-col overflow-hidden",
           isCollapsed ? "pl-16" : "pl-[300px]",
         )}
       >
-        <div className="p-6">{children}</div>
+        <div className="flex-1 min-h-0 overflow-auto p-6">{children}</div>
       </main>
     </div>
   );
