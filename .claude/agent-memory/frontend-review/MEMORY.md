@@ -3,3 +3,5 @@
 - [Patterns: AlertDialog during submission](project_alert_dialog_submit.md) — AlertDialogCancel must be disabled during isSubmitting to prevent double-submit; AlertDialogAction is the submit trigger
 - [Patterns: SelectContent custom button keyboard a11y](feedback_selectcontent_keyboard.md) — div[role="button"] inside SelectContent needs tabIndex="0" + onKeyDown for keyboard users; non-blocking but flag in every review
 - [Patterns: Filter logic in hooks, not useMemo](feedback_filter_logic_in_hooks.md) — useMemo filter/derivation in component bodies is a blocking issue; extract to /hooks per CLAUDE.md rule 9
+- [Patterns: Unsafe as-cast on Convex Id props](feedback_unsafe_as_cast.md) — `someNullable as Id<"table">` to silence null on a non-nullable prop is a type lie; use conditional rendering instead
+- [Patterns: Zod schemas must be in lib/validations/](feedback_zod_schema_location.md) — Zod schemas defined inside _components/ files are a blocking issue; must live in lib/validations/ one file per domain

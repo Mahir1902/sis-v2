@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
+const MAX_RETRIES = 3;
+const BACKOFF_MS = [1000, 2000, 4000];
+
 export default function DashboardError({
   error,
   reset,
@@ -17,10 +20,12 @@ export default function DashboardError({
   const { isAuthenticated, isLoading } = useConvexAuth();
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const hasRetriedRef = useRef(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const retryCountRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Convex wraps thrown errors: "[CONVEX Q(...)] Server Error\nUncaught Error: Unauthorized..."
-  // "Unauthenticated" = not logged in → sign out + redirect to login
+  // "Unauthenticated" = not logged in → retry with backoff, then sign out as last resort
   // "Unauthorized"    = logged in but wrong role/missing account → show access denied, do NOT sign out
   const isUnauthenticated = error.message.includes("Unauthenticated");
   const isUnauthorized =
@@ -29,22 +34,35 @@ export default function DashboardError({
   useEffect(() => {
     if (!isUnauthenticated) return;
 
-    // Auth state is still loading — wait before acting
+    // Auth state is still loading — token refresh is in progress, wait
     if (isLoading) return;
 
-    // If confirmed authenticated AND this is the first Unauthenticated error,
-    // it's likely a transient race condition where the Convex client had a stale
-    // cached error before re-subscribing with the new token. Reset once to retry.
-    if (isAuthenticated && !hasRetriedRef.current) {
-      hasRetriedRef.current = true;
-      reset();
-      return;
+    // If authenticated and we haven't exhausted retries, schedule a retry
+    // with exponential backoff. The token refresh needs ~2.5s so we give it
+    // up to 7s total (1s + 2s + 4s) across 3 retries.
+    if (isAuthenticated && retryCountRef.current < MAX_RETRIES) {
+      const delay =
+        BACKOFF_MS[retryCountRef.current] ?? BACKOFF_MS[BACKOFF_MS.length - 1];
+      retryCountRef.current += 1;
+      setIsRetrying(true);
+
+      timerRef.current = setTimeout(() => {
+        setIsRetrying(false);
+        reset();
+      }, delay);
+
+      return () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+      };
     }
 
-    // Confirmed unauthenticated (or retry also failed) — sign out and redirect.
+    // All retries exhausted or confirmed unauthenticated — sign out and
+    // redirect. We must call signOut() to clear the 30-day session cookie;
+    // without it, proxy.ts would redirect /login back to /dashboard in a loop.
     let cancelled = false;
 
     async function handleUnauthenticated() {
+      setIsRetrying(false);
       setIsSigningOut(true);
       try {
         await signOut();
@@ -61,6 +79,26 @@ export default function DashboardError({
       cancelled = true;
     };
   }, [isUnauthenticated, isAuthenticated, isLoading, signOut, router, reset]);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  if (isRetrying) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-school-green border-t-transparent" />
+          <output className="text-muted-foreground text-sm">
+            Re-establishing connection...
+          </output>
+        </div>
+      </div>
+    );
+  }
 
   if (isUnauthenticated || isSigningOut) {
     return (

@@ -377,9 +377,41 @@ The frontend is a single admin-only page with filtering by action type and entit
 
 ---
 
+## Fee Structure Editability Feature (2026-04-26)
+**Status**: In Progress
+**Active Agent**: CODING AGENT (orchestrating)
+
+### Summary
+Add the ability to view, edit, and soft-delete individual fees within a fee structure. Adds a detail page at `/fees/[levelId]` with a fee table, edit dialog, deactivate/reactivate confirmation, and student count per fee. Cards on the `/fees` listing page become clickable links to the detail page.
+
+### Devil's Advocate Review
+- Concern: Editing baseAmount on a fee structure doesn't retroactively update existing studentFees → Mitigation: Acceptable — existing studentFees record the original amount at time of assignment; new assignments will use the updated amount
+- Concern: Soft delete means deactivated fees still appear in queries → Mitigation: getByLevel returns all fees (active + inactive) for admin visibility; getFormFees/getFormFeeStructure should filter by isActive for admission form
+- Concern: Student count query per fee could be slow without index → Mitigation: Adding by_feeStructure index to studentFees table
+- Concern: Changing feeType could break studentFees references → Mitigation: feeType change is allowed (no referential integrity issue — studentFees references feeStructureId, not feeType)
+- Concern: "semester" frequency option in CreateFeeDialog doesn't match schema → Mitigation: Fixing as part of B1 extraction
+
+### Sub-tasks
+
+| # | Task | Agent | Status |
+|---|------|-------|--------|
+| FS-1 | Add `by_feeStructure` index to studentFees in schema.ts | BACKEND AGENT | [x] DONE |
+| FS-2 | Add `updateFee` mutation to feeStructure.ts | BACKEND AGENT | [x] DONE |
+| FS-3 | Add `toggleActive` mutation to feeStructure.ts | BACKEND AGENT | [x] DONE |
+| FS-4 | Add `getByLevel` query to feeStructure.ts | BACKEND AGENT | [x] DONE |
+| FS-5 | Backend review of FS-1 through FS-4 | BACKEND REVIEW AGENT | [x] APPROVED 2026-04-26 — All 4 previously rejected issues resolved. Full checklist passed. |
+| FS-6 | Extract CreateFeeDialog to shared component + fix semester bug | FRONTEND AGENT | [x] DONE — Extracted to `_components/CreateFeeDialog.tsx`, removed `"semester"` from frequencies, added aria-labels |
+| FS-7 | Create EditFeeDialog component | FRONTEND AGENT | [x] DONE — `_components/EditFeeDialog.tsx`, follows EditAssessmentDialog pattern, pre-populated defaults |
+| FS-8 | Create detail page at fees/[levelId]/page.tsx | FRONTEND AGENT | [x] DONE — Full page with summary cards, fee table, edit/deactivate/reactivate dialogs, loading/empty/not-found states |
+| FS-9 | Make grade cards clickable with navigation | FRONTEND AGENT | [x] DONE — Cards wrapped in `Link`, chevron-right indicator, `e.preventDefault()` on Add button |
+| FS-10 | Frontend review of FS-6 through FS-9 | FRONTEND REVIEW AGENT | [x] APPROVED 2026-04-26 (re-review) — All 4 blocking issues confirmed resolved: (1) conditional render guard replaces unsafe `as` cast, (2) empty state for zero levels added, (3) summaryStats/level derivation extracted to `hooks/use-fee-level-summary.ts`, (4) schemas moved to `lib/validations/feesSchema.ts`. isSubmitting fix confirmed. Full checklist passed. |
+| FS-11 | Run npm run build and npm run lint | CODING AGENT | [x] DONE — Build: 15 routes PASSING. Lint: 129 files, 0 errors. |
+
+---
+
 ## Current Build Status
-- `npm run build`: PASSING (14 routes + Proxy Middleware)
-- `npm run lint`: PASSING (125 files, 0 errors)
+- `npm run build`: PASSING (15 routes + Proxy Middleware)
+- `npm run lint`: PASSING (129 files, 0 errors)
 - Playwright smoke tests: 6/6 PASSING
 
 ---

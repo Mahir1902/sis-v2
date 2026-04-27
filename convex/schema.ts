@@ -266,7 +266,9 @@ export default defineSchema({
       }),
     ),
     lateFeeAmount: v.optional(v.float64()),
-  }).index("by_student_year", ["studentId", "academicYear"]),
+  })
+    .index("by_student_year", ["studentId", "academicYear"])
+    .index("by_feeStructure", ["feeStructureId"]),
 
   feeTransactions: defineTable({
     studentId: v.id("students"),

@@ -1,5 +1,6 @@
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
+import type { MutationCtx } from "./_generated/server";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [Password],
@@ -9,10 +10,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       const email = args.profile.email as string;
       const name =
         (args.profile.name as string | undefined) ?? email.split("@")[0];
-      // Check for a pre-provisioned user (e.g. seeded admin) — preserve their role
-      const existing = await ctx.db
+      // Check for a pre-provisioned user (e.g. seeded admin) — preserve their role.
+      // Cast to MutationCtx so TypeScript knows the "by_email" index exists.
+      const existing = await (ctx as unknown as MutationCtx).db
         .query("users")
-        .filter((q) => q.eq(q.field("email"), email))
+        .withIndex("by_email", (q) => q.eq("email", email))
         .first();
       if (existing !== null) {
         await ctx.db.patch(existing._id, { name });
