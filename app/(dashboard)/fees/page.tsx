@@ -1,64 +1,17 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { format } from "date-fns";
-import { Plus } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { toast } from "sonner";
-import { z } from "zod";
 import { RoleGate } from "@/components/shared/RoleGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-
-const feeTypes = [
-  "admission",
-  "tuition",
-  "registration",
-  "library",
-  "sports",
-  "computer",
-] as const;
-
-const frequencies = ["one-time", "monthly", "yearly"] as const;
-
-const createFeeSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  feeType: z.enum(feeTypes),
-  baseAmount: z.number().min(0, "Amount must be non-negative"),
-  frequency: z.enum(frequencies),
-  dueDate: z.string().optional(),
-  lateFeeEnabled: z.boolean(),
-  lateFeeAmount: z.number().optional(),
-});
-type CreateFeeValues = z.infer<typeof createFeeSchema>;
+import { CreateFeeDialog } from "./_components/CreateFeeDialog";
 
 export default function FeesPage() {
   return (
@@ -88,6 +41,20 @@ function FeesPageContent() {
     );
   }
 
+  if (levels.length === 0) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900">Fee Structures</h1>
+        <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-lg border">
+          <p className="text-gray-500 font-medium">No standard levels found</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Add standard levels before managing fee structures.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Fee Structures</h1>
@@ -103,283 +70,77 @@ function FeesPageContent() {
               : null;
 
           return (
-            <div
+            <Link
               key={level._id}
-              className="bg-white border rounded-lg p-4 space-y-3 hover:border-gray-300 transition-colors"
+              href={`/fees/${level._id}`}
+              className="block"
+              aria-label={`View fee structure for ${level.name}`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-sm text-gray-900">
-                  {level.name}
-                </h3>
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-school-green/10 flex items-center justify-center">
-                  <span className="text-xs font-bold text-school-green">
-                    {levelFees.length}
-                  </span>
+              <div className="bg-white border rounded-lg p-4 space-y-3 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer group">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-gray-900">
+                    {level.name}
+                  </h3>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-school-green/10 flex items-center justify-center">
+                      <span className="text-xs font-bold text-school-green">
+                        {levelFees.length}
+                      </span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-xs text-gray-500">
-                  Total Fee Types: {levelFees.length}
-                </p>
-                {lastUpdated && (
-                  <p className="text-xs text-gray-400">
-                    Last updated: {format(new Date(lastUpdated), "dd MMM yyyy")}
+                <div className="space-y-0.5">
+                  <p className="text-xs text-gray-500">
+                    Total Fee Types: {levelFees.length}
                   </p>
-                )}
-              </div>
-              {levelFees.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {levelFees.map((f) => (
-                    <Badge
-                      key={f._id}
-                      variant="outline"
-                      className="text-xs capitalize"
-                    >
-                      {f.feeType}
-                    </Badge>
-                  ))}
+                  {lastUpdated && (
+                    <p className="text-xs text-gray-400">
+                      Last updated:{" "}
+                      {format(new Date(lastUpdated), "dd MMM yyyy")}
+                    </p>
+                  )}
                 </div>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full text-xs"
-                onClick={() => setCreateFor(level._id)}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Add Fee Type
-              </Button>
-            </div>
+                {levelFees.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {levelFees.map((f) => (
+                      <Badge
+                        key={f._id}
+                        variant="outline"
+                        className="text-xs capitalize"
+                      >
+                        {f.feeType}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full text-xs"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCreateFor(level._id);
+                  }}
+                  aria-label={`Add fee type for ${level.name}`}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Add Fee Type
+                </Button>
+              </div>
+            </Link>
           );
         })}
       </div>
 
-      <CreateFeeDialog
-        open={!!createFor}
-        onClose={() => setCreateFor(null)}
-        standardLevelId={createFor as Id<"standardLevels">}
-      />
+      {createFor && (
+        <CreateFeeDialog
+          open={true}
+          onClose={() => setCreateFor(null)}
+          standardLevelId={createFor}
+        />
+      )}
     </div>
-  );
-}
-
-// ── Create Fee Dialog ─────────────────────────────────────────────────────────
-
-function CreateFeeDialog({
-  open,
-  onClose,
-  standardLevelId,
-}: {
-  open: boolean;
-  onClose: () => void;
-  standardLevelId: Id<"standardLevels">;
-}) {
-  const createFee = useMutation(api.feeStructure.createFee);
-
-  const form = useForm<CreateFeeValues>({
-    resolver: zodResolver(createFeeSchema),
-    defaultValues: {
-      name: "",
-      feeType: "tuition",
-      baseAmount: 0,
-      frequency: "monthly",
-      lateFeeEnabled: false,
-    },
-  });
-
-  const lateFeeEnabled = form.watch("lateFeeEnabled");
-
-  async function onSubmit(values: CreateFeeValues) {
-    try {
-      await createFee({
-        name: values.name,
-        feeType: values.feeType,
-        baseAmount: values.baseAmount,
-        frequency: values.frequency,
-        standardLevel: standardLevelId,
-        dueDate: values.dueDate
-          ? new Date(values.dueDate).getTime()
-          : undefined,
-        lateFeeConfig: values.lateFeeEnabled
-          ? { enabled: true, amount: values.lateFeeAmount ?? 0 }
-          : undefined,
-      });
-      toast.success("Fee structure created");
-      form.reset();
-      onClose();
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to create fee";
-      toast.error(message);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Fee Type</DialogTitle>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Monthly Tuition Fee" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="feeType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fee Type</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {feeTypes.map((t) => (
-                          <SelectItem key={t} value={t} className="capitalize">
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="frequency"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Frequency</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {["monthly", "yearly", "one-time", "semester"].map(
-                          (f) => (
-                            <SelectItem
-                              key={f}
-                              value={f}
-                              className="capitalize"
-                            >
-                              {f}
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="baseAmount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Base Amount (৳)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      {...field}
-                      onChange={(e) =>
-                        field.onChange(parseFloat(e.target.value))
-                      }
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="dueDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Due Date (optional)</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="lateFeeEnabled"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between">
-                  <FormLabel>Late Fee</FormLabel>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {lateFeeEnabled && (
-              <FormField
-                control={form.control}
-                name="lateFeeAmount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Late Fee Amount (৳)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseFloat(e.target.value))
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            <div className="flex justify-end gap-2 pt-1">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="bg-school-green hover:bg-school-green/90 text-white"
-              >
-                Create
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
   );
 }
