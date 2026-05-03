@@ -93,10 +93,6 @@ export function FeesTab({ studentId }: FeesTabProps) {
     setCollectDialogOpen(true);
   }, []);
 
-  const openCollectForSelected = useCallback(() => {
-    setCollectDialogOpen(true);
-  }, []);
-
   const handleDialogClose = useCallback(() => {
     setCollectDialogOpen(false);
     setSelectedFeeIds(new Set());
@@ -178,7 +174,7 @@ export function FeesTab({ studentId }: FeesTabProps) {
             </Button>
             <Button
               size="sm"
-              onClick={openCollectForSelected}
+              onClick={() => setCollectDialogOpen(true)}
               className="bg-school-green hover:bg-school-green/90 text-white"
               aria-label="Collect selected fees"
             >

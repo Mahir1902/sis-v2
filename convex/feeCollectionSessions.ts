@@ -106,8 +106,14 @@ export const collectFees = mutation({
 
       const newPaidAmount = fee.paidAmount + amount;
       const newBalance = fee.balance - amount;
-      const newStatus: "paid" | "partial" | "unpaid" =
-        newBalance <= 0 ? "paid" : newPaidAmount > 0 ? "partial" : "unpaid";
+      let newStatus: "paid" | "partial" | "unpaid";
+      if (newBalance <= 0) {
+        newStatus = "paid";
+      } else if (newPaidAmount > 0) {
+        newStatus = "partial";
+      } else {
+        newStatus = "unpaid";
+      }
 
       await ctx.db.patch(fee._id, {
         paidAmount: newPaidAmount,

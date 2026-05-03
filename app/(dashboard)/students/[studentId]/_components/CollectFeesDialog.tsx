@@ -78,7 +78,8 @@ export function CollectFeesDialog({
   const [selectedFeeIds, setSelectedFeeIds] = useState<Set<string>>(
     () => new Set(initialFees.map((f) => f._id as string)),
   );
-  const [paymentMode, setPaymentMode] = useState<string>("Cash");
+  const [paymentMode, setPaymentMode] =
+    useState<(typeof PAYMENT_MODES)[number]>("Cash");
   const [remarks, setRemarks] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFutureMonths, setShowFutureMonths] = useState(false);
@@ -184,7 +185,7 @@ export function CollectFeesDialog({
       const result = await collectFees({
         studentId,
         feeIds: selectedFees.map((f) => f._id),
-        paymentMode: paymentMode as (typeof PAYMENT_MODES)[number],
+        paymentMode,
         remarks: remarks || undefined,
       });
       toast.success(
@@ -329,7 +330,12 @@ export function CollectFeesDialog({
               >
                 Payment Mode
               </label>
-              <Select value={paymentMode} onValueChange={setPaymentMode}>
+              <Select
+                value={paymentMode}
+                onValueChange={(v) =>
+                  setPaymentMode(v as (typeof PAYMENT_MODES)[number])
+                }
+              >
                 <SelectTrigger id="payment-mode-select">
                   <SelectValue />
                 </SelectTrigger>
