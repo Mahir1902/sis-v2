@@ -1,4 +1,9 @@
 import { v } from "convex/values";
+import {
+  computeNewFeeStatus,
+  generateInvoiceNumber,
+  generateTransactionReference,
+} from "../lib/feeCollectionUtils";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
@@ -55,7 +60,7 @@ export const collectFees = mutation({
 
     const now = Date.now();
     const totalAmount = fees.reduce((sum, fee) => sum + fee.balance, 0);
-    const invoiceNumber = `INV-${now}`;
+    const invoiceNumber = generateInvoiceNumber(now);
 
     const enrollment = await ctx.db
       .query("enrollments")
@@ -88,7 +93,7 @@ export const collectFees = mutation({
 
     for (let i = 0; i < fees.length; i++) {
       const fee = fees[i];
-      const referenceNumber = `TXN-${now}-${i}`;
+      const referenceNumber = generateTransactionReference(now, i);
       const amount = fee.balance;
 
       const txnId = await ctx.db.insert("feeTransactions", {
@@ -106,14 +111,11 @@ export const collectFees = mutation({
 
       const newPaidAmount = fee.paidAmount + amount;
       const newBalance = fee.balance - amount;
-      let newStatus: "paid" | "partial" | "unpaid";
-      if (newBalance <= 0) {
-        newStatus = "paid";
-      } else if (newPaidAmount > 0) {
-        newStatus = "partial";
-      } else {
-        newStatus = "unpaid";
-      }
+      const newStatus = computeNewFeeStatus(
+        fee.balance,
+        fee.paidAmount,
+        amount,
+      );
 
       await ctx.db.patch(fee._id, {
         paidAmount: newPaidAmount,
