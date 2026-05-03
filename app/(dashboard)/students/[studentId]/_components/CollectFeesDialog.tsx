@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { getSequentialRemovalIds } from "@/lib/feeCollectionUtils";
 
 interface EnrichedDiscount {
   discountId: Id<"discountRules">;
@@ -116,35 +117,28 @@ export function CollectFeesDialog({
     [selectedFees],
   );
 
+  const feesForRemoval = useMemo(
+    () =>
+      allFees.map((f) => ({
+        id: f._id as string,
+        billingPeriod: f.billingPeriod,
+        feeStructureId: f.feeStructureId as string,
+      })),
+    [allFees],
+  );
+
   const removeFee = useCallback(
     (feeId: string) => {
-      const fee = allFees.find((f) => (f._id as string) === feeId);
-      if (!fee?.billingPeriod) {
-        setSelectedFeeIds((prev) => {
-          const next = new Set(prev);
-          next.delete(feeId);
-          return next;
-        });
-        return;
-      }
-
-      const removedPeriod = fee.billingPeriod;
+      const idsToRemove = getSequentialRemovalIds(feeId, feesForRemoval);
       setSelectedFeeIds((prev) => {
         const next = new Set(prev);
-        for (const id of prev) {
-          const f = allFees.find((af) => (af._id as string) === id);
-          if (
-            f?.billingPeriod &&
-            f.feeStructureId === fee.feeStructureId &&
-            f.billingPeriod >= removedPeriod
-          ) {
-            next.delete(id);
-          }
+        for (const id of idsToRemove) {
+          next.delete(id);
         }
         return next;
       });
     },
-    [allFees],
+    [feesForRemoval],
   );
 
   const handleAddFutureMonths = useCallback(

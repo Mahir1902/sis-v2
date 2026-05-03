@@ -1,8 +1,10 @@
 import { v } from "convex/values";
 import {
   computeNewFeeStatus,
+  generateBillingPeriods,
   generateInvoiceNumber,
   generateTransactionReference,
+  resolveFutureMonths,
 } from "../lib/feeCollectionUtils";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
@@ -192,17 +194,10 @@ export const getFutureMonths = query({
     const academicYear = await ctx.db.get(args.academicYear);
     if (!academicYear) return [];
 
-    const startDate = new Date(academicYear.startDate);
-    const endDate = new Date(academicYear.endDate);
-
-    const allMonths: string[] = [];
-    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    while (cursor <= endDate) {
-      const yyyy = cursor.getFullYear();
-      const mm = String(cursor.getMonth() + 1).padStart(2, "0");
-      allMonths.push(`${yyyy}-${mm}`);
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
+    const allMonths = generateBillingPeriods(
+      new Date(academicYear.startDate),
+      new Date(academicYear.endDate),
+    );
 
     const existingFees = await ctx.db
       .query("studentFees")
@@ -222,12 +217,12 @@ export const getFutureMonths = query({
     const now = new Date();
     const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    return allMonths
-      .filter((m) => m >= currentPeriod && !existingPeriods.has(m))
-      .map((m) => ({
+    return resolveFutureMonths(allMonths, existingPeriods, currentPeriod).map(
+      (m) => ({
         billingPeriod: m,
         amount: feeStructure.baseAmount,
-      }));
+      }),
+    );
   },
 });
 
