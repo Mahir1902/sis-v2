@@ -19,6 +19,7 @@ import type * as computedGrades from "../computedGrades.js";
 import type * as dashboard from "../dashboard.js";
 import type * as discounts from "../discounts.js";
 import type * as enrollments from "../enrollments.js";
+import type * as feeCollectionSessions from "../feeCollectionSessions.js";
 import type * as feeStructure from "../feeStructure.js";
 import type * as feeTransactions from "../feeTransactions.js";
 import type * as http from "../http.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   discounts: typeof discounts;
   enrollments: typeof enrollments;
+  feeCollectionSessions: typeof feeCollectionSessions;
   feeStructure: typeof feeStructure;
   feeTransactions: typeof feeTransactions;
   http: typeof http;

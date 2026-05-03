@@ -12,6 +12,7 @@ type AuditAction =
   | "delete"
   | "status_change"
   | "collect_payment"
+  | "collect_fees"
   | "apply_discount"
   | "upload"
   | "promote"
