@@ -93,6 +93,55 @@ export function resolveFutureMonths(
 }
 
 /**
+ * Returns YYYY-MM billing period strings within the academic year range that
+ * are not already in existingBillingPeriods.
+ */
+export function getAvailableMonths(
+  startDate: number,
+  endDate: number,
+  existingBillingPeriods: string[],
+): string[] {
+  const allMonths = generateBillingPeriods(
+    new Date(startDate),
+    new Date(endDate),
+  );
+  const existing = new Set(existingBillingPeriods);
+  return allMonths.filter((m) => !existing.has(m));
+}
+
+type FeeStructureMinimal = {
+  _id: string;
+  frequency: "one-time" | "monthly" | "yearly";
+};
+type ExistingFeeMinimal = { feeStructureId: string };
+
+/**
+ * Filters active fee structures to those still assignable to a student.
+ * Monthly structures are always included.
+ * One-time and yearly structures are excluded when already assigned
+ * (i.e., when an existing studentFee references the same feeStructureId).
+ */
+export function filterAssignableStructures(
+  structures: FeeStructureMinimal[],
+  existingFees: ExistingFeeMinimal[],
+): FeeStructureMinimal[] {
+  const structureMap = new Map(structures.map((s) => [s._id, s]));
+  const assignedNonMonthly = new Set<string>();
+
+  for (const fee of existingFees) {
+    const structure = structureMap.get(fee.feeStructureId);
+    if (structure && structure.frequency !== "monthly") {
+      assignedNonMonthly.add(fee.feeStructureId);
+    }
+  }
+
+  return structures.filter((s) => {
+    if (s.frequency === "monthly") return true;
+    return !assignedNonMonthly.has(s._id);
+  });
+}
+
+/**
  * Generates all YYYY-MM billing periods between two dates.
  */
 export function generateBillingPeriods(

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   computeGrandTotal,
   computeNewFeeStatus,
+  filterAssignableStructures,
   generateBillingPeriods,
   generateInvoiceNumber,
   generateTransactionReference,
+  getAvailableMonths,
   getSequentialRemovalIds,
   resolveFutureMonths,
   validateSequentialMonths,
@@ -206,5 +208,151 @@ describe("generateBillingPeriods", () => {
     const start = new Date(2025, 5, 1);
     const end = new Date(2025, 3, 30);
     expect(generateBillingPeriods(start, end)).toEqual([]);
+  });
+});
+
+// Sep 2024 = 2024-09-01T00:00:00Z
+const SEP_2024 = new Date(2024, 8, 1).getTime();
+// Jun 2025 = 2025-06-30T00:00:00Z
+const JUN_2025 = new Date(2025, 5, 30).getTime();
+// Nov 2024
+const NOV_2024 = new Date(2024, 10, 1).getTime();
+// Feb 2025
+const FEB_2025 = new Date(2025, 1, 28).getTime();
+// Apr 2025 (single-month)
+const APR_2025_START = new Date(2025, 3, 1).getTime();
+const APR_2025_END = new Date(2025, 3, 30).getTime();
+
+describe("getAvailableMonths", () => {
+  it("returns all months when no periods are already assigned (full year)", () => {
+    const result = getAvailableMonths(SEP_2024, JUN_2025, []);
+    expect(result).toEqual([
+      "2024-09",
+      "2024-10",
+      "2024-11",
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+    ]);
+  });
+
+  it("excludes already-assigned periods", () => {
+    const result = getAvailableMonths(SEP_2024, JUN_2025, [
+      "2024-09",
+      "2024-10",
+    ]);
+    expect(result).toEqual([
+      "2024-11",
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+    ]);
+  });
+
+  it("returns empty array when all periods are already assigned", () => {
+    const all = [
+      "2024-09",
+      "2024-10",
+      "2024-11",
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+    ];
+    expect(getAvailableMonths(SEP_2024, JUN_2025, all)).toEqual([]);
+  });
+
+  it("returns the single month when academic year is one month and not assigned", () => {
+    expect(getAvailableMonths(APR_2025_START, APR_2025_END, [])).toEqual([
+      "2025-04",
+    ]);
+  });
+
+  it("returns empty when single-month academic year is already assigned", () => {
+    expect(
+      getAvailableMonths(APR_2025_START, APR_2025_END, ["2025-04"]),
+    ).toEqual([]);
+  });
+
+  it("handles year-boundary ranges correctly", () => {
+    const result = getAvailableMonths(NOV_2024, FEB_2025, []);
+    expect(result).toEqual(["2024-11", "2024-12", "2025-01", "2025-02"]);
+  });
+
+  it("excludes assigned periods within a year-boundary range", () => {
+    const result = getAvailableMonths(NOV_2024, FEB_2025, [
+      "2024-12",
+      "2025-01",
+    ]);
+    expect(result).toEqual(["2024-11", "2025-02"]);
+  });
+});
+
+describe("filterAssignableStructures", () => {
+  const oneTime = { _id: "fs-1", frequency: "one-time" as const };
+  const yearly = { _id: "fs-2", frequency: "yearly" as const };
+  const monthly = { _id: "fs-3", frequency: "monthly" as const };
+  const monthly2 = { _id: "fs-4", frequency: "monthly" as const };
+
+  it("returns all structures when no fees exist", () => {
+    const result = filterAssignableStructures([oneTime, yearly, monthly], []);
+    expect(result).toHaveLength(3);
+  });
+
+  it("excludes one-time structures already assigned", () => {
+    const result = filterAssignableStructures(
+      [oneTime, yearly, monthly],
+      [{ feeStructureId: "fs-1" }],
+    );
+    expect(result.map((s) => s._id)).not.toContain("fs-1");
+    expect(result.map((s) => s._id)).toContain("fs-2");
+    expect(result.map((s) => s._id)).toContain("fs-3");
+  });
+
+  it("excludes yearly structures already assigned", () => {
+    const result = filterAssignableStructures(
+      [oneTime, yearly, monthly],
+      [{ feeStructureId: "fs-2" }],
+    );
+    expect(result.map((s) => s._id)).not.toContain("fs-2");
+    expect(result.map((s) => s._id)).toContain("fs-1");
+    expect(result.map((s) => s._id)).toContain("fs-3");
+  });
+
+  it("always includes monthly structures even when months are assigned", () => {
+    const result = filterAssignableStructures(
+      [oneTime, monthly, monthly2],
+      [{ feeStructureId: "fs-3" }, { feeStructureId: "fs-3" }],
+    );
+    expect(result.map((s) => s._id)).toContain("fs-3");
+    expect(result.map((s) => s._id)).toContain("fs-4");
+  });
+
+  it("excludes both one-time and yearly when both are assigned", () => {
+    const result = filterAssignableStructures(
+      [oneTime, yearly, monthly],
+      [{ feeStructureId: "fs-1" }, { feeStructureId: "fs-2" }],
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]._id).toBe("fs-3");
+  });
+
+  it("ignores existing fees referencing structures not in the input list", () => {
+    const result = filterAssignableStructures(
+      [oneTime, monthly],
+      [{ feeStructureId: "fs-999" }],
+    );
+    expect(result).toHaveLength(2);
   });
 });
