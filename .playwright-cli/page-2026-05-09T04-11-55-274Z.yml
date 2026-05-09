@@ -1,0 +1,738 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic: SIS v2
+        - button:
+          - img
+      - navigation:
+        - generic:
+          - paragraph: Overview
+          - generic:
+            - link:
+              - /url: /dashboard
+              - img
+              - generic: Dashboard
+        - generic:
+          - paragraph: Student Management
+          - generic:
+            - link:
+              - /url: /students
+              - img
+              - generic: Students
+            - link:
+              - /url: /student-fees
+              - img
+              - generic: Student Fees
+        - generic:
+          - paragraph: Administration
+          - generic:
+            - link:
+              - /url: /fees
+              - img
+              - generic: Fee Structures
+            - link:
+              - /url: /admin/assessments
+              - img
+              - generic: Assessments
+            - link:
+              - /url: /admin/promotions
+              - img
+              - generic: Promotions
+            - link:
+              - /url: /admin/subjects
+              - img
+              - generic: Subjects
+            - link:
+              - /url: /admin/audit-log
+              - img
+              - generic: Audit Log
+            - link:
+              - /url: /admin/settings
+              - img
+              - generic: Settings
+      - generic:
+        - generic: admin@school.edu
+        - button:
+          - img
+    - main:
+      - generic:
+        - generic:
+          - button:
+            - img
+            - text: All Students
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: FK
+                  - img
+                - generic:
+                  - generic:
+                    - heading [level=1]: Fatima Khan
+                    - button:
+                      - generic:
+                        - text: active
+                        - img
+                  - generic:
+                    - generic: STD-2025-0002
+                    - generic: Grade Eight · Sec A
+                    - generic: Campus 2
+                    - generic: 2025-2026
+              - generic:
+                - link:
+                  - /url: tel:+92-302-2662061
+                  - img
+                  - text: Father
+                - link:
+                  - /url: tel:+92-320-1928013
+                  - img
+                  - text: Mother
+                - link:
+                  - /url: tel:+92-303-1142238
+                  - img
+                  - text: Guardian
+                - button: Edit
+                - button:
+                  - img
+                  - text: Delete
+          - generic:
+            - complementary:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: Avg Grade
+                    - generic: 50.5%
+                  - generic:
+                    - generic: Fees Due
+                    - generic: ৳0
+                - generic:
+                  - generic:
+                    - heading [level=3]:
+                      - button [expanded]:
+                        - text: Personal Info
+                        - img
+                    - region:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: Gender
+                            - generic: Female
+                          - generic:
+                            - generic: Date of Birth
+                            - generic: 07 Mar 2011
+                          - generic:
+                            - generic: Birthplace
+                            - generic: Canadian
+                          - generic:
+                            - generic: Citizenship
+                            - generic: Pakistani
+                          - generic:
+                            - generic: Religion
+                            - generic: Islam
+                          - generic:
+                            - generic: Blood Group
+                            - generic: O+
+                  - generic:
+                    - heading [level=3]:
+                      - button [expanded]:
+                        - text: Enrollment
+                        - img
+                    - region:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: Level
+                            - generic: Grade Eight
+                          - generic:
+                            - generic: Section / Roll
+                            - generic: "A / #36"
+                          - generic:
+                            - generic: Campus
+                            - generic: Campus 2
+                          - generic:
+                            - generic: Type
+                            - generic: promotion
+                          - generic:
+                            - generic: Admitted
+                            - generic: 01 Jun 2019
+                          - generic:
+                            - generic: Class Start
+                            - generic: 01 Jun 2019
+                          - generic:
+                            - generic: Consultant
+                            - generic: Consultant Khan
+                  - generic:
+                    - heading [level=3]:
+                      - button [expanded]:
+                        - text: Family & Contacts
+                        - img
+                    - region:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic: I
+                              - generic:
+                                - generic: Ibrahim
+                                - generic: Father
+                            - generic:
+                              - generic:
+                                - generic: Occupation
+                                - generic: Engineer
+                              - generic:
+                                - generic: Phone
+                                - link:
+                                  - /url: tel:+92-302-2662061
+                                  - text: +92-302-2662061
+                              - generic:
+                                - generic: NID
+                                - generic: 53811-3836082-9
+                          - generic:
+                            - generic:
+                              - generic: R
+                              - generic:
+                                - generic: Rabia
+                                - generic: Mother
+                            - generic:
+                              - generic:
+                                - generic: Occupation
+                                - generic: Housewife
+                              - generic:
+                                - generic: Phone
+                                - link:
+                                  - /url: tel:+92-320-1928013
+                                  - text: +92-320-1928013
+                              - generic:
+                                - generic: NID
+                                - generic: 11669-1054898-7
+                          - generic:
+                            - generic:
+                              - generic: I
+                              - generic:
+                                - generic: Ibrahim
+                                - generic: Guardian · Father
+                            - generic:
+                              - generic:
+                                - generic: Phone
+                                - link:
+                                  - /url: tel:+92-303-1142238
+                                  - text: +92-303-1142238
+                              - generic:
+                                - generic: NID
+                                - generic: 47927-6445198-4
+                          - generic:
+                            - generic: Annual Income
+                            - generic: 3,000,000+
+                  - generic:
+                    - heading [level=3]:
+                      - button [expanded]:
+                        - text: Addresses
+                        - img
+                    - region:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: Present
+                            - generic: "House #47, Street 11, Block J, East Campus"
+                  - generic:
+                    - heading [level=3]:
+                      - button:
+                        - generic:
+                          - generic: Documents
+                          - generic: 1 doc
+                        - img
+                  - generic:
+                    - heading [level=3]:
+                      - button:
+                        - generic:
+                          - generic: Health
+                          - generic: Has issues
+                        - img
+                  - generic:
+                    - heading [level=3]:
+                      - button:
+                        - generic:
+                          - generic: Siblings
+                          - generic: 1 linked
+                        - img
+                - generic: Created 03 Mar 2026
+            - generic:
+              - tablist:
+                - tab [selected]: Fees
+                - tab: Grades
+                - tab: Academic History
+                - tab: Report Cards
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - paragraph: Total Fees
+                      - paragraph: BDT 192,500
+                    - generic:
+                      - paragraph: Total Paid
+                      - paragraph: BDT 173,250
+                    - generic:
+                      - paragraph: Outstanding
+                      - paragraph: BDT 0
+                  - generic:
+                    - button:
+                      - img
+                      - text: Assign Fee
+                  - generic:
+                    - generic:
+                      - table:
+                        - rowgroup:
+                          - row:
+                            - columnheader:
+                              - checkbox [disabled]
+                            - columnheader: Fee Type
+                            - columnheader: Academic Year
+                            - columnheader: Period
+                            - columnheader: Amount
+                            - columnheader: Paid
+                            - columnheader: Balance
+                            - columnheader: Status
+                            - columnheader: Due Date
+                            - columnheader
+                        - rowgroup:
+                          - row:
+                            - cell
+                            - cell: computer
+                            - cell: 2023-2024
+                            - cell: —
+                            - cell: ৳3,000
+                            - cell: ৳2,700
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: sports
+                            - cell: 2023-2024
+                            - cell: —
+                            - cell: ৳1,500
+                            - cell: ৳1,350
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: library
+                            - cell: 2023-2024
+                            - cell: —
+                            - cell: ৳2,000
+                            - cell: ৳1,800
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: tuition
+                            - cell: 2023-2024
+                            - cell: —
+                            - cell: ৳7,000
+                            - cell: ৳6,300
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2023
+                            - cell
+                          - row:
+                            - cell
+                            - cell: admission
+                            - cell: 2023-2024
+                            - cell: —
+                            - cell: ৳14,000
+                            - cell: ৳12,600
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 15/06/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: computer
+                            - cell: 2021-2022
+                            - cell: —
+                            - cell: ৳3,000
+                            - cell: ৳2,700
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: sports
+                            - cell: 2021-2022
+                            - cell: —
+                            - cell: ৳1,500
+                            - cell: ৳1,350
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: library
+                            - cell: 2021-2022
+                            - cell: —
+                            - cell: ৳2,000
+                            - cell: ৳1,800
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: tuition
+                            - cell: 2021-2022
+                            - cell: —
+                            - cell: ৳7,000
+                            - cell: ৳6,300
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2021
+                            - cell
+                          - row:
+                            - cell
+                            - cell: admission
+                            - cell: 2021-2022
+                            - cell: —
+                            - cell: ৳14,000
+                            - cell: ৳12,600
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 15/06/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: computer
+                            - cell: 2020-2021
+                            - cell: —
+                            - cell: ৳3,000
+                            - cell: ৳2,700
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: sports
+                            - cell: 2020-2021
+                            - cell: —
+                            - cell: ৳1,500
+                            - cell: ৳1,350
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: library
+                            - cell: 2020-2021
+                            - cell: —
+                            - cell: ৳2,000
+                            - cell: ৳1,800
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: tuition
+                            - cell: 2020-2021
+                            - cell: —
+                            - cell: ৳7,000
+                            - cell: ৳6,300
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2020
+                            - cell
+                          - row:
+                            - cell
+                            - cell: admission
+                            - cell: 2020-2021
+                            - cell: —
+                            - cell: ৳14,000
+                            - cell: ৳12,600
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 15/06/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: computer
+                            - cell: 2019-2020
+                            - cell: —
+                            - cell: ৳3,000
+                            - cell: ৳2,700
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: sports
+                            - cell: 2019-2020
+                            - cell: —
+                            - cell: ৳1,500
+                            - cell: ৳1,350
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: library
+                            - cell: 2019-2020
+                            - cell: —
+                            - cell: ৳2,000
+                            - cell: ৳1,800
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: tuition
+                            - cell: 2019-2020
+                            - cell: —
+                            - cell: ৳7,000
+                            - cell: ৳6,300
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2019
+                            - cell
+                          - row:
+                            - cell
+                            - cell: admission
+                            - cell: 2019-2020
+                            - cell: —
+                            - cell: ৳14,000
+                            - cell: ৳12,600
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 15/06/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: computer
+                            - cell: 2022-2023
+                            - cell: —
+                            - cell: ৳3,000
+                            - cell: ৳2,700
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: sports
+                            - cell: 2022-2023
+                            - cell: —
+                            - cell: ৳1,500
+                            - cell: ৳1,350
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: library
+                            - cell: 2022-2023
+                            - cell: —
+                            - cell: ৳2,000
+                            - cell: ৳1,800
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: tuition
+                            - cell: 2022-2023
+                            - cell: —
+                            - cell: ৳7,000
+                            - cell: ৳6,300
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2022
+                            - cell
+                          - row:
+                            - cell
+                            - cell: admission
+                            - cell: 2022-2023
+                            - cell: —
+                            - cell: ৳14,000
+                            - cell: ৳12,600
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 15/06/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: computer
+                            - cell: 2024-2025
+                            - cell: —
+                            - cell: ৳3,000
+                            - cell: ৳2,700
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: sports
+                            - cell: 2024-2025
+                            - cell: —
+                            - cell: ৳1,500
+                            - cell: ৳1,350
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: library
+                            - cell: 2024-2025
+                            - cell: —
+                            - cell: ৳2,000
+                            - cell: ৳1,800
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: tuition
+                            - cell: 2024-2025
+                            - cell: —
+                            - cell: ৳7,000
+                            - cell: ৳6,300
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: admission
+                            - cell: 2024-2025
+                            - cell: —
+                            - cell: ৳14,000
+                            - cell: ৳12,600
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 15/06/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: computer
+                            - cell: 2025-2026
+                            - cell: —
+                            - cell: ৳3,000
+                            - cell: ৳2,700
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: sports
+                            - cell: 2025-2026
+                            - cell: —
+                            - cell: ৳1,500
+                            - cell: ৳1,350
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: library
+                            - cell: 2025-2026
+                            - cell: —
+                            - cell: ৳2,000
+                            - cell: ৳1,800
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2024
+                            - cell
+                          - row:
+                            - cell
+                            - cell: tuition
+                            - cell: 2025-2026
+                            - cell: —
+                            - cell: ৳7,000
+                            - cell: ৳6,300
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 01/07/2025
+                            - cell
+                          - row:
+                            - cell
+                            - cell: admission
+                            - cell: 2025-2026
+                            - cell: —
+                            - cell: ৳14,000
+                            - cell: ৳12,600
+                            - cell: ৳0
+                            - cell:
+                              - generic: paid
+                            - cell: 15/06/2024
+                            - cell
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e9] [cursor=pointer]:
+    - img [ref=e10]
+  - alert
+  - dialog "Assign Fee" [ref=e1100]:
+    - generic [ref=e1101]:
+      - heading "Assign Fee" [level=2] [ref=e1102]
+      - paragraph [ref=e1103]: Add a fee structure to this student for the current academic year.
+    - generic [ref=e1105]:
+      - generic [ref=e1106]: Fee Structure
+      - combobox "Select fee structure" [ref=e1107]:
+        - generic: Select a fee structure
+        - img
+    - generic [ref=e1108]:
+      - button "Cancel fee assignment" [active] [ref=e1109]: Cancel
+      - button "Assign fee to student" [disabled]: Assign Fee
+    - button "Close" [ref=e1110]:
+      - img
+      - generic [ref=e1111]: Close

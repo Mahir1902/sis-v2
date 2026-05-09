@@ -1,0 +1,704 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16]: SIS v2
+        - button "Collapse sidebar" [ref=e17]:
+          - img [ref=e18]
+      - navigation [ref=e20]:
+        - generic [ref=e21]:
+          - paragraph [ref=e22]: Overview
+          - link "Dashboard" [ref=e24] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e25]
+            - generic [ref=e30]: Dashboard
+        - generic [ref=e31]:
+          - paragraph [ref=e32]: Student Management
+          - generic [ref=e33]:
+            - link "Students" [ref=e34] [cursor=pointer]:
+              - /url: /students
+              - img [ref=e35]
+              - generic [ref=e40]: Students
+            - link "Student Fees" [ref=e41] [cursor=pointer]:
+              - /url: /student-fees
+              - img [ref=e42]
+              - generic [ref=e44]: Student Fees
+        - generic [ref=e45]:
+          - paragraph [ref=e46]: Administration
+          - generic [ref=e47]:
+            - link "Fee Structures" [ref=e48] [cursor=pointer]:
+              - /url: /fees
+              - img [ref=e49]
+              - generic [ref=e51]: Fee Structures
+            - link "Assessments" [ref=e52] [cursor=pointer]:
+              - /url: /admin/assessments
+              - img [ref=e53]
+              - generic [ref=e56]: Assessments
+            - link "Promotions" [ref=e57] [cursor=pointer]:
+              - /url: /admin/promotions
+              - img [ref=e58]
+              - generic [ref=e61]: Promotions
+            - link "Subjects" [ref=e62] [cursor=pointer]:
+              - /url: /admin/subjects
+              - img [ref=e63]
+              - generic [ref=e65]: Subjects
+            - link "Audit Log" [ref=e66] [cursor=pointer]:
+              - /url: /admin/audit-log
+              - img [ref=e67]
+              - generic [ref=e70]: Audit Log
+            - link "Settings" [ref=e71] [cursor=pointer]:
+              - /url: /admin/settings
+              - img [ref=e72]
+              - generic [ref=e75]: Settings
+      - generic [ref=e76]:
+        - generic "admin@school.edu" [ref=e77]
+        - button "Sign out" [ref=e78]:
+          - img [ref=e79]
+    - main [ref=e82]:
+      - generic [ref=e462]:
+        - button "Back to students list" [ref=e463]:
+          - img [ref=e464]
+          - text: All Students
+        - generic [ref=e467]:
+          - generic [ref=e468]:
+            - generic [ref=e469]:
+              - generic [ref=e471]: FK
+              - img "Active status" [ref=e472]
+            - generic [ref=e473]:
+              - generic [ref=e474]:
+                - heading "Fatima Khan" [level=1] [ref=e475]
+                - button "active" [ref=e476]:
+                  - generic [ref=e477]:
+                    - text: active
+                    - img [ref=e478]
+              - generic [ref=e480]:
+                - generic [ref=e481]: STD-2025-0002
+                - generic [ref=e482]: Grade Eight · Sec A
+                - generic [ref=e483]: Campus 2
+                - generic [ref=e484]: 2025-2026
+          - generic [ref=e485]:
+            - link "Call father Ibrahim" [ref=e486] [cursor=pointer]:
+              - /url: tel:+92-302-2662061
+              - img [ref=e487]
+              - text: Father
+            - link "Call mother Rabia" [ref=e489] [cursor=pointer]:
+              - /url: tel:+92-320-1928013
+              - img [ref=e490]
+              - text: Mother
+            - link "Call guardian Ibrahim" [ref=e492] [cursor=pointer]:
+              - /url: tel:+92-303-1142238
+              - img [ref=e493]
+              - text: Guardian
+            - button "Edit student" [ref=e496]: Edit
+            - button "Delete student" [ref=e497]:
+              - img
+              - text: Delete
+        - generic [ref=e498]:
+          - complementary [ref=e499]:
+            - generic [ref=e500]:
+              - generic [ref=e501]:
+                - generic [ref=e502]:
+                  - generic [ref=e503]: Avg Grade
+                  - generic [ref=e504]: 50.5%
+                - generic [ref=e505]:
+                  - generic [ref=e506]: Fees Due
+                  - generic [ref=e507]: ৳0
+              - generic [ref=e508]:
+                - generic [ref=e509]:
+                  - heading "Personal Info" [level=3] [ref=e510]:
+                    - button "Personal Info" [expanded] [ref=e511]:
+                      - text: Personal Info
+                      - img
+                  - region "Personal Info" [ref=e512]:
+                    - generic [ref=e514]:
+                      - generic [ref=e515]:
+                        - generic [ref=e516]: Gender
+                        - generic [ref=e517]: Female
+                      - generic [ref=e518]:
+                        - generic [ref=e519]: Date of Birth
+                        - generic [ref=e520]: 07 Mar 2011
+                      - generic [ref=e521]:
+                        - generic [ref=e522]: Birthplace
+                        - generic [ref=e523]: Canadian
+                      - generic [ref=e524]:
+                        - generic [ref=e525]: Citizenship
+                        - generic [ref=e526]: Pakistani
+                      - generic [ref=e527]:
+                        - generic [ref=e528]: Religion
+                        - generic [ref=e529]: Islam
+                      - generic [ref=e530]:
+                        - generic [ref=e531]: Blood Group
+                        - generic [ref=e532]: O+
+                - generic [ref=e533]:
+                  - heading "Enrollment" [level=3] [ref=e534]:
+                    - button "Enrollment" [expanded] [ref=e535]:
+                      - text: Enrollment
+                      - img
+                  - region "Enrollment" [ref=e536]:
+                    - generic [ref=e538]:
+                      - generic [ref=e539]:
+                        - generic [ref=e540]: Level
+                        - generic [ref=e541]: Grade Eight
+                      - generic [ref=e542]:
+                        - generic [ref=e543]: Section / Roll
+                        - generic [ref=e544]: "A / #36"
+                      - generic [ref=e545]:
+                        - generic [ref=e546]: Campus
+                        - generic [ref=e547]: Campus 2
+                      - generic [ref=e548]:
+                        - generic [ref=e549]: Type
+                        - generic [ref=e550]: promotion
+                      - generic [ref=e551]:
+                        - generic [ref=e552]: Admitted
+                        - generic [ref=e553]: 01 Jun 2019
+                      - generic [ref=e554]:
+                        - generic [ref=e555]: Class Start
+                        - generic [ref=e556]: 01 Jun 2019
+                      - generic [ref=e557]:
+                        - generic [ref=e558]: Consultant
+                        - generic [ref=e559]: Consultant Khan
+                - generic [ref=e560]:
+                  - heading "Family & Contacts" [level=3] [ref=e561]:
+                    - button "Family & Contacts" [expanded] [ref=e562]:
+                      - text: Family & Contacts
+                      - img
+                  - region "Family & Contacts" [ref=e563]:
+                    - generic [ref=e565]:
+                      - generic [ref=e566]:
+                        - generic [ref=e567]:
+                          - generic [ref=e568]: I
+                          - generic [ref=e569]:
+                            - generic [ref=e570]: Ibrahim
+                            - generic [ref=e571]: Father
+                        - generic [ref=e572]:
+                          - generic [ref=e573]:
+                            - generic [ref=e574]: Occupation
+                            - generic [ref=e575]: Engineer
+                          - generic [ref=e576]:
+                            - generic [ref=e577]: Phone
+                            - link "+92-302-2662061" [ref=e578] [cursor=pointer]:
+                              - /url: tel:+92-302-2662061
+                          - generic [ref=e579]:
+                            - generic [ref=e580]: NID
+                            - generic [ref=e581]: 53811-3836082-9
+                      - generic [ref=e582]:
+                        - generic [ref=e583]:
+                          - generic [ref=e584]: R
+                          - generic [ref=e585]:
+                            - generic [ref=e586]: Rabia
+                            - generic [ref=e587]: Mother
+                        - generic [ref=e588]:
+                          - generic [ref=e589]:
+                            - generic [ref=e590]: Occupation
+                            - generic [ref=e591]: Housewife
+                          - generic [ref=e592]:
+                            - generic [ref=e593]: Phone
+                            - link "+92-320-1928013" [ref=e594] [cursor=pointer]:
+                              - /url: tel:+92-320-1928013
+                          - generic [ref=e595]:
+                            - generic [ref=e596]: NID
+                            - generic [ref=e597]: 11669-1054898-7
+                      - generic [ref=e598]:
+                        - generic [ref=e599]:
+                          - generic [ref=e600]: I
+                          - generic [ref=e601]:
+                            - generic [ref=e602]: Ibrahim
+                            - generic [ref=e603]: Guardian · Father
+                        - generic [ref=e604]:
+                          - generic [ref=e605]:
+                            - generic [ref=e606]: Phone
+                            - link "+92-303-1142238" [ref=e607] [cursor=pointer]:
+                              - /url: tel:+92-303-1142238
+                          - generic [ref=e608]:
+                            - generic [ref=e609]: NID
+                            - generic [ref=e610]: 47927-6445198-4
+                      - generic [ref=e611]:
+                        - generic [ref=e612]: Annual Income
+                        - generic [ref=e613]: 3,000,000+
+                - generic [ref=e614]:
+                  - heading "Addresses" [level=3] [ref=e615]:
+                    - button "Addresses" [expanded] [ref=e616]:
+                      - text: Addresses
+                      - img
+                  - region "Addresses" [ref=e617]:
+                    - generic [ref=e620]:
+                      - generic [ref=e621]: Present
+                      - generic [ref=e622]: "House #47, Street 11, Block J, East Campus"
+                - heading "Documents 1 doc" [level=3] [ref=e624]:
+                  - button "Documents 1 doc" [ref=e625]:
+                    - generic [ref=e626]:
+                      - generic [ref=e627]: Documents
+                      - generic [ref=e628]: 1 doc
+                    - img
+                - heading "Health Has issues" [level=3] [ref=e630]:
+                  - button "Health Has issues" [ref=e631]:
+                    - generic [ref=e632]:
+                      - generic [ref=e633]: Health
+                      - generic [ref=e634]: Has issues
+                    - img
+                - heading "Siblings 1 linked" [level=3] [ref=e636]:
+                  - button "Siblings 1 linked" [ref=e637]:
+                    - generic [ref=e638]:
+                      - generic [ref=e639]: Siblings
+                      - generic [ref=e640]: 1 linked
+                    - img
+              - generic [ref=e641]: Created 03 Mar 2026
+          - generic [ref=e642]:
+            - tablist "Student detail tabs" [ref=e643]:
+              - tab "Fees" [selected] [ref=e644]
+              - tab "Grades" [ref=e645]
+              - tab "Academic History" [ref=e646]
+              - tab "Report Cards" [ref=e647]
+            - generic [ref=e649]:
+              - generic [ref=e650]:
+                - generic [ref=e651]:
+                  - paragraph [ref=e652]: Total Fees
+                  - paragraph [ref=e653]: BDT 192,500
+                - generic [ref=e654]:
+                  - paragraph [ref=e655]: Total Paid
+                  - paragraph [ref=e656]: BDT 173,250
+                - generic [ref=e657]:
+                  - paragraph [ref=e658]: Outstanding
+                  - paragraph [ref=e659]: BDT 0
+              - button "Assign new fee to student" [ref=e661]:
+                - img
+                - text: Assign Fee
+              - table [ref=e664]:
+                - rowgroup [ref=e665]:
+                  - row "Select all unpaid fees Fee Type Academic Year Period Amount Paid Balance Status Due Date" [ref=e666]:
+                    - columnheader "Select all unpaid fees" [ref=e667]:
+                      - checkbox "Select all unpaid fees" [disabled] [ref=e668]
+                    - columnheader "Fee Type" [ref=e669]
+                    - columnheader "Academic Year" [ref=e670]
+                    - columnheader "Period" [ref=e671]
+                    - columnheader "Amount" [ref=e672]
+                    - columnheader "Paid" [ref=e673]
+                    - columnheader "Balance" [ref=e674]
+                    - columnheader "Status" [ref=e675]
+                    - columnheader "Due Date" [ref=e676]
+                    - columnheader [ref=e677]
+                - rowgroup [ref=e678]:
+                  - row "computer 2023-2024 — ৳3,000 ৳2,700 ৳0 paid 01/07/2024" [ref=e679] [cursor=pointer]:
+                    - cell [ref=e680]
+                    - cell "computer" [ref=e681]
+                    - cell "2023-2024" [ref=e682]
+                    - cell "—" [ref=e683]
+                    - cell "৳3,000" [ref=e684]
+                    - cell "৳2,700" [ref=e685]
+                    - cell "৳0" [ref=e686]
+                    - cell "paid" [ref=e687]:
+                      - generic [ref=e688]: paid
+                    - cell "01/07/2024" [ref=e689]
+                    - cell [ref=e690]
+                  - row "sports 2023-2024 — ৳1,500 ৳1,350 ৳0 paid 01/07/2024" [ref=e691] [cursor=pointer]:
+                    - cell [ref=e692]
+                    - cell "sports" [ref=e693]
+                    - cell "2023-2024" [ref=e694]
+                    - cell "—" [ref=e695]
+                    - cell "৳1,500" [ref=e696]
+                    - cell "৳1,350" [ref=e697]
+                    - cell "৳0" [ref=e698]
+                    - cell "paid" [ref=e699]:
+                      - generic [ref=e700]: paid
+                    - cell "01/07/2024" [ref=e701]
+                    - cell [ref=e702]
+                  - row "library 2023-2024 — ৳2,000 ৳1,800 ৳0 paid 01/07/2024" [ref=e703] [cursor=pointer]:
+                    - cell [ref=e704]
+                    - cell "library" [ref=e705]
+                    - cell "2023-2024" [ref=e706]
+                    - cell "—" [ref=e707]
+                    - cell "৳2,000" [ref=e708]
+                    - cell "৳1,800" [ref=e709]
+                    - cell "৳0" [ref=e710]
+                    - cell "paid" [ref=e711]:
+                      - generic [ref=e712]: paid
+                    - cell "01/07/2024" [ref=e713]
+                    - cell [ref=e714]
+                  - row "tuition 2023-2024 — ৳7,000 ৳6,300 ৳0 paid 01/07/2023" [ref=e715] [cursor=pointer]:
+                    - cell [ref=e716]
+                    - cell "tuition" [ref=e717]
+                    - cell "2023-2024" [ref=e718]
+                    - cell "—" [ref=e719]
+                    - cell "৳7,000" [ref=e720]
+                    - cell "৳6,300" [ref=e721]
+                    - cell "৳0" [ref=e722]
+                    - cell "paid" [ref=e723]:
+                      - generic [ref=e724]: paid
+                    - cell "01/07/2023" [ref=e725]
+                    - cell [ref=e726]
+                  - row "admission 2023-2024 — ৳14,000 ৳12,600 ৳0 paid 15/06/2024" [ref=e727] [cursor=pointer]:
+                    - cell [ref=e728]
+                    - cell "admission" [ref=e729]
+                    - cell "2023-2024" [ref=e730]
+                    - cell "—" [ref=e731]
+                    - cell "৳14,000" [ref=e732]
+                    - cell "৳12,600" [ref=e733]
+                    - cell "৳0" [ref=e734]
+                    - cell "paid" [ref=e735]:
+                      - generic [ref=e736]: paid
+                    - cell "15/06/2024" [ref=e737]
+                    - cell [ref=e738]
+                  - row "computer 2021-2022 — ৳3,000 ৳2,700 ৳0 paid 01/07/2024" [ref=e739] [cursor=pointer]:
+                    - cell [ref=e740]
+                    - cell "computer" [ref=e741]
+                    - cell "2021-2022" [ref=e742]
+                    - cell "—" [ref=e743]
+                    - cell "৳3,000" [ref=e744]
+                    - cell "৳2,700" [ref=e745]
+                    - cell "৳0" [ref=e746]
+                    - cell "paid" [ref=e747]:
+                      - generic [ref=e748]: paid
+                    - cell "01/07/2024" [ref=e749]
+                    - cell [ref=e750]
+                  - row "sports 2021-2022 — ৳1,500 ৳1,350 ৳0 paid 01/07/2024" [ref=e751] [cursor=pointer]:
+                    - cell [ref=e752]
+                    - cell "sports" [ref=e753]
+                    - cell "2021-2022" [ref=e754]
+                    - cell "—" [ref=e755]
+                    - cell "৳1,500" [ref=e756]
+                    - cell "৳1,350" [ref=e757]
+                    - cell "৳0" [ref=e758]
+                    - cell "paid" [ref=e759]:
+                      - generic [ref=e760]: paid
+                    - cell "01/07/2024" [ref=e761]
+                    - cell [ref=e762]
+                  - row "library 2021-2022 — ৳2,000 ৳1,800 ৳0 paid 01/07/2024" [ref=e763] [cursor=pointer]:
+                    - cell [ref=e764]
+                    - cell "library" [ref=e765]
+                    - cell "2021-2022" [ref=e766]
+                    - cell "—" [ref=e767]
+                    - cell "৳2,000" [ref=e768]
+                    - cell "৳1,800" [ref=e769]
+                    - cell "৳0" [ref=e770]
+                    - cell "paid" [ref=e771]:
+                      - generic [ref=e772]: paid
+                    - cell "01/07/2024" [ref=e773]
+                    - cell [ref=e774]
+                  - row "tuition 2021-2022 — ৳7,000 ৳6,300 ৳0 paid 01/07/2021" [ref=e775] [cursor=pointer]:
+                    - cell [ref=e776]
+                    - cell "tuition" [ref=e777]
+                    - cell "2021-2022" [ref=e778]
+                    - cell "—" [ref=e779]
+                    - cell "৳7,000" [ref=e780]
+                    - cell "৳6,300" [ref=e781]
+                    - cell "৳0" [ref=e782]
+                    - cell "paid" [ref=e783]:
+                      - generic [ref=e784]: paid
+                    - cell "01/07/2021" [ref=e785]
+                    - cell [ref=e786]
+                  - row "admission 2021-2022 — ৳14,000 ৳12,600 ৳0 paid 15/06/2024" [ref=e787] [cursor=pointer]:
+                    - cell [ref=e788]
+                    - cell "admission" [ref=e789]
+                    - cell "2021-2022" [ref=e790]
+                    - cell "—" [ref=e791]
+                    - cell "৳14,000" [ref=e792]
+                    - cell "৳12,600" [ref=e793]
+                    - cell "৳0" [ref=e794]
+                    - cell "paid" [ref=e795]:
+                      - generic [ref=e796]: paid
+                    - cell "15/06/2024" [ref=e797]
+                    - cell [ref=e798]
+                  - row "computer 2020-2021 — ৳3,000 ৳2,700 ৳0 paid 01/07/2024" [ref=e799] [cursor=pointer]:
+                    - cell [ref=e800]
+                    - cell "computer" [ref=e801]
+                    - cell "2020-2021" [ref=e802]
+                    - cell "—" [ref=e803]
+                    - cell "৳3,000" [ref=e804]
+                    - cell "৳2,700" [ref=e805]
+                    - cell "৳0" [ref=e806]
+                    - cell "paid" [ref=e807]:
+                      - generic [ref=e808]: paid
+                    - cell "01/07/2024" [ref=e809]
+                    - cell [ref=e810]
+                  - row "sports 2020-2021 — ৳1,500 ৳1,350 ৳0 paid 01/07/2024" [ref=e811] [cursor=pointer]:
+                    - cell [ref=e812]
+                    - cell "sports" [ref=e813]
+                    - cell "2020-2021" [ref=e814]
+                    - cell "—" [ref=e815]
+                    - cell "৳1,500" [ref=e816]
+                    - cell "৳1,350" [ref=e817]
+                    - cell "৳0" [ref=e818]
+                    - cell "paid" [ref=e819]:
+                      - generic [ref=e820]: paid
+                    - cell "01/07/2024" [ref=e821]
+                    - cell [ref=e822]
+                  - row "library 2020-2021 — ৳2,000 ৳1,800 ৳0 paid 01/07/2024" [ref=e823] [cursor=pointer]:
+                    - cell [ref=e824]
+                    - cell "library" [ref=e825]
+                    - cell "2020-2021" [ref=e826]
+                    - cell "—" [ref=e827]
+                    - cell "৳2,000" [ref=e828]
+                    - cell "৳1,800" [ref=e829]
+                    - cell "৳0" [ref=e830]
+                    - cell "paid" [ref=e831]:
+                      - generic [ref=e832]: paid
+                    - cell "01/07/2024" [ref=e833]
+                    - cell [ref=e834]
+                  - row "tuition 2020-2021 — ৳7,000 ৳6,300 ৳0 paid 01/07/2020" [ref=e835] [cursor=pointer]:
+                    - cell [ref=e836]
+                    - cell "tuition" [ref=e837]
+                    - cell "2020-2021" [ref=e838]
+                    - cell "—" [ref=e839]
+                    - cell "৳7,000" [ref=e840]
+                    - cell "৳6,300" [ref=e841]
+                    - cell "৳0" [ref=e842]
+                    - cell "paid" [ref=e843]:
+                      - generic [ref=e844]: paid
+                    - cell "01/07/2020" [ref=e845]
+                    - cell [ref=e846]
+                  - row "admission 2020-2021 — ৳14,000 ৳12,600 ৳0 paid 15/06/2024" [ref=e847] [cursor=pointer]:
+                    - cell [ref=e848]
+                    - cell "admission" [ref=e849]
+                    - cell "2020-2021" [ref=e850]
+                    - cell "—" [ref=e851]
+                    - cell "৳14,000" [ref=e852]
+                    - cell "৳12,600" [ref=e853]
+                    - cell "৳0" [ref=e854]
+                    - cell "paid" [ref=e855]:
+                      - generic [ref=e856]: paid
+                    - cell "15/06/2024" [ref=e857]
+                    - cell [ref=e858]
+                  - row "computer 2019-2020 — ৳3,000 ৳2,700 ৳0 paid 01/07/2024" [ref=e859] [cursor=pointer]:
+                    - cell [ref=e860]
+                    - cell "computer" [ref=e861]
+                    - cell "2019-2020" [ref=e862]
+                    - cell "—" [ref=e863]
+                    - cell "৳3,000" [ref=e864]
+                    - cell "৳2,700" [ref=e865]
+                    - cell "৳0" [ref=e866]
+                    - cell "paid" [ref=e867]:
+                      - generic [ref=e868]: paid
+                    - cell "01/07/2024" [ref=e869]
+                    - cell [ref=e870]
+                  - row "sports 2019-2020 — ৳1,500 ৳1,350 ৳0 paid 01/07/2024" [ref=e871] [cursor=pointer]:
+                    - cell [ref=e872]
+                    - cell "sports" [ref=e873]
+                    - cell "2019-2020" [ref=e874]
+                    - cell "—" [ref=e875]
+                    - cell "৳1,500" [ref=e876]
+                    - cell "৳1,350" [ref=e877]
+                    - cell "৳0" [ref=e878]
+                    - cell "paid" [ref=e879]:
+                      - generic [ref=e880]: paid
+                    - cell "01/07/2024" [ref=e881]
+                    - cell [ref=e882]
+                  - row "library 2019-2020 — ৳2,000 ৳1,800 ৳0 paid 01/07/2024" [ref=e883] [cursor=pointer]:
+                    - cell [ref=e884]
+                    - cell "library" [ref=e885]
+                    - cell "2019-2020" [ref=e886]
+                    - cell "—" [ref=e887]
+                    - cell "৳2,000" [ref=e888]
+                    - cell "৳1,800" [ref=e889]
+                    - cell "৳0" [ref=e890]
+                    - cell "paid" [ref=e891]:
+                      - generic [ref=e892]: paid
+                    - cell "01/07/2024" [ref=e893]
+                    - cell [ref=e894]
+                  - row "tuition 2019-2020 — ৳7,000 ৳6,300 ৳0 paid 01/07/2019" [ref=e895] [cursor=pointer]:
+                    - cell [ref=e896]
+                    - cell "tuition" [ref=e897]
+                    - cell "2019-2020" [ref=e898]
+                    - cell "—" [ref=e899]
+                    - cell "৳7,000" [ref=e900]
+                    - cell "৳6,300" [ref=e901]
+                    - cell "৳0" [ref=e902]
+                    - cell "paid" [ref=e903]:
+                      - generic [ref=e904]: paid
+                    - cell "01/07/2019" [ref=e905]
+                    - cell [ref=e906]
+                  - row "admission 2019-2020 — ৳14,000 ৳12,600 ৳0 paid 15/06/2024" [ref=e907] [cursor=pointer]:
+                    - cell [ref=e908]
+                    - cell "admission" [ref=e909]
+                    - cell "2019-2020" [ref=e910]
+                    - cell "—" [ref=e911]
+                    - cell "৳14,000" [ref=e912]
+                    - cell "৳12,600" [ref=e913]
+                    - cell "৳0" [ref=e914]
+                    - cell "paid" [ref=e915]:
+                      - generic [ref=e916]: paid
+                    - cell "15/06/2024" [ref=e917]
+                    - cell [ref=e918]
+                  - row "computer 2022-2023 — ৳3,000 ৳2,700 ৳0 paid 01/07/2024" [ref=e919] [cursor=pointer]:
+                    - cell [ref=e920]
+                    - cell "computer" [ref=e921]
+                    - cell "2022-2023" [ref=e922]
+                    - cell "—" [ref=e923]
+                    - cell "৳3,000" [ref=e924]
+                    - cell "৳2,700" [ref=e925]
+                    - cell "৳0" [ref=e926]
+                    - cell "paid" [ref=e927]:
+                      - generic [ref=e928]: paid
+                    - cell "01/07/2024" [ref=e929]
+                    - cell [ref=e930]
+                  - row "sports 2022-2023 — ৳1,500 ৳1,350 ৳0 paid 01/07/2024" [ref=e931] [cursor=pointer]:
+                    - cell [ref=e932]
+                    - cell "sports" [ref=e933]
+                    - cell "2022-2023" [ref=e934]
+                    - cell "—" [ref=e935]
+                    - cell "৳1,500" [ref=e936]
+                    - cell "৳1,350" [ref=e937]
+                    - cell "৳0" [ref=e938]
+                    - cell "paid" [ref=e939]:
+                      - generic [ref=e940]: paid
+                    - cell "01/07/2024" [ref=e941]
+                    - cell [ref=e942]
+                  - row "library 2022-2023 — ৳2,000 ৳1,800 ৳0 paid 01/07/2024" [ref=e943] [cursor=pointer]:
+                    - cell [ref=e944]
+                    - cell "library" [ref=e945]
+                    - cell "2022-2023" [ref=e946]
+                    - cell "—" [ref=e947]
+                    - cell "৳2,000" [ref=e948]
+                    - cell "৳1,800" [ref=e949]
+                    - cell "৳0" [ref=e950]
+                    - cell "paid" [ref=e951]:
+                      - generic [ref=e952]: paid
+                    - cell "01/07/2024" [ref=e953]
+                    - cell [ref=e954]
+                  - row "tuition 2022-2023 — ৳7,000 ৳6,300 ৳0 paid 01/07/2022" [ref=e955] [cursor=pointer]:
+                    - cell [ref=e956]
+                    - cell "tuition" [ref=e957]
+                    - cell "2022-2023" [ref=e958]
+                    - cell "—" [ref=e959]
+                    - cell "৳7,000" [ref=e960]
+                    - cell "৳6,300" [ref=e961]
+                    - cell "৳0" [ref=e962]
+                    - cell "paid" [ref=e963]:
+                      - generic [ref=e964]: paid
+                    - cell "01/07/2022" [ref=e965]
+                    - cell [ref=e966]
+                  - row "admission 2022-2023 — ৳14,000 ৳12,600 ৳0 paid 15/06/2024" [ref=e967] [cursor=pointer]:
+                    - cell [ref=e968]
+                    - cell "admission" [ref=e969]
+                    - cell "2022-2023" [ref=e970]
+                    - cell "—" [ref=e971]
+                    - cell "৳14,000" [ref=e972]
+                    - cell "৳12,600" [ref=e973]
+                    - cell "৳0" [ref=e974]
+                    - cell "paid" [ref=e975]:
+                      - generic [ref=e976]: paid
+                    - cell "15/06/2024" [ref=e977]
+                    - cell [ref=e978]
+                  - row "computer 2024-2025 — ৳3,000 ৳2,700 ৳0 paid 01/07/2024" [ref=e979] [cursor=pointer]:
+                    - cell [ref=e980]
+                    - cell "computer" [ref=e981]
+                    - cell "2024-2025" [ref=e982]
+                    - cell "—" [ref=e983]
+                    - cell "৳3,000" [ref=e984]
+                    - cell "৳2,700" [ref=e985]
+                    - cell "৳0" [ref=e986]
+                    - cell "paid" [ref=e987]:
+                      - generic [ref=e988]: paid
+                    - cell "01/07/2024" [ref=e989]
+                    - cell [ref=e990]
+                  - row "sports 2024-2025 — ৳1,500 ৳1,350 ৳0 paid 01/07/2024" [ref=e991] [cursor=pointer]:
+                    - cell [ref=e992]
+                    - cell "sports" [ref=e993]
+                    - cell "2024-2025" [ref=e994]
+                    - cell "—" [ref=e995]
+                    - cell "৳1,500" [ref=e996]
+                    - cell "৳1,350" [ref=e997]
+                    - cell "৳0" [ref=e998]
+                    - cell "paid" [ref=e999]:
+                      - generic [ref=e1000]: paid
+                    - cell "01/07/2024" [ref=e1001]
+                    - cell [ref=e1002]
+                  - row "library 2024-2025 — ৳2,000 ৳1,800 ৳0 paid 01/07/2024" [ref=e1003] [cursor=pointer]:
+                    - cell [ref=e1004]
+                    - cell "library" [ref=e1005]
+                    - cell "2024-2025" [ref=e1006]
+                    - cell "—" [ref=e1007]
+                    - cell "৳2,000" [ref=e1008]
+                    - cell "৳1,800" [ref=e1009]
+                    - cell "৳0" [ref=e1010]
+                    - cell "paid" [ref=e1011]:
+                      - generic [ref=e1012]: paid
+                    - cell "01/07/2024" [ref=e1013]
+                    - cell [ref=e1014]
+                  - row "tuition 2024-2025 — ৳7,000 ৳6,300 ৳0 paid 01/07/2024" [ref=e1015] [cursor=pointer]:
+                    - cell [ref=e1016]
+                    - cell "tuition" [ref=e1017]
+                    - cell "2024-2025" [ref=e1018]
+                    - cell "—" [ref=e1019]
+                    - cell "৳7,000" [ref=e1020]
+                    - cell "৳6,300" [ref=e1021]
+                    - cell "৳0" [ref=e1022]
+                    - cell "paid" [ref=e1023]:
+                      - generic [ref=e1024]: paid
+                    - cell "01/07/2024" [ref=e1025]
+                    - cell [ref=e1026]
+                  - row "admission 2024-2025 — ৳14,000 ৳12,600 ৳0 paid 15/06/2024" [ref=e1027] [cursor=pointer]:
+                    - cell [ref=e1028]
+                    - cell "admission" [ref=e1029]
+                    - cell "2024-2025" [ref=e1030]
+                    - cell "—" [ref=e1031]
+                    - cell "৳14,000" [ref=e1032]
+                    - cell "৳12,600" [ref=e1033]
+                    - cell "৳0" [ref=e1034]
+                    - cell "paid" [ref=e1035]:
+                      - generic [ref=e1036]: paid
+                    - cell "15/06/2024" [ref=e1037]
+                    - cell [ref=e1038]
+                  - row "computer 2025-2026 — ৳3,000 ৳2,700 ৳0 paid 01/07/2024" [ref=e1039] [cursor=pointer]:
+                    - cell [ref=e1040]
+                    - cell "computer" [ref=e1041]
+                    - cell "2025-2026" [ref=e1042]
+                    - cell "—" [ref=e1043]
+                    - cell "৳3,000" [ref=e1044]
+                    - cell "৳2,700" [ref=e1045]
+                    - cell "৳0" [ref=e1046]
+                    - cell "paid" [ref=e1047]:
+                      - generic [ref=e1048]: paid
+                    - cell "01/07/2024" [ref=e1049]
+                    - cell [ref=e1050]
+                  - row "sports 2025-2026 — ৳1,500 ৳1,350 ৳0 paid 01/07/2024" [ref=e1051] [cursor=pointer]:
+                    - cell [ref=e1052]
+                    - cell "sports" [ref=e1053]
+                    - cell "2025-2026" [ref=e1054]
+                    - cell "—" [ref=e1055]
+                    - cell "৳1,500" [ref=e1056]
+                    - cell "৳1,350" [ref=e1057]
+                    - cell "৳0" [ref=e1058]
+                    - cell "paid" [ref=e1059]:
+                      - generic [ref=e1060]: paid
+                    - cell "01/07/2024" [ref=e1061]
+                    - cell [ref=e1062]
+                  - row "library 2025-2026 — ৳2,000 ৳1,800 ৳0 paid 01/07/2024" [ref=e1063] [cursor=pointer]:
+                    - cell [ref=e1064]
+                    - cell "library" [ref=e1065]
+                    - cell "2025-2026" [ref=e1066]
+                    - cell "—" [ref=e1067]
+                    - cell "৳2,000" [ref=e1068]
+                    - cell "৳1,800" [ref=e1069]
+                    - cell "৳0" [ref=e1070]
+                    - cell "paid" [ref=e1071]:
+                      - generic [ref=e1072]: paid
+                    - cell "01/07/2024" [ref=e1073]
+                    - cell [ref=e1074]
+                  - row "tuition 2025-2026 — ৳7,000 ৳6,300 ৳0 paid 01/07/2025" [ref=e1075] [cursor=pointer]:
+                    - cell [ref=e1076]
+                    - cell "tuition" [ref=e1077]
+                    - cell "2025-2026" [ref=e1078]
+                    - cell "—" [ref=e1079]
+                    - cell "৳7,000" [ref=e1080]
+                    - cell "৳6,300" [ref=e1081]
+                    - cell "৳0" [ref=e1082]
+                    - cell "paid" [ref=e1083]:
+                      - generic [ref=e1084]: paid
+                    - cell "01/07/2025" [ref=e1085]
+                    - cell [ref=e1086]
+                  - row "admission 2025-2026 — ৳14,000 ৳12,600 ৳0 paid 15/06/2024" [ref=e1087] [cursor=pointer]:
+                    - cell [ref=e1088]
+                    - cell "admission" [ref=e1089]
+                    - cell "2025-2026" [ref=e1090]
+                    - cell "—" [ref=e1091]
+                    - cell "৳14,000" [ref=e1092]
+                    - cell "৳12,600" [ref=e1093]
+                    - cell "৳0" [ref=e1094]
+                    - cell "paid" [ref=e1095]:
+                      - generic [ref=e1096]: paid
+                    - cell "15/06/2024" [ref=e1097]
+                    - cell [ref=e1098]
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e9] [cursor=pointer]:
+    - img [ref=e10]
+  - alert [ref=e13]

@@ -416,6 +416,89 @@ Add the ability to view, edit, and soft-delete individual fees within a fee stru
 
 ---
 
+---
+
+## Fee Management Bug Fixes (2026-05-09)
+**Status**: Planning
+**Active Agent**: PLANNING AGENT
+
+### Summary
+Three reported issues with the fee management system:
+
+1. **Feature A — CollectFeesDialog overflow + compact UX**: When 12+ fees are selected the
+   dialog overflows the viewport. Each fee is shown as a full card with Original/To Collect
+   lines. Redesign to group same-structure fees into a single compact summary row
+   (e.g., "Sports × 12 months (Jul 2026 – Feb 2027) — ৳18,000") with an optional expand
+   toggle to see individual fees. Dialog must stay within the viewport at all times.
+
+2. **Feature B — Delete accidentally assigned fee**: No way to remove an unpaid fee that
+   was assigned by mistake. Needs a backend `deleteStudentFee` mutation (admin-only, unpaid
+   only) and a frontend "Delete Fee" option in the "..." dropdown on each fee row in FeesTab,
+   protected by a confirmation dialog.
+
+### Files in scope
+- `convex/studentFees.ts` — add `deleteStudentFee` mutation
+- `convex/auditLogs.ts` — `logAudit` must be called from the new mutation (already imported in studentFees.ts)
+- `app/(dashboard)/students/[studentId]/_components/CollectFeesDialog.tsx` — compact grouped display
+- `app/(dashboard)/students/[studentId]/_components/FeesTab.tsx` — delete option in "..." dropdown
+
+### Devil's Advocate Review
+
+| # | Concern | Mitigation |
+|---|---------|------------|
+| 1 | Deleting a fee that has a partial payment — balance > 0, paidAmount > 0 | Mutation must block deletion if `paidAmount > 0` (not just `status !== "paid"`). Even "unpaid" status can have partial-but-unrecorded context. Rule: only allow delete when `paidAmount === 0`. |
+| 2 | feeTransactions rows reference the studentFee via `feeId` — deleting the fee leaves orphaned transactions | Block deletion if any `feeTransactions` row references this fee (use `by_student` index to find transactions for the student and filter by `feeId`). This is stricter and safer than checking `paidAmount`. |
+| 3 | Double-delete: user clicks delete twice before mutation returns | Confirmation dialog's confirm button must be disabled during submission with `isDeleting` state. |
+| 4 | Grouping logic in CollectFeesDialog — a structure with both monthly and one-off fees (same feeStructureId but one fee has no billingPeriod) | Non-monthly fees (no billingPeriod) should never be grouped; they always render as individual cards. Only fees with `billingPeriod` and matching `feeStructureId` are eligible for grouping. |
+| 5 | Grouped row "Sports × 12 months (Jul 2026 – Feb 2027)" — what if the months are non-contiguous? | Display as "Sports × N fees" without a date range if the months are non-contiguous; date range label only when contiguous. `formatBillingPeriod` already exists — parse first/last period. |
+| 6 | Removing one month from a grouped set — does the grouped row collapse or update count? | The existing `removeFee` already enforces sequential removal (`getSequentialRemovalIds`). After removal the group simply re-renders with updated count. No extra logic needed. |
+| 7 | CollectFeesDialog is currently 422 lines — adding grouping logic will grow it further | Extract the new grouped-fee section into a `GroupedFeeRow` sub-component in the same file (same pattern as the existing `PerStructureFutureMonths` sub-component). No new file unless it grows past ~600 lines. |
+| 8 | Delete option only appears on `status !== "paid"` rows — need to verify the "paid" guard is enforced server-side | Mutation already calls `requireRole(ctx, ["admin"])`. Add the `paidAmount > 0 || hasFeeTransactions` check as the next guard. Frontend "Delete" item in the dropdown is already only rendered for `status !== "paid"` rows. |
+
+### Sub-tasks
+
+| # | Task | Agent | Status | Notes |
+|---|------|-------|--------|-------|
+| FM-1 | Add `deleteStudentFee` mutation to `convex/studentFees.ts`. Args: `{ feeId: v.id("studentFees") }`. Handler: (1) `requireRole(ctx, ["admin"])` first, (2) fetch the fee record — throw "Fee not found" if missing, (3) check `fee.paidAmount > 0` — throw "Cannot delete a fee with recorded payments", (4) query `feeTransactions` for any row with `feeId` matching using `by_student` index filtered by this studentId + feeId — throw "Cannot delete a fee with existing transactions", (5) `ctx.db.delete(feeId)`, (6) `logAudit(ctx, { user, action: "delete", entityType: "studentFees", entityId: feeId, description: "Deleted student fee" })`. Return void. | BACKEND AGENT | [ ] Pending | No schema change required — `by_student` index already exists on feeTransactions and `by_student_year` index exists on studentFees |
+| FM-2 | Backend review of FM-1. Verify: requireRole present and first, paidAmount guard correct, feeTransactions orphan check present, logAudit called, no N+1 (single `ctx.db.get` + one index query), error messages don't leak internals, return type void. | BACKEND REVIEW AGENT | [ ] Pending | Blocked by FM-1 |
+| FM-3 | Redesign fee display in `CollectFeesDialog.tsx`. Replace the flat `selectedFees.map(...)` card list with a grouped display. Logic: split `selectedFees` into two buckets — (a) fees with `billingPeriod` grouped by `feeStructureId`, (b) fees without `billingPeriod` rendered as individual cards (unchanged). For each group in bucket (a): render a `GroupedFeeRow` sub-component showing fee type name, count, date range (contiguous → "Jul 2026 – Feb 2027"; non-contiguous → "N fees"), total balance, and a chevron toggle to expand individual fee cards within the group. The remove (X) button on each individual fee within an expanded group still calls the existing `removeFee`. Non-monthly individual cards render exactly as they do today. The `ScrollArea`, `grandTotal`, payment mode, remarks, and action buttons are unchanged. Extract the new sub-component as `GroupedFeeRow` inside the same file below the existing `PerStructureFutureMonths` definition. | FRONTEND AGENT | [ ] Pending | Blocked by FM-2. No new Convex queries needed — all data already in `selectedFees`. Use `ChevronDown`/`ChevronRight` from lucide-react. |
+| FM-4 | Add "Delete Fee" option to the fee row dropdown in `FeesTab.tsx`. Steps: (1) import `useMutation` and `api.studentFees.deleteStudentFee`, (2) add state `deletingFeeId: Id<"studentFees"> | null` and `isDeleting: boolean`, (3) add a `DropdownMenuSeparator` and a `DropdownMenuItem` with red text ("Delete Fee") inside the existing DropdownMenuContent — only for `status !== "paid"` rows (already gated by the outer condition), (4) clicking "Delete Fee" sets `deletingFeeId` and opens a confirmation `AlertDialog` (inline — small, single-page-use), (5) confirmation calls `deleteStudentFee({ feeId })` with `isDeleting` guard on the confirm button, (6) on success: `toast.success("Fee deleted")` + clear state; on error: `toast.error(message)` + clear `isDeleting`. The AlertDialog and its state live inside `FeesTab` (not extracted — ≤3 interactions, single-page use per inline dialog pattern). | FRONTEND AGENT | [ ] Pending | Blocked by FM-2. FM-3 and FM-4 can be done in the same Frontend Agent session as they touch different components with no shared state. |
+| FM-5 | Frontend review of FM-3 and FM-4. Check: (1) grouped display handles 0-fee edge (never shown), 1-fee group (still shows grouped row, not just a flat card), and 12-fee group correctly; (2) expand/collapse toggle has aria-label and aria-expanded; (3) individual fee cards within expanded group still show remove (X) button; (4) non-monthly fees render as individual cards unchanged; (5) delete confirmation AlertDialog has disabled confirm button during `isDeleting`; (6) Sonner toast on delete success and error; (7) no `any` types; (8) no hardcoded hex; (9) dialog still fits viewport with 12 fees grouped. | FRONTEND REVIEW AGENT | [ ] Pending | Blocked by FM-3 and FM-4 |
+| FM-6 | Run `npm run build` and `npm run lint`. Confirm 0 errors. Update build status line. | CODING AGENT | [ ] Pending | Blocked by FM-5 |
+
+### Dependencies and Blockers
+- FM-1 (backend mutation) has no external blockers — no schema change, no new index, imports already in place.
+- FM-2 (backend review) gates all frontend work.
+- FM-3 and FM-4 are independent of each other and can run in one Frontend Agent session after FM-2 is approved.
+- FM-5 (frontend review) requires both FM-3 and FM-4 to be complete.
+- FM-6 is the final integration check.
+
+### Agent Notes — FM-1 (BACKEND AGENT)
+- The `feeTransactions` table has a `by_student` index on `["studentId"]`, not on `feeId`. To check for orphaned transactions: query `feeTransactions` with `by_student` index for the fee's `studentId`, then `.filter(q => q.eq(q.field("feeId"), feeId))` or use `.take(100)` and filter in JS. A `.take(1)` with filter is sufficient — we only need to know if any exist, not count them.
+- Do not add a new index for this check. The `feeTransactions` table is low-cardinality per student; filtering in JS after a `by_student` index read is acceptable.
+- Import `logAudit` is already at line 3 of `convex/studentFees.ts` — no new import needed.
+- Error message for paid fee: "Cannot delete a fee that has already been paid or partially paid". Error message for existing transactions: "Cannot delete a fee that has recorded transactions". Neither reveals table names or internal field names.
+
+### Agent Notes — FM-3 (FRONTEND AGENT)
+- The existing `groupMonthlyStructures` utility from `lib/perStructureFutureMonths` groups by structure for the "Add Future Months" section but is not appropriate here — it is designed for future month selection, not for display grouping. Write a small pure function `groupFeesByStructure` at the top of `CollectFeesDialog.tsx` (not in a lib file — it is only used here). It takes `FeeForCollection[]` and returns `{ monthly: Map<string, FeeForCollection[]>, individual: FeeForCollection[] }` where monthly groups contain only fees with `billingPeriod`.
+- Contiguous date range detection: sort the `billingPeriod` strings for a group (they are `"YYYY-MM"` format, so lexicographic sort is chronologically correct). Check that each consecutive pair differs by exactly one month. If contiguous, format as `"MMM YYYY – MMM YYYY"` using `formatBillingPeriod` on the first and last. If not contiguous, use `"N fees"` label.
+- The `ChevronDown` and `ChevronRight` icons are already available from `lucide-react` (used elsewhere in this project).
+- Ensure the `GroupedFeeRow` sub-component accepts `fees: FeeForCollection[]`, `onRemove: (id: string) => void`, `isExpanded: boolean`, `onToggle: () => void` props. The expanded/collapsed state is managed by the parent `CollectFeesDialog` using a `Set<string>` keyed by `feeStructureId` — this is the same pattern already used for `expandedStructures`.
+
+### Agent Notes — FM-4 (FRONTEND AGENT)
+- The `AlertDialog` for delete confirmation is inline in `FeesTab.tsx`. It follows the same inline pattern used in `app/(dashboard)/admin/promotions/page.tsx` (confirm action AlertDialog). Do not create a separate file.
+- The delete dropdown item should use `className="text-red-600 focus:text-red-600"` to visually signal destructive action — consistent with the pattern in other destructive DropdownMenuItems in this codebase.
+- Add a `DropdownMenuSeparator` between "Collect Fee" and "Delete Fee" in the dropdown.
+- After a successful delete the `fees` query will auto-update via Convex reactivity — no manual refetch needed. Clear `deletingFeeId` and `isDeleting` in the `finally` block.
+
+### Decisions Made
+- 2026-05-09: No schema change for this feature. The existing `by_student_year` and `by_feeStructure` indexes on `studentFees` are sufficient; the existing `by_student` index on `feeTransactions` is sufficient for the orphan check.
+- 2026-05-09: Delete is blocked when `paidAmount > 0` OR when any `feeTransactions` row references the fee — belt-and-suspenders guard against data loss.
+- 2026-05-09: Grouping logic for CollectFeesDialog lives in a pure function inside the component file (not in `lib/`) — it is only used in one place.
+- 2026-05-09: The `GroupedFeeRow` sub-component lives in the same file as `CollectFeesDialog` following the existing `PerStructureFutureMonths` sub-component pattern.
+
+---
+
 ## Decisions Made
 - 2026-04-05: Reuse Convex deployment hushed-bass-123 (no migration cost)
 - 2026-04-05: Build from scratch per CLAUDE.md spec (no v1 code copy-paste)
