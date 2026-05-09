@@ -1,9 +1,20 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import { DollarSign, MoreHorizontal, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,9 +56,14 @@ export function FeesTab({ studentId }: FeesTabProps) {
   const [selectedFeeIds, setSelectedFeeIds] = useState<Set<string>>(new Set());
   const [collectDialogOpen, setCollectDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [deleteFeeId, setDeleteFeeId] = useState<Id<"studentFees"> | null>(
+    null,
+  );
   const [detailFeeId, setDetailFeeId] = useState<Id<"studentFees"> | null>(
     null,
   );
+
+  const deleteStudentFee = useMutation(api.studentFees.deleteStudentFee);
 
   const fees = useQuery(api.studentFees.getByStudent, { studentId });
   const currentEnrollment = useQuery(api.enrollments.getCurrentEnrollment, {
@@ -98,6 +115,20 @@ export function FeesTab({ studentId }: FeesTabProps) {
     setSelectedFeeIds(new Set([feeId as string]));
     setCollectDialogOpen(true);
   }, []);
+
+  const handleDeleteFee = useCallback(async () => {
+    if (!deleteFeeId) return;
+    try {
+      await deleteStudentFee({ feeId: deleteFeeId });
+      toast.success("Fee deleted successfully");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to delete fee";
+      toast.error(message);
+    } finally {
+      setDeleteFeeId(null);
+    }
+  }, [deleteFeeId, deleteStudentFee]);
 
   const handleDialogClose = useCallback(() => {
     setCollectDialogOpen(false);
@@ -310,6 +341,20 @@ export function FeesTab({ studentId }: FeesTabProps) {
                           >
                             Collect Fee
                           </DropdownMenuItem>
+                          {fee.status === "unpaid" && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteFeeId(fee._id);
+                                }}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                Delete Fee
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
@@ -363,6 +408,33 @@ export function FeesTab({ studentId }: FeesTabProps) {
             }))}
           />
         )}
+
+      {/* Delete Fee confirmation */}
+      <AlertDialog
+        open={!!deleteFeeId}
+        onOpenChange={(open) => {
+          if (!open) setDeleteFeeId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Fee</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this unpaid fee record. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteFee}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

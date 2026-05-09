@@ -84,6 +84,51 @@ export const getById = query({
   },
 });
 
+/**
+ * Delete an unpaid student fee record.
+ * Guarded: admin only, fee must exist, must have zero payments,
+ * and no feeTransaction rows may reference this fee.
+ */
+export const deleteStudentFee = mutation({
+  args: { feeId: v.id("studentFees") },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+
+    const fee = await ctx.db.get(args.feeId);
+    if (!fee) throw new Error("Fee record not found");
+
+    // Guard 1: no payments recorded on the fee itself
+    if (fee.paidAmount > 0) {
+      throw new Error(
+        "Cannot delete a fee that has received payments. Reverse the payment first.",
+      );
+    }
+
+    // Guard 2: no transaction rows reference this fee
+    const transactions = await ctx.db
+      .query("feeTransactions")
+      .withIndex("by_student_year", (q) =>
+        q.eq("studentId", fee.studentId).eq("academicYear", fee.academicYear),
+      )
+      .take(100);
+
+    const hasTransaction = transactions.some((t) => t.feeId === args.feeId);
+    if (hasTransaction) {
+      throw new Error("Cannot delete a fee that has linked transactions.");
+    }
+
+    await ctx.db.delete(args.feeId);
+
+    await logAudit(ctx, {
+      user,
+      action: "delete",
+      entityType: "studentFees",
+      entityId: args.feeId,
+      description: `Deleted unpaid fee record${fee.billingPeriod ? ` (${fee.billingPeriod})` : ""}`,
+    });
+  },
+});
+
 /** Update a student fee after payment. */
 export const updateStudentFee = mutation({
   args: {

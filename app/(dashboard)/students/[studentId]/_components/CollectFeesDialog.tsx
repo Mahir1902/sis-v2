@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Loader2, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Plus, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -71,6 +72,81 @@ const PAYMENT_MODES = [
   "Online",
 ] as const;
 
+// ── Grouping helpers ─────────────────────────────────────────────────────────
+
+interface FeeGroup {
+  key: string;
+  structureName: string;
+  feeType: string;
+  frequency: string;
+  fees: FeeForCollection[];
+  totalBalance: number;
+  dateRange: string | null;
+}
+
+/**
+ * Groups selected fees for compact display. Monthly fees with the same
+ * feeStructureId are collapsed into one row. Non-monthly fees or fees
+ * without billingPeriod remain as individual items.
+ */
+function groupFeesForDisplay(fees: FeeForCollection[]): FeeGroup[] {
+  const monthlyBuckets = new Map<string, FeeForCollection[]>();
+  const singles: FeeForCollection[] = [];
+
+  for (const fee of fees) {
+    if (fee.feeStructureDoc?.frequency === "monthly" && fee.billingPeriod) {
+      const bucket = monthlyBuckets.get(fee.feeStructureId as string) ?? [];
+      bucket.push(fee);
+      monthlyBuckets.set(fee.feeStructureId as string, bucket);
+    } else {
+      singles.push(fee);
+    }
+  }
+
+  const groups: FeeGroup[] = [];
+
+  for (const [structId, bucket] of monthlyBuckets) {
+    const sorted = [...bucket].sort((a, b) =>
+      (a.billingPeriod ?? "").localeCompare(b.billingPeriod ?? ""),
+    );
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const dateRange =
+      sorted.length > 1
+        ? `${formatBillingPeriod(first.billingPeriod)} – ${formatBillingPeriod(last.billingPeriod)}`
+        : formatBillingPeriod(first.billingPeriod);
+
+    groups.push({
+      key: `monthly-${structId}`,
+      structureName: first.feeStructureDoc?.name ?? "Monthly Fee",
+      feeType: first.feeStructureDoc?.feeType ?? "fee",
+      frequency: "monthly",
+      fees: sorted,
+      totalBalance: sorted.reduce((s, f) => s + f.balance, 0),
+      dateRange,
+    });
+  }
+
+  // Add non-monthly fees as individual groups
+  for (const fee of singles) {
+    groups.push({
+      key: `single-${fee._id}`,
+      structureName: fee.feeStructureDoc?.name ?? "Fee",
+      feeType: fee.feeStructureDoc?.feeType ?? "fee",
+      frequency: fee.feeStructureDoc?.frequency ?? "one-time",
+      fees: [fee],
+      totalBalance: fee.balance,
+      dateRange: fee.billingPeriod
+        ? formatBillingPeriod(fee.billingPeriod)
+        : null,
+    });
+  }
+
+  return groups;
+}
+
+// ── Main Dialog ──────────────────────────────────────────────────────────────
+
 export function CollectFeesDialog({
   open,
   onClose,
@@ -88,6 +164,7 @@ export function CollectFeesDialog({
   const [expandedStructures, setExpandedStructures] = useState<Set<string>>(
     new Set(),
   );
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const collectFees = useMutation(api.feeCollectionSessions.collectFees);
   const createFutureMonthFees = useMutation(
@@ -101,6 +178,11 @@ export function CollectFeesDialog({
 
   const grandTotal = useMemo(
     () => selectedFees.reduce((sum, f) => sum + f.balance, 0),
+    [selectedFees],
+  );
+
+  const feeGroups = useMemo(
+    () => groupFeesForDisplay(selectedFees),
     [selectedFees],
   );
 
@@ -144,14 +226,30 @@ export function CollectFeesDialog({
     [feesForRemoval],
   );
 
+  const removeGroup = useCallback((group: FeeGroup) => {
+    setSelectedFeeIds((prev) => {
+      const next = new Set(prev);
+      for (const fee of group.fees) {
+        next.delete(fee._id as string);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleGroupExpanded = useCallback((key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   const toggleStructureExpanded = useCallback((structureId: string) => {
     setExpandedStructures((prev) => {
       const next = new Set(prev);
-      if (next.has(structureId)) {
-        next.delete(structureId);
-      } else {
-        next.add(structureId);
-      }
+      if (next.has(structureId)) next.delete(structureId);
+      else next.add(structureId);
       return next;
     });
   }, []);
@@ -227,76 +325,112 @@ export function CollectFeesDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="space-y-4 pb-2">
-            {/* Selected fees list */}
-            <div className="space-y-2">
-              {selectedFees.map((fee) => {
-                const totalDiscounts = fee.enrichedDiscounts.reduce(
-                  (s, d) => s + d.amount,
-                  0,
-                );
-                return (
-                  <div
-                    key={fee._id}
-                    className="bg-gray-50 border rounded-lg p-3 relative"
-                  >
+        <ScrollArea className="flex-1 -mx-6 px-6 max-h-[50vh]">
+          <div className="space-y-3 pb-2">
+            {/* Grouped fee display */}
+            {feeGroups.map((group) => {
+              const isMulti = group.fees.length > 1;
+              const isExpanded = expandedGroups.has(group.key);
+
+              return (
+                <div key={group.key} className="bg-gray-50 border rounded-lg">
+                  {/* Compact summary row */}
+                  <div className="flex items-center gap-2 p-3">
+                    {isMulti && (
+                      <button
+                        type="button"
+                        onClick={() => toggleGroupExpanded(group.key)}
+                        className="text-gray-400 hover:text-gray-600 shrink-0"
+                        aria-label={
+                          isExpanded
+                            ? `Collapse ${group.structureName} details`
+                            : `Expand ${group.structureName} details`
+                        }
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium capitalize truncate">
+                          {group.feeType}
+                        </span>
+                        {isMulti && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            ×{group.fees.length}
+                          </Badge>
+                        )}
+                        {group.dateRange && (
+                          <span className="text-xs text-gray-400 truncate">
+                            {group.dateRange}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <span className="text-sm font-semibold text-gray-900 shrink-0">
+                      ৳{group.totalBalance.toLocaleString()}
+                    </span>
+
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute top-1 right-1 h-6 w-6"
-                      onClick={() => removeFee(fee._id as string)}
-                      aria-label={`Remove ${fee.feeStructureDoc?.feeType ?? "fee"} from collection`}
-                      disabled={selectedFees.length <= 1}
+                      className="h-6 w-6 shrink-0"
+                      onClick={() =>
+                        isMulti
+                          ? removeGroup(group)
+                          : removeFee(group.fees[0]._id as string)
+                      }
+                      aria-label={`Remove ${group.structureName} from collection`}
+                      disabled={feeGroups.length <= 1 && group.fees.length <= 1}
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
-
-                    <div className="pr-8">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium capitalize">
-                          {fee.feeStructureDoc?.feeType ?? "Fee"}
-                        </span>
-                        {fee.billingPeriod && (
-                          <Badge variant="outline" className="text-xs">
-                            {formatBillingPeriod(fee.billingPeriod)}
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="text-xs text-gray-500 space-y-0.5">
-                        <div className="flex justify-between">
-                          <span>Original</span>
-                          <span>৳{fee.originalAmount.toLocaleString()}</span>
-                        </div>
-                        {totalDiscounts > 0 && (
-                          <div className="flex justify-between text-green-600">
-                            <span>
-                              Discounts (
-                              {fee.enrichedDiscounts
-                                .map((d) => d.ruleName)
-                                .join(", ")}
-                              )
-                            </span>
-                            <span>-৳{totalDiscounts.toLocaleString()}</span>
-                          </div>
-                        )}
-                        {fee.paidAmount > 0 && (
-                          <div className="flex justify-between text-blue-600">
-                            <span>Already Paid</span>
-                            <span>-৳{fee.paidAmount.toLocaleString()}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between font-medium text-gray-900 pt-0.5 border-t border-gray-200">
-                          <span>To Collect</span>
-                          <span>৳{fee.balance.toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Expanded individual fee rows */}
+                  {isExpanded && isMulti && (
+                    <div className="border-t px-3 pb-2 pt-1 space-y-1">
+                      {group.fees.map((fee) => (
+                        <div
+                          key={fee._id}
+                          className="flex items-center justify-between text-xs py-1"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500">
+                              {formatBillingPeriod(fee.billingPeriod)}
+                            </span>
+                            {fee.paidAmount > 0 && (
+                              <span className="text-blue-600">
+                                (৳{fee.paidAmount.toLocaleString()} paid)
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-700">
+                              ৳{fee.balance.toLocaleString()}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeFee(fee._id as string)}
+                              className="text-gray-300 hover:text-red-500 transition-colors"
+                              aria-label={`Remove ${formatBillingPeriod(fee.billingPeriod)} from collection`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Per-structure "Add Future Months" sections */}
             {monthlyGroups.map((group) => (
@@ -315,26 +449,31 @@ export function CollectFeesDialog({
                 }
               />
             ))}
+          </div>
+        </ScrollArea>
 
-            <Separator />
+        <Separator />
 
-            {/* Grand total */}
-            <div className="bg-school-green/5 border border-school-green/20 rounded-lg p-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">
-                  Grand Total
-                </span>
-                <span className="text-xl font-bold text-school-green">
-                  ৳{grandTotal.toLocaleString()}
-                </span>
-              </div>
+        {/* Fixed bottom section — never scrolls */}
+        <div className="space-y-3 pt-1">
+          {/* Grand total */}
+          <div className="bg-school-green/5 border border-school-green/20 rounded-lg p-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-700">
+                Grand Total
+              </span>
+              <span className="text-xl font-bold text-school-green">
+                ৳{grandTotal.toLocaleString()}
+              </span>
             </div>
+          </div>
 
-            {/* Payment mode */}
-            <div className="space-y-1.5">
+          {/* Payment mode + remarks in a compact row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
               <label
                 htmlFor="payment-mode-select"
-                className="text-sm font-medium text-gray-700"
+                className="text-xs font-medium text-gray-500"
               >
                 Payment Mode
               </label>
@@ -344,7 +483,7 @@ export function CollectFeesDialog({
                   setPaymentMode(v as (typeof PAYMENT_MODES)[number])
                 }
               >
-                <SelectTrigger id="payment-mode-select">
+                <SelectTrigger id="payment-mode-select" className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -357,11 +496,10 @@ export function CollectFeesDialog({
               </Select>
             </div>
 
-            {/* Remarks */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label
                 htmlFor="collection-remarks"
-                className="text-sm font-medium text-gray-700"
+                className="text-xs font-medium text-gray-500"
               >
                 Remarks (optional)
               </label>
@@ -369,34 +507,34 @@ export function CollectFeesDialog({
                 id="collection-remarks"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Any notes about this collection..."
-                rows={2}
+                placeholder="Any notes..."
+                rows={1}
+                className="h-9 min-h-9 resize-none"
               />
             </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCollect}
-                disabled={isSubmitting || selectedFees.length === 0}
-                className="bg-school-green hover:bg-school-green/90 text-white"
-                aria-label="Confirm fee collection"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  `Collect ৳${grandTotal.toLocaleString()}`
-                )}
-              </Button>
-            </div>
           </div>
-        </ScrollArea>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCollect}
+            disabled={isSubmitting || selectedFees.length === 0}
+            className="bg-school-green hover:bg-school-green/90 text-white"
+            aria-label="Confirm fee collection"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              `Collect ৳${grandTotal.toLocaleString()}`
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -445,12 +583,10 @@ function PerStructureFutureMonths({
       const next = new Set(prev);
 
       if (prev.has(period)) {
-        // Remove this and all subsequent months (sequential constraint)
         for (let i = idx; i < sorted.length; i++) {
           next.delete(sorted[i]);
         }
       } else {
-        // Add this and all preceding months (sequential constraint)
         for (let i = 0; i <= idx; i++) {
           next.add(sorted[i]);
         }
