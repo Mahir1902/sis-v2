@@ -237,6 +237,28 @@ export default defineSchema({
     endDate: v.optional(v.string()),
   }),
 
+  feeCollectionSessions: defineTable({
+    invoiceNumber: v.string(),
+    studentId: v.id("students"),
+    academicYear: v.id("academicYears"),
+    campus: v.optional(v.string()),
+    totalAmount: v.float64(),
+    paymentMode: v.union(
+      v.literal("Cash"),
+      v.literal("Bank Transfer"),
+      v.literal("Cheque"),
+      v.literal("UPI"),
+      v.literal("Online"),
+    ),
+    remarks: v.optional(v.string()),
+    status: v.union(v.literal("completed"), v.literal("voided")),
+    collectedBy: v.id("users"),
+    transactionDate: v.float64(),
+    feeCount: v.float64(),
+  })
+    .index("by_student", ["studentId"])
+    .index("by_invoice", ["invoiceNumber"]),
+
   studentFees: defineTable({
     studentId: v.id("students"),
     feeStructureId: v.id("feeStructure"),
@@ -250,6 +272,7 @@ export default defineSchema({
       v.literal("partial"),
       v.literal("paid"),
     ),
+    billingPeriod: v.optional(v.string()),
     appliedDiscounts: v.array(
       v.object({
         discountId: v.id("discountRules"),
@@ -284,13 +307,15 @@ export default defineSchema({
     ),
     transactionDate: v.float64(),
     referenceNumber: v.optional(v.string()),
+    sessionId: v.optional(v.id("feeCollectionSessions")),
     isAdvancePayment: v.optional(v.boolean()),
     monthsPaid: v.optional(v.array(v.string())),
     remarks: v.optional(v.string()),
     collectedBy: v.optional(v.id("users")),
   })
     .index("by_student_year", ["studentId", "academicYear"])
-    .index("by_fee", ["feeId"]),
+    .index("by_fee", ["feeId"])
+    .index("by_session", ["sessionId"]),
 
   studentDiscounts: defineTable({
     studentId: v.id("students"),
@@ -434,6 +459,7 @@ export default defineSchema({
       v.literal("delete"),
       v.literal("status_change"),
       v.literal("collect_payment"),
+      v.literal("collect_fees"),
       v.literal("apply_discount"),
       v.literal("upload"),
       v.literal("promote"),
