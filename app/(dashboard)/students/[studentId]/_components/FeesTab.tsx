@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { formatBillingPeriod } from "@/lib/formatBillingPeriod";
 import { cn } from "@/lib/utils";
 import { CollectFeesDialog } from "./CollectFeesDialog";
 import { FeeDetailDialog } from "./FeeDetailDialog";
@@ -238,7 +239,7 @@ export function FeesTab({ studentId }: FeesTabProps) {
                     {fee.academicYearDoc?.name ?? "—"}
                   </TableCell>
                   <TableCell className="text-sm text-gray-500">
-                    {fee.billingPeriod ?? "—"}
+                    {formatBillingPeriod(fee.billingPeriod)}
                   </TableCell>
                   <TableCell className="text-right text-sm">
                     ৳{fee.originalAmount.toLocaleString()}
