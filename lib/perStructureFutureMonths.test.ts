@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  type MonthlyStructureGroup,
-  groupMonthlyStructures,
-} from "./perStructureFutureMonths";
+import { groupMonthlyStructures } from "./perStructureFutureMonths";
 
 describe("groupMonthlyStructures", () => {
   it("groups selected monthly fees by feeStructureId", () => {
