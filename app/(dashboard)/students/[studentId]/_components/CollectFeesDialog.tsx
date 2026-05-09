@@ -317,7 +317,7 @@ export function CollectFeesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-lg max-h-[85vh] !grid-rows-[auto_1fr_auto_auto] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Collect Fees</DialogTitle>
           <DialogDescription>
@@ -325,7 +325,7 @@ export function CollectFeesDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 -mx-6 px-6 max-h-[50vh]">
+        <ScrollArea className="-mx-6 px-6 min-h-0 overflow-auto">
           <div className="space-y-3 pb-2">
             {/* Grouped fee display */}
             {feeGroups.map((group) => {
@@ -393,7 +393,7 @@ export function CollectFeesDialog({
                     </Button>
                   </div>
 
-                  {/* Expanded individual fee rows */}
+                  {/* Expanded individual fee rows (read-only breakdown) */}
                   {isExpanded && isMulti && (
                     <div className="border-t px-3 pb-2 pt-1 space-y-1">
                       {group.fees.map((fee) => (
@@ -401,29 +401,12 @@ export function CollectFeesDialog({
                           key={fee._id}
                           className="flex items-center justify-between text-xs py-1"
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-500">
-                              {formatBillingPeriod(fee.billingPeriod)}
-                            </span>
-                            {fee.paidAmount > 0 && (
-                              <span className="text-blue-600">
-                                (৳{fee.paidAmount.toLocaleString()} paid)
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-700">
-                              ৳{fee.balance.toLocaleString()}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeFee(fee._id as string)}
-                              className="text-gray-300 hover:text-red-500 transition-colors"
-                              aria-label={`Remove ${formatBillingPeriod(fee.billingPeriod)} from collection`}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
+                          <span className="text-gray-500">
+                            {formatBillingPeriod(fee.billingPeriod)}
+                          </span>
+                          <span className="text-gray-700">
+                            ৳{fee.balance.toLocaleString()}
+                          </span>
                         </div>
                       ))}
                     </div>
