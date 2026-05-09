@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
-import { DollarSign, MoreHorizontal } from "lucide-react";
+import { DollarSign, MoreHorizontal, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatBillingPeriod } from "@/lib/formatBillingPeriod";
 import { cn } from "@/lib/utils";
+import { AssignFeeDialog } from "./AssignFeeDialog";
 import { CollectFeesDialog } from "./CollectFeesDialog";
 import { FeeDetailDialog } from "./FeeDetailDialog";
 
@@ -42,11 +43,15 @@ const statusStyles: Record<string, string> = {
 export function FeesTab({ studentId }: FeesTabProps) {
   const [selectedFeeIds, setSelectedFeeIds] = useState<Set<string>>(new Set());
   const [collectDialogOpen, setCollectDialogOpen] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [detailFeeId, setDetailFeeId] = useState<Id<"studentFees"> | null>(
     null,
   );
 
   const fees = useQuery(api.studentFees.getByStudent, { studentId });
+  const currentEnrollment = useQuery(api.enrollments.getCurrentEnrollment, {
+    studentId,
+  });
 
   const unpaidFees = useMemo(
     () => (fees ?? []).filter((f) => f.status !== "paid"),
@@ -153,6 +158,22 @@ export function FeesTab({ studentId }: FeesTabProps) {
           </div>
         ))}
       </div>
+
+      {/* Assign Fee action */}
+      {currentEnrollment?.academicYearDoc && (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setAssignDialogOpen(true)}
+            className="border-school-green text-school-green hover:bg-school-green/5"
+            aria-label="Assign new fee to student"
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Assign Fee
+          </Button>
+        </div>
+      )}
 
       {/* Bulk action bar */}
       {someSelected && (
@@ -324,6 +345,24 @@ export function FeesTab({ studentId }: FeesTabProps) {
           }}
         />
       )}
+
+      {/* Assign Fee dialog */}
+      {assignDialogOpen &&
+        currentEnrollment?.academicYearDoc &&
+        currentEnrollment.academicYear && (
+          <AssignFeeDialog
+            open={assignDialogOpen}
+            onClose={() => setAssignDialogOpen(false)}
+            studentId={studentId}
+            academicYearId={currentEnrollment.academicYear}
+            academicYearStartDate={currentEnrollment.academicYearDoc.startDate}
+            academicYearEndDate={currentEnrollment.academicYearDoc.endDate}
+            existingFees={(fees ?? []).map((f) => ({
+              feeStructureId: f.feeStructureId,
+              billingPeriod: f.billingPeriod,
+            }))}
+          />
+        )}
     </div>
   );
 }

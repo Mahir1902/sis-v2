@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
-/** Create a student fee record (called during admission). */
+/** Create a student fee record (called during admission or mid-semester assignment). */
 export const createStudentFee = mutation({
   args: {
     studentId: v.id("students"),
@@ -18,6 +18,7 @@ export const createStudentFee = mutation({
       v.literal("paid"),
     ),
     dueDate: v.optional(v.float64()),
+    billingPeriod: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
