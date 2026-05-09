@@ -26,6 +26,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { getSequentialRemovalIds } from "@/lib/feeCollectionUtils";
+import { formatBillingPeriod } from "@/lib/formatBillingPeriod";
+import { groupMonthlyStructures } from "@/lib/perStructureFutureMonths";
 
 interface EnrichedDiscount {
   discountId: Id<"discountRules">;
@@ -83,28 +85,13 @@ export function CollectFeesDialog({
     useState<(typeof PAYMENT_MODES)[number]>("Cash");
   const [remarks, setRemarks] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showFutureMonths, setShowFutureMonths] = useState(false);
+  const [expandedStructures, setExpandedStructures] = useState<Set<string>>(
+    new Set(),
+  );
 
   const collectFees = useMutation(api.feeCollectionSessions.collectFees);
   const createFutureMonthFees = useMutation(
     api.feeCollectionSessions.createFutureMonthFees,
-  );
-
-  const monthlyFee = allFees.find(
-    (f) =>
-      f.feeStructureDoc?.frequency === "monthly" &&
-      selectedFeeIds.has(f._id as string),
-  );
-
-  const futureMonths = useQuery(
-    api.feeCollectionSessions.getFutureMonths,
-    monthlyFee
-      ? {
-          studentId,
-          feeStructureId: monthlyFee.feeStructureId,
-          academicYear: monthlyFee.academicYear,
-        }
-      : "skip",
   );
 
   const selectedFees = useMemo(
@@ -127,6 +114,22 @@ export function CollectFeesDialog({
     [allFees],
   );
 
+  // Group selected monthly fees by structure for per-structure future month sections
+  const monthlyGroups = useMemo(
+    () =>
+      groupMonthlyStructures(
+        selectedFees.map((f) => ({
+          _id: f._id as string,
+          feeStructureId: f.feeStructureId as string,
+          billingPeriod: f.billingPeriod,
+          balance: f.balance,
+          academicYear: f.academicYear as string,
+          feeStructureDoc: f.feeStructureDoc,
+        })),
+      ),
+    [selectedFees],
+  );
+
   const removeFee = useCallback(
     (feeId: string) => {
       const idsToRemove = getSequentialRemovalIds(feeId, feesForRemoval);
@@ -141,14 +144,29 @@ export function CollectFeesDialog({
     [feesForRemoval],
   );
 
+  const toggleStructureExpanded = useCallback((structureId: string) => {
+    setExpandedStructures((prev) => {
+      const next = new Set(prev);
+      if (next.has(structureId)) {
+        next.delete(structureId);
+      } else {
+        next.add(structureId);
+      }
+      return next;
+    });
+  }, []);
+
   const handleAddFutureMonths = useCallback(
-    async (periods: string[]) => {
-      if (!monthlyFee) return;
+    async (
+      feeStructureId: Id<"feeStructure">,
+      academicYear: Id<"academicYears">,
+      periods: string[],
+    ) => {
       try {
         const newFeeIds = await createFutureMonthFees({
           studentId,
-          feeStructureId: monthlyFee.feeStructureId,
-          academicYear: monthlyFee.academicYear,
+          feeStructureId,
+          academicYear,
           billingPeriods: periods,
         });
         setSelectedFeeIds((prev) => {
@@ -158,7 +176,11 @@ export function CollectFeesDialog({
           }
           return next;
         });
-        setShowFutureMonths(false);
+        setExpandedStructures((prev) => {
+          const next = new Set(prev);
+          next.delete(feeStructureId as string);
+          return next;
+        });
         toast.success(`Added ${periods.length} future month(s)`);
       } catch (err: unknown) {
         const message =
@@ -166,7 +188,7 @@ export function CollectFeesDialog({
         toast.error(message);
       }
     },
-    [monthlyFee, studentId, createFutureMonthFees],
+    [studentId, createFutureMonthFees],
   );
 
   async function handleCollect() {
@@ -194,10 +216,6 @@ export function CollectFeesDialog({
       setIsSubmitting(false);
     }
   }
-
-  const hasMonthlyFees = allFees.some(
-    (f) => f.feeStructureDoc?.frequency === "monthly" && f.status !== "paid",
-  );
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -241,7 +259,7 @@ export function CollectFeesDialog({
                         </span>
                         {fee.billingPeriod && (
                           <Badge variant="outline" className="text-xs">
-                            {fee.billingPeriod}
+                            {formatBillingPeriod(fee.billingPeriod)}
                           </Badge>
                         )}
                       </div>
@@ -280,27 +298,23 @@ export function CollectFeesDialog({
               })}
             </div>
 
-            {/* Add Future Months */}
-            {hasMonthlyFees && !showFutureMonths && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => setShowFutureMonths(true)}
-                aria-label="Add future months for advance payment"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Future Months
-              </Button>
-            )}
-
-            {showFutureMonths && (
-              <FutureMonthsSection
-                months={futureMonths ?? []}
-                onAdd={handleAddFutureMonths}
-                onCancel={() => setShowFutureMonths(false)}
+            {/* Per-structure "Add Future Months" sections */}
+            {monthlyGroups.map((group) => (
+              <PerStructureFutureMonths
+                key={group.feeStructureId}
+                group={group}
+                studentId={studentId}
+                isExpanded={expandedStructures.has(group.feeStructureId)}
+                onToggle={() => toggleStructureExpanded(group.feeStructureId)}
+                onAdd={(periods) =>
+                  handleAddFutureMonths(
+                    group.feeStructureId as Id<"feeStructure">,
+                    group.academicYear as Id<"academicYears">,
+                    periods,
+                  )
+                }
               />
-            )}
+            ))}
 
             <Separator />
 
@@ -388,31 +402,55 @@ export function CollectFeesDialog({
   );
 }
 
-// ── Future Months Section ──────────────────────────────────────────────────────
+// ── Per-Structure Future Months Section ──────────────────────────────────────
 
-function FutureMonthsSection({
-  months,
-  onAdd,
-  onCancel,
-}: {
-  months: Array<{ billingPeriod: string; amount: number }>;
+interface PerStructureFutureMonthsProps {
+  group: {
+    feeStructureId: string;
+    structureName: string;
+    feeType: string;
+    academicYear: string;
+  };
+  studentId: Id<"students">;
+  isExpanded: boolean;
+  onToggle: () => void;
   onAdd: (periods: string[]) => Promise<void>;
-  onCancel: () => void;
-}) {
+}
+
+function PerStructureFutureMonths({
+  group,
+  studentId,
+  isExpanded,
+  onToggle,
+  onAdd,
+}: PerStructureFutureMonthsProps) {
+  const futureMonths = useQuery(api.feeCollectionSessions.getFutureMonths, {
+    studentId,
+    feeStructureId: group.feeStructureId as Id<"feeStructure">,
+    academicYear: group.academicYear as Id<"academicYears">,
+  });
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
 
+  // Hide section if no future months available
+  if (futureMonths !== undefined && futureMonths.length === 0) {
+    return null;
+  }
+
   function toggleMonth(period: string) {
     setSelected((prev) => {
-      const sorted = months.map((m) => m.billingPeriod).sort();
+      const sorted = (futureMonths ?? []).map((m) => m.billingPeriod).sort();
       const idx = sorted.indexOf(period);
       const next = new Set(prev);
 
       if (prev.has(period)) {
+        // Remove this and all subsequent months (sequential constraint)
         for (let i = idx; i < sorted.length; i++) {
           next.delete(sorted[i]);
         }
       } else {
+        // Add this and all preceding months (sequential constraint)
         for (let i = 0; i <= idx; i++) {
           next.add(sorted[i]);
         }
@@ -426,61 +464,74 @@ function FutureMonthsSection({
     setIsAdding(true);
     try {
       await onAdd(Array.from(selected).sort());
+      setSelected(new Set());
     } finally {
       setIsAdding(false);
     }
   }
 
-  if (months.length === 0) {
+  if (!isExpanded) {
     return (
-      <div className="border border-dashed rounded-lg p-4 text-center">
-        <p className="text-sm text-gray-500">
-          No future months available for advance payment
-        </p>
-        <Button variant="ghost" size="sm" onClick={onCancel} className="mt-2">
-          Close
-        </Button>
-      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full"
+        onClick={onToggle}
+        aria-label={`Add future months for ${group.structureName}`}
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        Add Future Months — {group.structureName}
+      </Button>
     );
   }
 
   return (
     <div className="border rounded-lg p-3 space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-gray-700">Add Future Months</h4>
+        <h4 className="text-sm font-medium text-gray-700 capitalize">
+          Future Months — {group.structureName}
+        </h4>
         <Button
           variant="ghost"
           size="icon"
           className="h-6 w-6"
-          onClick={onCancel}
-          aria-label="Close future months section"
+          onClick={onToggle}
+          aria-label={`Close future months for ${group.structureName}`}
         >
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        {months.map((m) => (
-          <button
-            key={m.billingPeriod}
-            type="button"
-            onClick={() => toggleMonth(m.billingPeriod)}
-            className={`text-xs p-2 rounded-lg border transition-colors ${
-              selected.has(m.billingPeriod)
-                ? "bg-school-green/10 border-school-green text-school-green font-medium"
-                : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
-            }`}
-            aria-label={`Select ${m.billingPeriod}`}
-            aria-pressed={selected.has(m.billingPeriod)}
-          >
-            <div>{m.billingPeriod}</div>
-            <div className="text-[10px] mt-0.5 opacity-70">
-              ৳{m.amount.toLocaleString()}
-            </div>
-          </button>
-        ))}
-      </div>
+
+      {futureMonths === undefined ? (
+        <div className="text-sm text-gray-400 text-center py-2">
+          Loading available months...
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {futureMonths.map((m) => (
+            <button
+              key={m.billingPeriod}
+              type="button"
+              onClick={() => toggleMonth(m.billingPeriod)}
+              className={`text-xs p-2 rounded-lg border transition-colors ${
+                selected.has(m.billingPeriod)
+                  ? "bg-school-green/10 border-school-green text-school-green font-medium"
+                  : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+              }`}
+              aria-label={`Select ${formatBillingPeriod(m.billingPeriod)} for ${group.structureName}`}
+              aria-pressed={selected.has(m.billingPeriod)}
+            >
+              <div>{formatBillingPeriod(m.billingPeriod)}</div>
+              <div className="text-[10px] mt-0.5 opacity-70">
+                ৳{m.amount.toLocaleString()}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+        <Button variant="ghost" size="sm" onClick={onToggle}>
           Cancel
         </Button>
         <Button
@@ -488,7 +539,7 @@ function FutureMonthsSection({
           onClick={handleAdd}
           disabled={selected.size === 0 || isAdding}
           className="bg-school-green hover:bg-school-green/90 text-white"
-          aria-label="Add selected future months"
+          aria-label={`Add selected future months for ${group.structureName}`}
         >
           {isAdding ? (
             <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />

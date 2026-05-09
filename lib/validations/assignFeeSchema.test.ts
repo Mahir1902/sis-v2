@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  assignFeeSchema,
   type AssignFeeValues,
+  assignFeeSchema,
   resolveAssignFeePayload,
 } from "./assignFeeSchema";
 
@@ -96,7 +96,10 @@ describe("resolveAssignFeePayload", () => {
   });
 
   it("returns correct payload for a one-time fee (no billingPeriod)", () => {
-    const oneTimeStructure = { ...baseStructure, frequency: "one-time" as const };
+    const oneTimeStructure = {
+      ...baseStructure,
+      frequency: "one-time" as const,
+    };
     const payload = resolveAssignFeePayload(oneTimeStructure, undefined);
     expect(payload).toEqual({
       feeStructureId: "struct-1",
