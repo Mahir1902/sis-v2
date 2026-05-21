@@ -255,9 +255,14 @@ export default defineSchema({
     collectedBy: v.id("users"),
     transactionDate: v.float64(),
     feeCount: v.float64(),
+    standardLevelId: v.optional(v.id("standardLevels")),
   })
     .index("by_student", ["studentId"])
-    .index("by_invoice", ["invoiceNumber"]),
+    .index("by_invoice", ["invoiceNumber"])
+    .index("by_academic_year", ["academicYear"])
+    .index("by_academic_year_date", ["academicYear", "transactionDate"])
+    .index("by_campus", ["campus"])
+    .index("by_year_level", ["academicYear", "standardLevelId"]),
 
   studentFees: defineTable({
     studentId: v.id("students"),

@@ -85,6 +85,7 @@ export const collectFees = mutation({
       collectedBy: user._id,
       transactionDate: now,
       feeCount: fees.length,
+      standardLevelId: enrollment?.standardLevelId ?? student.standardLevel,
     });
 
     const transactions: Array<{

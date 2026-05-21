@@ -8,6 +8,8 @@ SIS v2 is a School Information System rebuild for a real school. Stack: Next.js 
 
 Phases 1–5 were completed and audited by 2026-04-05. The project is now in an incremental feature addition phase, with each feature tracked under a named section in TASK_LOG.md.
 
+As of 2026-05-18: Transaction Log filter enhancements landed (TL-5 through TL-9). Fee Management Bug Fixes (FM-1 through FM-6) are in progress. Transaction Log Filter UI Redesign (TF-R1 through TF-R9) is in planning — pure frontend, no backend changes.
+
 **Why:** Clean rewrite of v1 with proper RBAC, schema correctness, and agent-reviewed code quality.
 
 **How to apply:** When planning new features, do not re-scaffold anything — the foundation is solid. Focus plans on the domain layer only (schema, mutations, queries, page components). Always verify which shadcn components are already installed before flagging them as missing.

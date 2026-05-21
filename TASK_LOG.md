@@ -409,10 +409,23 @@ Add the ability to view, edit, and soft-delete individual fees within a fee stru
 
 ---
 
+## Transaction Log: Standard Level Filter + Date Range Presets (2026-05-18)
+**Status**: In Progress
+**Active Agent**: BACKEND AGENT
+
+### Sub-tasks
+- [x] TL-5 Create `convex/migrations.ts` — backfill `standardLevelId` on existing feeCollectionSessions — DONE (2026-05-18)
+- [x] TL-7 Update `hooks/use-transaction-filters.ts` — add standardLevelId, date range preset state, computed dates — DONE (2026-05-18). Also exported `PeriodForPreset` from `lib/dateRangeUtils.ts` to fix TS2345. Hook file: 0 TS errors. Expected downstream errors in page.tsx (setDateFrom/setDateTo removed) will be fixed in Tasks 8-9.
+- [x] TL-8 Update TransactionFilters UI — DONE (2026-05-18) — FRONTEND AGENT replaced entire component: removed dateFrom/dateTo/onDateFromChange/onDateToChange props; added standardLevelId, dateRangePreset, selectedPeriod, customDateFrom/To props; added Standard Level dropdown (api.standardLevels.list), Date Range Preset selector (monthly/quarterly/half-yearly/yearly/custom), conditional sub-pickers (month+year, quarter+year, half+year, custom date pickers); moved Reset button next to Show Voided toggle. TypeScript: 0 errors. Awaiting FRONTEND REVIEW.
+- [x] TL-9 Wire new filter props in page.tsx + update ExportButton — DONE (2026-05-18) — FRONTEND AGENT. ExportButton: added `levelName` and `dateRangeLabel` optional props, passed to `generateTransactionFilename`. page.tsx: removed old `dateFrom`/`onDateFromChange`/`dateTo`/`onDateToChange` props from TransactionFilters; added new props (`standardLevelId`, `dateRangePreset`, `selectedPeriod`, `customDateFrom`, `customDateTo` + their setters). ExportButton receives `levelName` from `data?.standardLevelName` and `dateRangeLabel` from `filters.dateRangeLabel`. Awaiting FRONTEND REVIEW.
+
+---
+
 ## Current Build Status
 - `npm run build`: PASSING (15 routes + Proxy Middleware)
 - `npm run lint`: PASSING (129 files, 0 errors)
 - Playwright smoke tests: 6/6 PASSING
+- `npx tsc --noEmit`: PASSING (0 errors) — verified 2026-05-18
 
 ---
 
@@ -496,6 +509,100 @@ Three reported issues with the fee management system:
 - 2026-05-09: Delete is blocked when `paidAmount > 0` OR when any `feeTransactions` row references the fee — belt-and-suspenders guard against data loss.
 - 2026-05-09: Grouping logic for CollectFeesDialog lives in a pure function inside the component file (not in `lib/`) — it is only used in one place.
 - 2026-05-09: The `GroupedFeeRow` sub-component lives in the same file as `CollectFeesDialog` following the existing `PerStructureFutureMonths` sub-component pattern.
+
+---
+
+## Transaction Log Filter UI Redesign (2026-05-18)
+**Status**: In Progress (TF-R3, TF-R4)
+**Active Agent**: FRONTEND AGENT
+
+### Summary
+The current TransactionFilters component uses a flat grid that injects extra sub-picker rows
+when the user selects a date preset (monthly, quarterly, half-yearly, custom), causing visible
+layout shifts. The redesign introduces a stable two-tier filter layout (primary row always
+visible; secondary row expandable via "More Filters"), replaces all sub-picker injection with
+a unified DateRangePicker popover (preset sidebar + two-month range calendar), and adds a
+mobile bottom sheet that collapses all filters behind a single "Filters" button.
+
+No backend changes are required. The hook still produces `dateFrom`/`dateTo` as Unix timestamps
+for `queryArgs`; only the internal state shape and the UI change.
+
+### Devil's Advocate Review
+
+| # | Concern | Mitigation |
+|---|---------|------------|
+| 1 | DateRange state in the hook is currently `dateRangePreset` + `selectedPeriod` + `customDateFrom/To` — consumers of the hook (page.tsx, ExportButton) read `filters.dateRangeLabel`. Refactoring the hook internal state must not break the `dateRangeLabel` string or `queryArgs` shape. | TF-R2 (hook refactor) must output an identical `queryArgs` object and a `dateRangeLabel` string. Unit-test the label output before wiring to the page. |
+| 2 | The DateRangePicker popover holds both a preset list and a two-month calendar — if popover width is constrained on small desktop (< 900px) the calendar overflows. | Constrain popover width with `min-w-[560px]` desktop and drop to single-month on screens narrower than `md` via a `useWindowSize` check or a CSS approach. |
+| 3 | "More Filters" badge count could show a stale count if campus/paymentMode is reset without going through resetAll. | Badge count derived live from `campusFilter`, `paymentMode`, `includeVoided` values — not stored separately. Any state change automatically updates the count. |
+| 4 | Mobile bottom sheet overlaps system navigation on iOS if the sheet extends to full viewport height. | Use `max-h-[90dvh] overflow-y-auto` on the sheet content — the `dvh` unit accounts for browser chrome. |
+| 5 | The calendar component uses `react-day-picker` which already supports `mode="range"` — but the existing `CalendarDayButton` override may not correctly style range-start/middle/end for the new two-month usage. | TF-R1 verifies range styling is correct using `numberOfMonths={2}` in a Popover before wiring to the hook. Read the existing classNames for `range_start`, `range_middle`, `range_end` — they are already present. No changes to calendar.tsx needed. |
+| 6 | Removing `computeDateRange`, `formatDateRangeLabel`, and `PeriodForPreset` from `dateRangeUtils.ts` may break other files that import them (e.g., any future feature that used them). | Grep for all import sites before deleting. Only delete if there are zero remaining import sites. |
+| 7 | Playwright tests require an authenticated session to reach the /admin/transactions page. Current smoke tests are unauthenticated. | Write Playwright tests that assert on the filter bar's static structure (desktop primary row elements, "More Filters" button, Reset link) without requiring a real authenticated session, using `page.route` to mock the Convex API, OR test only what the anonymous user sees (redirect to /login). Flag authenticated-session tests as Phase 5 TODOs. |
+
+### Sub-tasks
+
+| # | Task | Agent | Status | Notes |
+|---|------|-------|--------|-------|
+| TF-R1 | Build `components/ui/date-range-picker.tsx` + `hooks/use-media-query.ts`. DateRangePicker: Popover with preset sidebar (9 presets), Calendar mode="range" (2 months desktop, 1 mobile), responsive layout (flex-row desktop, flex-col mobile). Exported `getPresetRange` pure function. SSR-safe `useMediaQuery` hook. | FRONTEND AGENT | [x] DONE | 0 TS errors in both files. Awaiting FRONTEND REVIEW (TF-R8). |
+| TF-R2 | Refactor `hooks/use-transaction-filters.ts`. Replaced `dateRangePreset`/`selectedPeriod`/`customDateFrom`/`customDateTo` with `dateRange`/`datePresetLabel`. Updated `TransactionFilterState` interface, `resetAll`, `hasActiveFilters`, and return value. Removed `dateRangeUtils` imports. | FRONTEND AGENT | [x] DONE | 0 TS errors in hook file. Expected 8 downstream errors in page.tsx (old props) — fixed in TF-R3/TF-R4. Awaiting FRONTEND REVIEW (TF-R8). |
+| TF-R3 | Rewrite `TransactionFilters.tsx` with two-tier layout: primary row (Academic Year, Standard Level, DateRangePicker, Student Search, More Filters + Badge, Reset), secondary row (Campus, Payment Mode, Show Voided) with CSS grid animation. Removed all sub-picker injection blocks, old DatePicker, MONTH_LABELS. Uses `<section>` for a11y. Auto-expands secondary row when secondary filters are active. | FRONTEND AGENT | [x] DONE | Awaiting FRONTEND REVIEW (TF-R8). 0 TS errors, 0 lint errors. |
+| TF-R4 | Updated `page.tsx` to match new TransactionFilters props. Replaced 12 old date-related props with `dateRange`, `onDateRangeChange`, `datePresetLabel`, `onPresetSelect`, `onDateClear`. Added `PaymentMode` cast wrapper for type compatibility. ExportButton unchanged (still receives `dateRangeLabel`). | FRONTEND AGENT | [x] DONE | Awaiting FRONTEND REVIEW (TF-R8). 0 TS errors, build PASSING (15 routes), lint PASSING (161 files, 0 errors). |
+| TF-R5 | Add mobile bottom sheet to `TransactionFilters.tsx`. Mobile layout (`block sm:hidden`) shows a "Filters" Button with Badge for active count that opens a shadcn Sheet (`side="bottom"`) with all filters stacked vertically. Desktop layout wrapped in `hidden sm:block`. Sheet content uses `max-h-[85vh] overflow-y-auto`. | FRONTEND AGENT | [x] DONE | Completed 2026-05-18. Desktop layout wrapped in `hidden sm:block`, mobile Sheet with all 7 filters stacked vertically, Apply/Reset footer buttons, totalActiveCount badge. 0 TS errors, build PASSING (15 routes), lint PASSING (161 files, 0 errors). Awaiting FRONTEND REVIEW (TF-R8). |
+| TF-R6 | Clean up dead code. In `lib/dateRangeUtils.ts`: grep for all import sites of `computeDateRange`, `formatDateRangeLabel`, `PeriodForPreset`, `DateRangePreset` (old union type). Delete any functions and types that have zero remaining import sites after TF-R2 and TF-R3. In `hooks/use-transaction-filters.ts`: remove any remaining unused imports. In `TransactionFilters.tsx`: remove any unused imports (e.g., `MONTH_LABELS`, the old `DatePicker` sub-component). Run `npm run lint` to catch any remaining dead imports. If `DateRangePreset` is still imported elsewhere for the old preset values, keep the type but remove the computation functions. | FRONTEND AGENT | [ ] Pending | Blocked by TF-R5. Grep before deleting. |
+| TF-R7 | Playwright tests for the redesigned filter bar. Write or update tests in the `e2e/` directory. Test 1: navigate to `/admin/transactions` unauthenticated — assert redirect to `/login` (existing smoke test pattern). Test 2: assert the desktop filter bar container renders with the correct landmark structure when the page loads (check for `aria-label="Transaction filters"` or the equivalent container). Test 3: assert "More Filters" button is present in the desktop layout. Test 4: assert the mobile "Filters" button is present at `viewport: { width: 375, height: 812 }`. Note: full authenticated flow tests are deferred to Phase 5 as before. Invoke `playwright-cli` skill. | FRONTEND AGENT | [x] DONE | Completed 2026-05-18. 13 tests in `e2e/transaction-filters.spec.ts`: 1 auth-gate redirect test, 9 desktop filter structure tests (landmark, selects, picker, search, more-filters toggle, reset, secondary row expand/collapse, DateRangePicker popover with presets + calendar), 3 mobile tests (filters button visibility, bottom sheet controls, reset/apply buttons). All tests use `test.skip()` pattern for auth-gated pages. 0 TS errors, 0 lint errors. Awaiting FRONTEND REVIEW (TF-R8). |
+| TF-R8 | Frontend review of TF-R1 through TF-R7. Checklist: (1) DateRangePicker — preset sidebar fires `onChange` correctly, trigger label updates, range mode calendar highlights range-start/middle/end; (2) primary row is stable — no layout shift when date range changes; (3) secondary row expand/collapse is animated, has correct aria-expanded; (4) "More Filters" badge count is accurate for 0, 1, 2, 3 active secondary filters; (5) Reset ghost link disables when `!hasActiveFilters`; (6) mobile sheet is `side="bottom"`, has `max-h-[90dvh]`, single-month calendar; (7) no `any` types; (8) no hardcoded hex; (9) all interactive elements have aria-labels; (10) `dateRangeLabel` still flows to ExportButton correctly; (11) Playwright tests pass. | FRONTEND REVIEW AGENT | [ ] Pending | Blocked by TF-R7 |
+| TF-R9 | Run `npm run build` and `npm run lint`. Confirm 0 errors. Update Current Build Status. | CODING AGENT | [ ] Pending | Blocked by TF-R8 |
+
+### Dependencies and Blockers
+- TF-R1 (DateRangePicker component) has no external blockers — it is a self-contained UI component.
+- TF-R2 (hook refactor) is blocked on TF-R1 being finalized so the `dateRange` type shape is settled. TF-R1 and TF-R2 can be done in the same Frontend Agent session.
+- TF-R3 (TransactionFilters component rewrite) requires TF-R2 to be complete — it imports DateRangePicker and uses the new hook props.
+- TF-R4 (page.tsx wiring) requires TF-R3 — it passes the new props.
+- TF-R5 (mobile bottom sheet) requires TF-R4 — it lives in the same page file.
+- TF-R6 (dead code cleanup) requires TF-R5 — all consumers must be updated before functions can be safely deleted.
+- TF-R7 (Playwright tests) requires TF-R5 — all UI must be in place before assertions can be written.
+- TF-R8 (frontend review) requires TF-R1 through TF-R7 all complete.
+- TF-R9 (build/lint check) is the final integration gate.
+
+### Agent Notes — TF-R1 (FRONTEND AGENT)
+- The `Calendar` component in `components/ui/calendar.tsx` already has `range_start`, `range_middle`, `range_end` classNames wired. Pass `mode="range"` and `numberOfMonths={2}` directly — no changes to `calendar.tsx` needed.
+- Preset-to-date-range computation: implement a pure function `presetToDateRange(preset: string): { from: Date; to: Date }` inside the component file. Use `date-fns` helpers (`startOfDay`, `endOfDay`, `startOfWeek`, `endOfWeek`, `startOfMonth`, `endOfMonth`, `startOfQuarter`, `endOfQuarter`, `subMonths`, `subQuarters`). For "All Time": return `{ from: undefined, to: undefined }`.
+- Use `date-fns` `format(date, "MMM d, yyyy")` for the trigger label when showing a custom range. Show just the preset name (e.g., "This Month") when a preset is active.
+- The popover content layout: `flex` with `w-[180px]` left sidebar and `flex-1` right calendar area. On `sm` breakpoint and below, collapse to `flex-col` with just the preset list and single-month calendar stacked.
+- The shadcn `Popover` component already handles open/close animation via Radix UI — no extra animation code needed.
+
+### Agent Notes — TF-R2 (FRONTEND AGENT)
+- The new state shape: `const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined })` and `const [presetLabel, setPresetLabel] = useState<string | null>(null)`.
+- `dateFrom` in `queryArgs`: `dateRange.from ? startOfDay(dateRange.from).getTime() : undefined` (use `date-fns` `startOfDay`).
+- `dateTo` in `queryArgs`: `dateRange.to ? endOfDay(dateRange.to).getTime() : undefined` (use `date-fns` `endOfDay` to include the full last day).
+- `dateRangeLabel`: `presetLabel ?? (dateRange.from && dateRange.to ? format(dateRange.from, "MMM d") + " – " + format(dateRange.to, "MMM d, yyyy") : "")`.
+- `hasActiveFilters`: include `dateRange.from !== undefined` in the check.
+- `resetAll`: set `setDateRange({ from: undefined, to: undefined })` and `setPresetLabel(null)`.
+- The hook exports `{ dateRange, setDateRange, presetLabel, setPresetLabel, dateRangeLabel, ... }` — these replace `dateRangePreset`, `setDateRangePreset`, `selectedPeriod`, `setSelectedPeriod`, `customDateFrom`, `setCustomDateFrom`, `customDateTo`, `setCustomDateTo`.
+
+### Agent Notes — TF-R3 (FRONTEND AGENT)
+- The secondary row animation: use the Tailwind `grid` rows trick. Wrap the secondary row in `<div className="grid transition-all duration-300 ease-in-out" style={{ gridTemplateRows: showSecondary ? '1fr' : '0fr' }}>` with an inner `<div className="overflow-hidden">` containing the controls. This avoids any JS animation library and works with Tailwind v4.
+- The "More Filters" button: `<Button variant="outline" size="sm" onClick={() => setShowSecondary(s => !s)} aria-expanded={showSecondary} aria-label="Show more filters">`. The Badge showing count is inside the button: `{secondaryActiveCount > 0 && <Badge className="ml-1.5 h-4 w-4 ...">{secondaryActiveCount}</Badge>}`.
+- `secondaryActiveCount`: computed as `[campusFilter, paymentMode, includeVoided ? "voided" : undefined].filter(Boolean).length`.
+- The Reset link: `<Button variant="ghost" size="sm" onClick={onReset} disabled={!hasActiveFilters} className="text-muted-foreground">Reset</Button>` — right-aligned using `ml-auto` in the flex row.
+- StudentSearch sub-component can be kept as-is from the existing TransactionFilters file — move it to the bottom of the new file.
+
+### Agent Notes — TF-R5 (FRONTEND AGENT)
+- The mobile total active count for the "Filters (N)" badge: `[filters.standardLevelId, filters.campusFilter, filters.paymentMode, filters.includeVoided ? "v" : undefined, filters.dateRange.from ? "d" : undefined, filters.studentIds?.length ? "s" : undefined].filter(Boolean).length`.
+- Academic Year is always visible and not counted in the mobile filter badge — it is the primary context selector.
+- The Sheet footer: `<div className="flex gap-2 border-t pt-4"><Button variant="ghost" onClick={filters.resetAll}>Reset</Button><Button onClick={() => setMobileOpen(false)}>Apply</Button></div>`.
+
+### Agent Notes — TF-R6 (FRONTEND AGENT)
+- Before deleting from `lib/dateRangeUtils.ts`: run `grep -r "computeDateRange\|formatDateRangeLabel\|PeriodForPreset" --include="*.ts" --include="*.tsx" .` and confirm zero results outside the file itself.
+- The `DateRangePreset` type name will no longer be needed in the hook or TransactionFilters — but check if it is re-exported or used in any other file before removing from `dateRangeUtils.ts`.
+- The `MONTH_LABELS`, `DatePicker`, and `MONTH_NAMES` constants in the old `TransactionFilters.tsx` become dead code after the rewrite — they will not exist in the new file.
+
+### Decisions Made
+- 2026-05-18: No backend changes for this redesign — the `queryArgs` shape is unchanged (still `dateFrom`/`dateTo` as Unix timestamps).
+- 2026-05-18: Tailwind `grid` rows trick chosen for secondary row animation over framer-motion — no new dependency needed.
+- 2026-05-18: Mobile bottom sheet uses `hidden sm:block` / `block sm:hidden` visibility toggle — no `useMediaQuery` hook needed.
+- 2026-05-18: `DateRangePicker` built as a new file (`components/ui/date-range-picker.tsx`) — reusable across the app, not inline.
+- 2026-05-18: Authenticated Playwright E2E tests deferred — current smoke test suite (6 unauthenticated tests) is extended with structure-level assertions only.
 
 ---
 

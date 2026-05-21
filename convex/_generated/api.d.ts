@@ -25,6 +25,7 @@ import type * as feeStructure from "../feeStructure.js";
 import type * as feeTransactions from "../feeTransactions.js";
 import type * as http from "../http.js";
 import type * as lib_permissions from "../lib/permissions.js";
+import type * as migrations from "../migrations.js";
 import type * as promotions from "../promotions.js";
 import type * as reportCards from "../reportCards.js";
 import type * as seed from "../seed.js";
@@ -35,6 +36,7 @@ import type * as studentDiscounts from "../studentDiscounts.js";
 import type * as studentFees from "../studentFees.js";
 import type * as students from "../students.js";
 import type * as subjects from "../subjects.js";
+import type * as transactionLog from "../transactionLog.js";
 import type * as users from "../users.js";
 
 import type {
@@ -61,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   feeTransactions: typeof feeTransactions;
   http: typeof http;
   "lib/permissions": typeof lib_permissions;
+  migrations: typeof migrations;
   promotions: typeof promotions;
   reportCards: typeof reportCards;
   seed: typeof seed;
@@ -71,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   studentFees: typeof studentFees;
   students: typeof students;
   subjects: typeof subjects;
+  transactionLog: typeof transactionLog;
   users: typeof users;
 }>;
 
