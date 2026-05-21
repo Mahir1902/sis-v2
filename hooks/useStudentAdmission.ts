@@ -124,7 +124,7 @@ export function useStudentAdmission(onSuccess: () => void) {
         studentId,
         academicYear: values.academicYear as Id<"academicYears">,
         standardLevelId: values.standardLevel as Id<"standardLevels">,
-        campus: values.campus,
+        campus: values.campus as Id<"campuses">,
         enrollmentType: "new_admission",
         enrollmentDate: Date.now(),
       });

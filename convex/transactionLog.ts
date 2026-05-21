@@ -22,7 +22,7 @@ export const getTransactionLog = query({
     academicYearId: v.id("academicYears"),
     dateFrom: v.optional(v.float64()),
     dateTo: v.optional(v.float64()),
-    campusFilter: v.optional(v.string()),
+    campusFilter: v.optional(v.id("campuses")),
     paymentMode: v.optional(paymentModeValidator),
     studentIds: v.optional(v.array(v.id("students"))),
     includeVoided: v.optional(v.boolean()),
@@ -31,8 +31,6 @@ export const getTransactionLog = query({
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin"]);
 
-    // Query using the compound index — gives us academicYear filter
-    // plus ordering by transactionDate for free
     const rawSessions = await ctx.db
       .query("feeCollectionSessions")
       .withIndex("by_academic_year_date", (q) =>
@@ -44,43 +42,50 @@ export const getTransactionLog = query({
     // ── Apply filters ─────────────────────────────────────────────────────
     let filtered = rawSessions;
 
-    // Status filter: show only completed unless voided is included
     if (!args.includeVoided) {
       filtered = filtered.filter((s) => s.status === "completed");
     }
 
-    // Date range
     if (args.dateFrom !== undefined) {
       const from = args.dateFrom;
       filtered = filtered.filter((s) => s.transactionDate >= from);
     }
     if (args.dateTo !== undefined) {
-      // dateTo is inclusive — include sessions up to the end of that day
       const endOfDay = args.dateTo + 86400000 - 1;
       filtered = filtered.filter((s) => s.transactionDate <= endOfDay);
     }
 
-    // Campus
     if (args.campusFilter) {
       filtered = filtered.filter((s) => s.campus === args.campusFilter);
     }
 
-    // Payment mode
     if (args.paymentMode) {
       filtered = filtered.filter((s) => s.paymentMode === args.paymentMode);
     }
 
-    // Student IDs
     if (args.studentIds && args.studentIds.length > 0) {
       const idSet = new Set(args.studentIds);
       filtered = filtered.filter((s) => idSet.has(s.studentId));
     }
 
-    // Standard level
     if (args.standardLevelId) {
       filtered = filtered.filter(
         (s) => s.standardLevelId === args.standardLevelId,
       );
+    }
+
+    // ── Batch-resolve campus IDs to names ────────────────────────────
+    const campusIds = [
+      ...new Set(
+        filtered
+          .map((s) => s.campus)
+          .filter((c): c is NonNullable<typeof c> => c != null),
+      ),
+    ];
+    const campusDocs = await Promise.all(campusIds.map((id) => ctx.db.get(id)));
+    const campusNameMap = new Map<string, string>();
+    for (const c of campusDocs) {
+      if (c) campusNameMap.set(c._id, c.name);
     }
 
     // ── Compute aggregates from the filtered set ─────────────────────
@@ -92,7 +97,9 @@ export const getTransactionLog = query({
       totalAmount += s.totalAmount;
       byPaymentMode[s.paymentMode] =
         (byPaymentMode[s.paymentMode] ?? 0) + s.totalAmount;
-      const campus = s.campus ?? "Unknown";
+      const campus = s.campus
+        ? (campusNameMap.get(s.campus) ?? "Unknown")
+        : "Unknown";
       byCampus[campus] = (byCampus[campus] ?? 0) + s.totalAmount;
     }
 
@@ -126,7 +133,6 @@ export const getTransactionLog = query({
       if (u) collectorMap.set(u._id, u.name);
     }
 
-    // Resolve standard level name for filename generation
     let standardLevelName: string | null = null;
     if (args.standardLevelId) {
       const level = await ctx.db.get(args.standardLevelId);
@@ -139,7 +145,9 @@ export const getTransactionLog = query({
         _id: session._id,
         invoiceNumber: session.invoiceNumber,
         transactionDate: session.transactionDate,
-        campus: session.campus ?? null,
+        campus: session.campus
+          ? (campusNameMap.get(session.campus) ?? null)
+          : null,
         totalAmount: session.totalAmount,
         paymentMode: session.paymentMode,
         status: session.status,
@@ -174,10 +182,11 @@ export const getSessionDetail = query({
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
       .take(50);
 
-    // Batch-fetch student, collector, and fee details
-    const [student, collector] = await Promise.all([
+    // Batch-fetch student, collector, campus, and fee details
+    const [student, collector, campusDoc] = await Promise.all([
       ctx.db.get(session.studentId),
       ctx.db.get(session.collectedBy),
+      session.campus ? ctx.db.get(session.campus) : null,
     ]);
 
     // Two-hop fetch: feeTransactions → studentFees → feeStructure
@@ -229,7 +238,7 @@ export const getSessionDetail = query({
         _id: session._id,
         invoiceNumber: session.invoiceNumber,
         transactionDate: session.transactionDate,
-        campus: session.campus ?? null,
+        campus: campusDoc?.name ?? null,
         totalAmount: session.totalAmount,
         paymentMode: session.paymentMode,
         status: session.status,
@@ -255,7 +264,7 @@ export const getTransactionLogExport = query({
     academicYearId: v.id("academicYears"),
     dateFrom: v.optional(v.float64()),
     dateTo: v.optional(v.float64()),
-    campusFilter: v.optional(v.string()),
+    campusFilter: v.optional(v.id("campuses")),
     paymentMode: v.optional(paymentModeValidator),
     studentIds: v.optional(v.array(v.id("students"))),
     includeVoided: v.optional(v.boolean()),
@@ -299,6 +308,20 @@ export const getTransactionLogExport = query({
       filtered = filtered.filter(
         (s) => s.standardLevelId === args.standardLevelId,
       );
+    }
+
+    // Batch-resolve campus IDs to names
+    const campusIds = [
+      ...new Set(
+        filtered
+          .map((s) => s.campus)
+          .filter((c): c is NonNullable<typeof c> => c != null),
+      ),
+    ];
+    const campusDocs = await Promise.all(campusIds.map((id) => ctx.db.get(id)));
+    const campusNameMap = new Map<string, string>();
+    for (const c of campusDocs) {
+      if (c) campusNameMap.set(c._id, c.name);
     }
 
     // Batch-enrich students and collectors
@@ -378,7 +401,9 @@ export const getTransactionLogExport = query({
           invoiceNumber: session.invoiceNumber,
           studentName: student?.name ?? "Unknown Student",
           studentNumber: student?.number ?? "—",
-          campus: session.campus ?? null,
+          campus: session.campus
+            ? (campusNameMap.get(session.campus) ?? null)
+            : null,
           feeName: structureId
             ? (structureNameMap.get(structureId) ?? "Unknown Fee")
             : "Unknown Fee",

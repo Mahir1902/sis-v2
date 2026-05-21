@@ -77,7 +77,7 @@ export const collectFees = mutation({
       invoiceNumber,
       studentId: args.studentId,
       academicYear: student.academicYear,
-      campus: enrollment?.campus,
+      campus: enrollment?.campus ?? student.campus,
       totalAmount,
       paymentMode: args.paymentMode,
       remarks: args.remarks,

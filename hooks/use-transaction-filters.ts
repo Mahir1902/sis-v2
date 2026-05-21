@@ -8,7 +8,7 @@ export interface TransactionFilterState {
   academicYearId: Id<"academicYears"> | undefined;
   dateFrom: number | undefined;
   dateTo: number | undefined;
-  campusFilter: string | undefined;
+  campusFilter: Id<"campuses"> | undefined;
   paymentMode: PaymentMode | undefined;
   studentIds: Id<"students">[] | undefined;
   includeVoided: boolean;
@@ -23,7 +23,7 @@ export function useTransactionFilters(
   const [academicYearId, setAcademicYearId] = useState<
     Id<"academicYears"> | undefined
   >(undefined);
-  const [campusFilter, setCampusFilter] = useState<string | undefined>(
+  const [campusFilter, setCampusFilter] = useState<Id<"campuses"> | undefined>(
     undefined,
   );
   const [paymentMode, setPaymentMode] = useState<PaymentMode | undefined>(

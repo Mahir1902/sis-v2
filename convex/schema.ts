@@ -156,7 +156,7 @@ export default defineSchema({
     studentId: v.id("students"),
     academicYear: v.id("academicYears"),
     standardLevelId: v.id("standardLevels"),
-    campus: v.string(),
+    campus: v.id("campuses"),
     section: v.optional(v.string()),
     rollNumber: v.optional(v.string()),
     enrollmentType: v.string(), // "new_admission" | "promotion"
@@ -241,7 +241,7 @@ export default defineSchema({
     invoiceNumber: v.string(),
     studentId: v.id("students"),
     academicYear: v.id("academicYears"),
-    campus: v.optional(v.string()),
+    campus: v.optional(v.id("campuses")),
     totalAmount: v.float64(),
     paymentMode: v.union(
       v.literal("Cash"),
@@ -325,7 +325,7 @@ export default defineSchema({
   studentDiscounts: defineTable({
     studentId: v.id("students"),
     discountRuleId: v.id("discountRules"),
-    academicYear: v.string(),
+    academicYear: v.id("academicYears"),
     reason: v.string(),
     startDate: v.string(),
     endDate: v.optional(v.string()),
@@ -336,7 +336,7 @@ export default defineSchema({
   advancePayments: defineTable({
     studentId: v.id("students"),
     transactionId: v.id("feeTransactions"),
-    academicYear: v.string(),
+    academicYear: v.id("academicYears"),
     amount: v.float64(),
     adjustedAmount: v.optional(v.float64()),
     remainingAmount: v.float64(),

@@ -66,8 +66,8 @@ interface TransactionFiltersProps {
   studentIds: Id<"students">[] | undefined;
   onStudentIdsChange: (ids: Id<"students">[] | undefined) => void;
 
-  campusFilter: string | undefined;
-  onCampusChange: (campus: string | undefined) => void;
+  campusFilter: Id<"campuses"> | undefined;
+  onCampusChange: (campus: Id<"campuses"> | undefined) => void;
   paymentMode: string | undefined;
   onPaymentModeChange: (mode: string | undefined) => void;
   includeVoided: boolean;
@@ -264,7 +264,9 @@ export function TransactionFilters({
                 <Select
                   value={campusFilter ?? "__all__"}
                   onValueChange={(val) =>
-                    onCampusChange(val === "__all__" ? undefined : val)
+                    onCampusChange(
+                      val === "__all__" ? undefined : (val as Id<"campuses">),
+                    )
                   }
                 >
                   <SelectTrigger
@@ -276,7 +278,7 @@ export function TransactionFilters({
                   <SelectContent>
                     <SelectItem value="__all__">All Campuses</SelectItem>
                     {campuses?.map((c) => (
-                      <SelectItem key={c._id} value={c.name}>
+                      <SelectItem key={c._id} value={c._id}>
                         {c.name}
                       </SelectItem>
                     ))}
@@ -441,7 +443,9 @@ export function TransactionFilters({
                 <Select
                   value={campusFilter ?? "__all__"}
                   onValueChange={(val) =>
-                    onCampusChange(val === "__all__" ? undefined : val)
+                    onCampusChange(
+                      val === "__all__" ? undefined : (val as Id<"campuses">),
+                    )
                   }
                 >
                   <SelectTrigger
@@ -454,7 +458,7 @@ export function TransactionFilters({
                   <SelectContent>
                     <SelectItem value="__all__">All Campuses</SelectItem>
                     {campuses?.map((c) => (
-                      <SelectItem key={c._id} value={c.name}>
+                      <SelectItem key={c._id} value={c._id}>
                         {c.name}
                       </SelectItem>
                     ))}

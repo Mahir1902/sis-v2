@@ -9,7 +9,7 @@ export const applyDiscount = mutation({
     studentId: v.id("students"),
     feeId: v.id("studentFees"),
     discountRuleId: v.id("discountRules"),
-    academicYear: v.string(),
+    academicYear: v.id("academicYears"),
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
@@ -77,7 +77,7 @@ export const applyDiscount = mutation({
 
 /** Get all discounts applied to a student for a given year. */
 export const getByStudentYear = query({
-  args: { studentId: v.id("students"), academicYear: v.string() },
+  args: { studentId: v.id("students"), academicYear: v.id("academicYears") },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin"]);
     const discounts = await ctx.db

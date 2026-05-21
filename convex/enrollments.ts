@@ -11,7 +11,7 @@ export const createEnrollment = mutation({
     studentId: v.id("students"),
     academicYear: v.id("academicYears"),
     standardLevelId: v.id("standardLevels"),
-    campus: v.string(),
+    campus: v.id("campuses"),
     section: v.optional(v.string()),
     rollNumber: v.optional(v.string()),
     enrollmentType: v.string(),

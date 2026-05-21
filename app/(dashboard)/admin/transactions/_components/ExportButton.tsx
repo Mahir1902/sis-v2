@@ -22,7 +22,7 @@ interface ExportButtonProps {
     academicYearId: Id<"academicYears">;
     dateFrom?: number;
     dateTo?: number;
-    campusFilter?: string;
+    campusFilter?: Id<"campuses">;
     paymentMode?: PaymentMode;
     studentIds?: Id<"students">[];
     includeVoided?: boolean;

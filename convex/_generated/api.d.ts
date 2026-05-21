@@ -15,6 +15,7 @@ import type * as assessments from "../assessments.js";
 import type * as assignFee from "../assignFee.js";
 import type * as auditLogs from "../auditLogs.js";
 import type * as auth from "../auth.js";
+import type * as backfillEnrollments from "../backfillEnrollments.js";
 import type * as campus from "../campus.js";
 import type * as computedGrades from "../computedGrades.js";
 import type * as dashboard from "../dashboard.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   assignFee: typeof assignFee;
   auditLogs: typeof auditLogs;
   auth: typeof auth;
+  backfillEnrollments: typeof backfillEnrollments;
   campus: typeof campus;
   computedGrades: typeof computedGrades;
   dashboard: typeof dashboard;

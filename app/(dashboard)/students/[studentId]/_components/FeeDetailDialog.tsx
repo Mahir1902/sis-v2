@@ -387,7 +387,7 @@ function ApplyDiscountSubDialog({
         studentId,
         feeId: fee._id,
         discountRuleId: selectedRule._id,
-        academicYear: fee.academicYearDoc?.name ?? "",
+        academicYear: fee.academicYear,
       });
       toast.success(
         `Discount of ৳${discountAmount.toLocaleString()} applied successfully`,
