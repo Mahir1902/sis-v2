@@ -452,6 +452,62 @@ export default defineSchema({
     .index("by_student", ["studentId"])
     .index("by_subject", ["subjectId"]),
 
+  // ─── Invoices ─────────────────────────────────────────────────────────────
+
+  invoices: defineTable({
+    invoiceNumber: v.string(), // INV-YYYY-NNN — unique across the system
+    studentId: v.id("students"),
+    academicYearId: v.id("academicYears"),
+    standardLevelId: v.id("standardLevels"),
+    campusId: v.id("campuses"),
+
+    // Snapshot of the line items at invoice creation. Stored verbatim so
+    // historical invoices remain immutable even if the source studentFee or
+    // feeStructure changes afterwards.
+    lineItems: v.array(
+      v.object({
+        studentFeeId: v.id("studentFees"),
+        feeStructureId: v.id("feeStructure"),
+        description: v.string(),
+        amount: v.float64(),
+      }),
+    ),
+
+    totalAmount: v.float64(),
+    paidAmount: v.float64(), // initially 0
+    balance: v.float64(), // initially totalAmount
+
+    status: v.union(
+      v.literal("draft"),
+      v.literal("sent"),
+      v.literal("paid"),
+      v.literal("overdue"),
+      v.literal("voided"),
+    ),
+
+    issueDate: v.float64(), // Unix ms
+    dueDate: v.float64(),
+    sentAt: v.optional(v.float64()),
+    sentBy: v.optional(v.id("users")),
+    notes: v.optional(v.string()),
+
+    createdBy: v.id("users"),
+    createdAt: v.float64(),
+
+    voidedAt: v.optional(v.float64()),
+    voidedBy: v.optional(v.id("users")),
+    voidReason: v.optional(v.string()),
+  })
+    .index("by_student_year", ["studentId", "academicYearId"])
+    .index("by_status", ["status"])
+    .index("by_year_level", ["academicYearId", "standardLevelId"])
+    .index("by_invoice_number", ["invoiceNumber"])
+    .index("by_due_date", ["dueDate"])
+    // by_year is used during invoice number generation to scan the YYYY bucket
+    // for the current max sequence. Without this, the scan would degenerate to
+    // a full-table read.
+    .index("by_year", ["academicYearId"]),
+
   // ─── Audit Logs ───────────────────────────────────────────────────────────
 
   auditLogs: defineTable({
@@ -469,6 +525,7 @@ export default defineSchema({
       v.literal("upload"),
       v.literal("promote"),
       v.literal("role_change"),
+      v.literal("void"),
     ),
     entityType: v.string(),
     entityId: v.string(),

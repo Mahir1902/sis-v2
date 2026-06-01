@@ -16,7 +16,8 @@ type AuditAction =
   | "apply_discount"
   | "upload"
   | "promote"
-  | "role_change";
+  | "role_change"
+  | "void";
 
 // ─── Internal Helper ─────────────────────────────────────────────────────────
 

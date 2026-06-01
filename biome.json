@@ -13,7 +13,14 @@
       "!.next",
       "!dist",
       "!build",
-      "!convex/_generated"
+      "!convex/_generated",
+      "!.sandcastle",
+      "!.agents",
+      "!.claude/skills",
+      "!.claude/agent-memory",
+      "!.playwright-cli",
+      "!.tmp",
+      "!app/(dashboard)/invoices/prototype"
     ]
   },
   "formatter": {
