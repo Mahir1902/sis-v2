@@ -1,5 +1,10 @@
 import { type PaginationResult, paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import { distributeInvoicePayment } from "../lib/distributeInvoicePayment";
+import {
+  computeNewFeeStatus,
+  generateTransactionReference,
+} from "../lib/feeCollectionUtils";
 import { formatBillingPeriod } from "../lib/formatBillingPeriod";
 import {
   computeInvoiceAggregates,
@@ -10,6 +15,7 @@ import {
   formatInvoiceNumber,
   nextInvoiceSequence,
 } from "../lib/invoiceUtils";
+import { resolveBillingContact } from "../lib/resolveBillingContact";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
   internalMutation,
@@ -302,6 +308,268 @@ export const voidInvoice = mutation({
         previousStatus,
       },
     });
+  },
+});
+
+// ─── Mark as Issued (delivery attestation, ADR-0001) ───────────────────────
+
+const deliveryChannelValidator = v.union(
+  v.literal("email"),
+  v.literal("in_person"),
+  v.literal("phone"),
+  v.literal("whatsapp"),
+  v.literal("other"),
+);
+
+const deliveryStatusValidator = v.union(
+  v.literal("delivered"),
+  v.literal("failed"),
+);
+
+/**
+ * Records the admin's self-reported attestation that a draft invoice has been
+ * delivered (issue #31, ADR-0001). Transitions status `draft` → `issued`,
+ * stamps `sentAt` + `sentBy` (the schema's existing "issued at / issued by"
+ * fields — see ADR-0001), and persists the chosen `deliveryChannel` and
+ * `deliveryStatus`.
+ *
+ * The SIS does NOT actually send anything — Compose Email is a client-only
+ * Gmail launcher; this mutation records what the admin says happened. The
+ * audit log entry captures the full status snapshot so a future challenge to
+ * the attestation can be reconstructed.
+ *
+ * Admin-only. Refuses to run on any invoice not currently in `draft`.
+ */
+export const markAsIssued = mutation({
+  args: {
+    invoiceId: v.id("invoices"),
+    deliveryChannel: v.optional(deliveryChannelValidator),
+    deliveryStatus: v.optional(deliveryStatusValidator),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+
+    const invoice = await ctx.db.get(args.invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+
+    if (invoice.status !== "draft") {
+      throw new Error(
+        `Only draft invoices can be marked as issued (current status: ${invoice.status})`,
+      );
+    }
+
+    const now = Date.now();
+    const previousStatus = invoice.status;
+
+    await ctx.db.patch(args.invoiceId, {
+      status: "issued",
+      sentAt: now,
+      sentBy: user._id,
+      deliveryChannel: args.deliveryChannel,
+      deliveryStatus: args.deliveryStatus,
+    });
+
+    await logAudit(ctx, {
+      user,
+      action: "status_change",
+      entityType: "invoices",
+      entityId: args.invoiceId,
+      description: `Marked invoice ${invoice.invoiceNumber} as issued`,
+      metadata: {
+        invoiceNumber: invoice.invoiceNumber,
+        previousStatus,
+        newStatus: "issued",
+        deliveryChannel: args.deliveryChannel,
+        deliveryStatus: args.deliveryStatus,
+      },
+    });
+
+    return { invoiceId: args.invoiceId, status: "issued" as const };
+  },
+});
+
+// ─── Record Payment (issue #31 Part B) ─────────────────────────────────────
+
+const paymentModeValidator = v.union(
+  v.literal("Cash"),
+  v.literal("Bank Transfer"),
+  v.literal("Cheque"),
+  v.literal("UPI"),
+  v.literal("Online"),
+);
+
+/**
+ * Records a payment against an outstanding invoice.
+ *
+ * Atomically (within a single Convex transaction):
+ *   1. Validates the invoice is in a payable state (`issued` or `overdue`).
+ *   2. Distributes `amount` across the invoice's line items via
+ *      `distributeInvoicePayment` (oldest line items first; partial last fee).
+ *   3. Creates ONE `feeCollectionSession` describing the payment as a whole.
+ *   4. Creates ONE `feeTransaction` per fee that received money.
+ *   5. Patches each affected `studentFee` (paidAmount / balance / status /
+ *      paymentDetails ledger).
+ *   6. Patches the invoice (paidAmount / balance, and status → `paid` when
+ *      the balance reaches zero — partial payment keeps the existing status).
+ *   7. Writes an audit log entry.
+ *
+ * Admin-only. The amount may not exceed the outstanding balance —
+ * over-payment / advance payment is intentionally out of scope here (use the
+ * existing collectFees flow for that).
+ */
+export const recordInvoicePayment = mutation({
+  args: {
+    invoiceId: v.id("invoices"),
+    amount: v.float64(),
+    paymentMode: paymentModeValidator,
+    referenceNumber: v.optional(v.string()),
+    remarks: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+
+    if (!Number.isFinite(args.amount) || args.amount <= 0) {
+      throw new Error("Payment amount must be a positive number");
+    }
+
+    const invoice = await ctx.db.get(args.invoiceId);
+    if (!invoice) throw new Error("Invoice not found");
+
+    if (invoice.status !== "issued" && invoice.status !== "overdue") {
+      throw new Error(
+        `Cannot record payment on an invoice with status "${invoice.status}"`,
+      );
+    }
+
+    if (args.amount > invoice.balance) {
+      throw new Error("Payment amount exceeds invoice balance");
+    }
+
+    // Load each affected studentFee (parallel — no N+1).
+    const fees = await Promise.all(
+      invoice.lineItems.map(async (li) => {
+        const fee = await ctx.db.get(li.studentFeeId);
+        if (!fee) {
+          throw new Error("A fee on this invoice no longer exists");
+        }
+        return fee;
+      }),
+    );
+
+    // Build the allocation table. The pure helper enforces every business rule
+    // around distribution; the mutation only orchestrates writes.
+    const allocations = distributeInvoicePayment({
+      paymentAmount: args.amount,
+      fees: fees.map((f) => ({ studentFeeId: f._id, balance: f.balance })),
+    });
+
+    // 3. Create the collection session. invoiceNumber re-uses the invoice's
+    //    own number so this session is discoverable from the existing
+    //    by_invoice index (and lines up with the Transaction Log UI).
+    const now = Date.now();
+    const sessionId = await ctx.db.insert("feeCollectionSessions", {
+      invoiceNumber: invoice.invoiceNumber,
+      studentId: invoice.studentId,
+      academicYear: invoice.academicYearId,
+      campus: invoice.campusId,
+      totalAmount: args.amount,
+      paymentMode: args.paymentMode,
+      remarks: args.remarks,
+      status: "completed",
+      collectedBy: user._id,
+      transactionDate: now,
+      feeCount: allocations.length,
+      standardLevelId: invoice.standardLevelId,
+    });
+
+    // 4 + 5. One transaction + studentFee patch per allocation.
+    const feeById = new Map(fees.map((f) => [f._id, f] as const));
+    for (let i = 0; i < allocations.length; i++) {
+      const alloc = allocations[i];
+      const fee = feeById.get(alloc.studentFeeId as Id<"studentFees">);
+      if (!fee) {
+        throw new Error("Unexpected fee mismatch during payment recording");
+      }
+      const reference =
+        args.referenceNumber && args.referenceNumber.trim().length > 0
+          ? args.referenceNumber.trim()
+          : generateTransactionReference(now, i);
+
+      const txnId = await ctx.db.insert("feeTransactions", {
+        studentId: invoice.studentId,
+        feeId: fee._id,
+        academicYear: invoice.academicYearId,
+        amount: alloc.appliedAmount,
+        paymentMode: args.paymentMode,
+        transactionDate: now,
+        referenceNumber: reference,
+        sessionId,
+        collectedBy: user._id,
+        remarks: args.remarks,
+      });
+
+      const newPaidAmount = fee.paidAmount + alloc.appliedAmount;
+      const newBalance = fee.balance - alloc.appliedAmount;
+      const newStatus = computeNewFeeStatus(
+        fee.balance,
+        fee.paidAmount,
+        alloc.appliedAmount,
+      );
+
+      await ctx.db.patch(fee._id, {
+        paidAmount: newPaidAmount,
+        balance: newBalance,
+        status: newStatus,
+        paymentDetails: [
+          ...fee.paymentDetails,
+          {
+            paymentId: txnId,
+            date: new Date(now).toISOString(),
+            amount: alloc.appliedAmount,
+            mode: args.paymentMode,
+          },
+        ],
+      });
+    }
+
+    // 6. Patch the invoice itself. Status only flips to "paid" when the entire
+    //    balance is cleared — partial payments leave the lifecycle status
+    //    unchanged ("issued" stays "issued"; "overdue" stays "overdue").
+    const newInvoicePaidAmount = invoice.paidAmount + args.amount;
+    const newInvoiceBalance = invoice.balance - args.amount;
+    const newInvoiceStatus =
+      newInvoiceBalance <= 0 ? ("paid" as const) : invoice.status;
+
+    await ctx.db.patch(args.invoiceId, {
+      paidAmount: newInvoicePaidAmount,
+      balance: newInvoiceBalance,
+      status: newInvoiceStatus,
+    });
+
+    // 7. Audit log.
+    await logAudit(ctx, {
+      user,
+      action: "collect_payment",
+      entityType: "invoices",
+      entityId: args.invoiceId,
+      description: `Recorded payment of ${args.amount} for invoice ${invoice.invoiceNumber}`,
+      metadata: {
+        invoiceNumber: invoice.invoiceNumber,
+        amount: args.amount,
+        paymentMode: args.paymentMode,
+        referenceNumber: args.referenceNumber,
+        sessionId,
+        feeCount: allocations.length,
+        newStatus: newInvoiceStatus,
+      },
+    });
+
+    return {
+      sessionId,
+      invoiceId: args.invoiceId,
+      newBalance: newInvoiceBalance,
+      newStatus: newInvoiceStatus,
+    };
   },
 });
 
@@ -724,7 +992,7 @@ export const getInvoices = query({
  *   - `statusCounts` IGNORING the status filter — so the user always sees how
  *     many invoices land in each status tab for the current year/level/campus
  *     filter combination. An invoice counts as "overdue" if its stored status
- *     is `overdue` OR if it is `sent` AND its `dueDate` has passed.
+ *     is `overdue` OR if it is `issued` AND its `dueDate` has passed.
  *
  * The search term is intentionally NOT applied here — the UI uses the
  * unscoped status counts to label tabs, and search is a within-page tool.
@@ -890,6 +1158,26 @@ export const getInvoiceById = query({
       amount: li.amount,
     }));
 
+    // Resolve the Billing Contact (issue #31). Student may be null if the
+    // record was deleted after the invoice was issued; surface a stable
+    // fallback so the UI can show the badge as "no contact on file".
+    const billingContact = student
+      ? resolveBillingContact({
+          primaryBillingContact: student.primaryBillingContact,
+          fatherName: student.fatherName,
+          fatherEmail: student.fatherEmail,
+          motherName: student.motherName,
+          motherEmail: student.motherEmail,
+          guardianName: student.guardianName,
+          guardianEmail: student.guardianEmail,
+        })
+      : {
+          contactType: "father" as const,
+          name: "Unknown",
+          email: undefined,
+          hasEmail: false,
+        };
+
     return {
       _id: invoice._id,
       _creationTime: invoice._creationTime,
@@ -913,6 +1201,9 @@ export const getInvoiceById = query({
       dueDate: invoice.dueDate,
       sentAt: invoice.sentAt,
       sentByName: invoice.sentBy ? (userMap.get(invoice.sentBy) ?? null) : null,
+      deliveryChannel: invoice.deliveryChannel ?? null,
+      deliveryStatus: invoice.deliveryStatus ?? null,
+      billingContact,
       notes: invoice.notes ?? null,
       createdAt: invoice.createdAt,
       createdByName: userMap.get(invoice.createdBy) ?? "Unknown",

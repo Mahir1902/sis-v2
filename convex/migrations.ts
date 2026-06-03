@@ -1,5 +1,6 @@
 import { Migrations } from "@convex-dev/migrations";
 import { v } from "convex/values";
+import { applyBillingContactBackfill } from "../lib/applyBillingContactBackfill";
 import { components, internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import schema from "./schema";
@@ -43,11 +44,7 @@ export const run = migrations.runner();
  */
 export const backfillPrimaryBillingContact = migrations.define({
   table: "students",
-  migrateOne: (_ctx, student) => {
-    if (student.primaryBillingContact === undefined) {
-      return { primaryBillingContact: "father" as const };
-    }
-  },
+  migrateOne: (_ctx, student) => applyBillingContactBackfill(student),
 });
 
 export const runBackfillPrimaryBillingContact = migrations.runner(

@@ -421,9 +421,50 @@ Add the ability to view, edit, and soft-delete individual fees within a fee stru
 
 ---
 
+## Issue #33: Invoice Schema Migration — Billing Contact, Delivery Fields, "sent" → "issued" (2026-06-03)
+**Status**: Complete — APPROVED by BACKEND REVIEW AGENT
+**Active Agent**: CODING AGENT → BACKEND AGENT → BACKEND REVIEW AGENT
+**GitHub**: https://github.com/Mahir1902/sis-v2/issues/33
+
+### Summary
+Widen → migrate → narrow Convex migration adding Billing Contact infrastructure to `students` (4 fields), delivery tracking to `invoices` (2 fields), and renaming the `invoices.status` value `"sent"` → `"issued"` per ADR-0001. Both backfills ran against the dev dataset (27 students, 0 invoices). Migration body for the status rename is preserved in a commented re-run recipe inside `convex/migrations.ts` for future prod deploys still carrying `"sent"` rows.
+
+### Sub-tasks
+| # | Task | Agent | Status |
+|---|------|-------|--------|
+| I33-1 | Widen schema: add `fatherEmail`/`motherEmail`/`guardianEmail`/`primaryBillingContact` (optional) to students; add `deliveryChannel`/`deliveryStatus` to invoices; add `"issued"` alongside `"sent"` in `invoices.status` union | BACKEND AGENT | [x] DONE |
+| I33-2 | Write `backfillPrimaryBillingContact` migration (`@convex-dev/migrations`) defaulting missing rows to `"father"` | BACKEND AGENT | [x] DONE |
+| I33-3 | Write `renameInvoiceStatusSentToIssued` migration scanning `by_status` for `"sent"` rows | BACKEND AGENT | [x] DONE (ran 0 rows; code preserved in comments) |
+| I33-4 | Run both migrations against the dev dataset | BACKEND AGENT | [x] DONE (27 students backfilled, 0 invoices migrated) |
+| I33-5 | Narrow schema: require `primaryBillingContact`; drop `"sent"` from `invoices.status` union | BACKEND AGENT | [x] DONE |
+| I33-6 | Update every Convex `"sent"` reference to `"issued"` (`convex/invoices.ts`, crons, audit logs) | BACKEND AGENT | [x] DONE |
+| I33-7 | Update CONTEXT.md to remove the `sent`/`issued` flagged ambiguity | BACKEND AGENT | [x] DONE |
+| I33-8 | TDD: extract `migrateOne` body to pure `lib/applyBillingContactBackfill.ts` + unit test (RED → GREEN → REFACTOR) | BACKEND AGENT | [x] DONE — 4 tests passing |
+| I33-9 | Backend review of I33-1 through I33-8 against the CLAUDE.md checklist | BACKEND REVIEW AGENT | [x] APPROVED 2026-06-03 |
+| I33-10 | Fix stale doc-comment at `convex/invoices.ts:727` referencing `sent` (non-blocking review note) | BACKEND AGENT | [x] DONE |
+| I33-11 | Run `npm test`, `npm run build`, `npm run lint` — confirm 0 errors | CODING AGENT | [x] DONE — 249/249 tests, 17 routes, 0 lint errors |
+
+### Decisions Made
+- 2026-06-03: `/prototype/` mock files left referencing `"sent"` since they are throwaway design variants, not production code (per Frontend Review acceptance pattern). Confirmed no `"sent"` references in `app/` non-prototype paths, `components/`, `hooks/`, or `lib/`.
+- 2026-06-03: Extracted `applyBillingContactBackfill` as a pure function in `lib/` so the migration decision rule is unit-testable independently of the Convex `migrations.define` wrapper.
+- 2026-06-03: Status-rename migration code removed after running (would be untypeable against the narrowed schema). Full re-run recipe preserved in a code block inside the comment so prod operators do not need to dig through git history.
+
+### Review Notes
+**Backend Review (I33-9) — APPROVED 2026-06-03:**
+All checklist items pass. Schema correctly narrowed; `primaryBillingContact` required, `"sent"` removed from `invoices.status` union, `by_status` index intact, all 6 indexes used by `invoices.ts` declared. Every mutation/query in `convex/invoices.ts` calls `requireRole(ctx, ["admin"])` first. Every status comparison uses `"issued"`. `transitionOverdueInvoices` cron correctly walks `by_status` with `"issued"` and patches past-due rows. All `.take(N)` caps documented as constants (10000/2000/1000) — no unbounded `.collect()`. No N+1 — per-row enrichment via `Promise.all` over deduped id sets. Error messages do not leak schema. `applyBillingContactBackfill` pure function + 4 tests cover all branches.
+
+Non-blocking observations:
+1. `/prototype/` exemption acceptable.
+2. `generateInvoice` by-invoice-number collision retry is fine — Convex serialises mutations.
+3. `getInvoices` post-pagination search is intentional and commented.
+4. ✅ Fixed: stale doc-comment at `convex/invoices.ts:727` updated `sent` → `issued`.
+
+---
+
 ## Current Build Status
-- `npm run build`: PASSING (15 routes + Proxy Middleware)
-- `npm run lint`: PASSING (129 files, 0 errors)
+- `npm run build`: PASSING (17 routes + Proxy Middleware)
+- `npm run lint`: PASSING (207 files, 0 errors)
+- `npm test`: PASSING (18 files, 249 tests)
 - Playwright smoke tests: 6/6 PASSING
 - `npx tsc --noEmit`: PASSING (0 errors) — verified 2026-05-18
 
@@ -1097,3 +1138,52 @@ Schema foundation for #31 (Compose Email + Mark as Issued) and #30-bulk-issued. 
 - The FRONTEND AGENT for #31 can now read these student fields (`fatherEmail`, `motherEmail`, `guardianEmail`, `primaryBillingContact`) and these invoice fields (`deliveryChannel`, `deliveryStatus`) directly from `Doc<"students">` / `Doc<"invoices">`. The `getInvoiceById` and `getInvoices` queries already return all invoice fields — no extra projection work needed there. To expose the new student fields to the Billing Contact UI, the FRONTEND AGENT may need a thin selector helper in `lib/billingContact.ts`; flag this if you want me (BACKEND AGENT) to wire it.
 - `transitionOverdueInvoices` cron continues to operate against the `by_status` index, now looking up `status === "issued"` — unchanged behaviour from the operator's perspective.
 
+
+---
+
+## Issue #31 — Compose Email + Mark as Issued + Record Payment (2026-06-03)
+**Status**: Complete (awaiting Backend Review + Frontend Review)
+**Active Agent**: Coding Agent (TDD slice)
+
+### Slice
+- **Part A** — Compose Email (client-only Gmail launcher) + Mark as Issued (admin attestation mutation).
+- **Part B** — Record Payment (creates feeCollectionSession + per-fee feeTransactions, updates invoice balance + status).
+
+### New pure helpers (TDD: tests written first, then impl)
+- `lib/invoiceEmailTemplates.ts` + `.test.ts` — three V1 templates (initial / reminder / receipt) with `{{variable}}` substitution. 4 tests, all green.
+- `lib/composeEmailUrl.ts` + `.test.ts` — Gmail compose URL builder (`https://mail.google.com/mail/?view=cm&fs=1&to=…`). 4 tests, all green.
+- `lib/resolveBillingContact.ts` + `.test.ts` — picks the right name/email from `primaryBillingContact`; treats empty/whitespace email as missing. 5 tests, all green.
+- `lib/distributeInvoicePayment.ts` + `.test.ts` — distributes payment across line items (oldest first, partial last fee); rejects over-payment and zero/negative amounts. 7 tests, all green.
+
+### Backend (Convex)
+- `convex/invoices.ts`
+  - `markAsIssued` mutation — admin-only, `draft → issued`, stamps `sentAt` + `sentBy` + `deliveryChannel` + `deliveryStatus`, audit log entry. Re-uses existing `sentAt`/`sentBy` schema fields (issue #33 only renamed the status value, not field names).
+  - `recordInvoicePayment` mutation — admin-only, validates issued/overdue status + balance, creates one `feeCollectionSession`, distributes payment via `distributeInvoicePayment` and inserts one `feeTransaction` per allocation, patches each studentFee (paidAmount/balance/status/paymentDetails), patches invoice (paidAmount/balance, status → `paid` when balance hits zero), audit log.
+  - `getInvoiceById` extended to include resolved `billingContact` + `deliveryChannel` + `deliveryStatus` for the UI.
+- `convex/students.ts`
+  - `updateBillingContactEmail` mutation — admin-only, patches only the `{contactType}Email` field for the named contact; never overwrites `primaryBillingContact`.
+
+### Frontend
+- `app/(dashboard)/invoices/_components/InvoiceActionsToolbar.tsx` — orchestrator. Reads invoice via `useInvoiceDocument`, picks Compose label + template by status (`draft → Compose Email`, `issued/overdue → Compose Reminder`, `paid → Email Receipt`, `voided → hidden`), opens Gmail compose tab via `window.open`, owns all three dialogs.
+- `app/(dashboard)/invoices/_components/AddBillingEmailDialog.tsx` — inline email-capture modal; on save, opens Gmail compose so the admin doesn't lose their place.
+- `app/(dashboard)/invoices/_components/MarkAsIssuedDialog.tsx` — channel + status form (defaults email/delivered).
+- `app/(dashboard)/invoices/_components/RecordPaymentDialog.tsx` — amount/mode/reference/remarks form.
+- `components/shared/InvoiceDocument.tsx` — replaced `onSend` prop with `actions?: ReactNode` toolbar slot. Print/PDF stay inline; status-driven actions injected by the parent.
+- `app/(dashboard)/invoices/_components/InvoicePreviewSheet.tsx` — passes `<InvoiceActionsToolbar invoiceId={…} />` into the `actions` slot.
+- `app/(dashboard)/invoices/page.tsx` — `handleSend` row callback now opens the preview Sheet (where the actions live); bulk-send toast updated to point at issue #30.
+
+### Verification
+- `npm run test` — 269 tests pass (22 files).
+- `npm run build` — Next.js + TypeScript build green.
+- `npm run lint` — biome check clean.
+- `npx convex dev --once` — backend schema/types validate.
+
+### Decisions made
+- Used existing `sentAt`/`sentBy` schema fields as the "issued at / issued by" timestamps rather than adding parallel `issuedAt`/`issuedBy` columns; the migration in issue #33 only renamed the status value, not the field name, and adding new columns would mean another widen-migrate-narrow cycle.
+- Payment distribution = oldest line item first, partial last fee. The pure helper enforces this; the Convex mutation orchestrates writes.
+- `formatCurrency` includes the BDT prefix, but the email body templates already say "BDT ", so the toolbar uses a local `fmtEmailAmount` to print the bare number.
+- Row 3-dot "Send to Parent" entry now opens the preview Sheet (single point of action) rather than firing a separate action — keeps the row menu lean.
+
+### Hand-off
+- Bulk Mark as Issued (issue #30) can re-use `markAsIssued` and `recordInvoicePayment` directly; the toast in `handleBulkSend` already references #30.
+- The Receipt email template's `paidAt` falls back to `Date.now()` because the invoice document does not carry a paid-at timestamp. If the school wants the actual receipt date, add a `paidAt` projection in `getInvoiceById` (latest `transactionDate` on the linked feeCollectionSessions) and read it here.

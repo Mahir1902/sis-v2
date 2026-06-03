@@ -9,6 +9,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { Id } from "@/convex/_generated/dataModel";
+import { InvoiceActionsToolbar } from "./InvoiceActionsToolbar";
 
 /**
  * Side-panel preview Sheet for a single invoice (Issue #29).
@@ -56,7 +57,11 @@ export function InvoicePreviewSheet({
           </SheetDescription>
         </SheetHeader>
         {invoiceId !== null && (
-          <InvoiceDocument invoiceId={invoiceId} onClose={onClose} />
+          <InvoiceDocument
+            invoiceId={invoiceId}
+            onClose={onClose}
+            actions={<InvoiceActionsToolbar invoiceId={invoiceId} />}
+          />
         )}
       </SheetContent>
     </Sheet>

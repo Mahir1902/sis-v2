@@ -1,0 +1,270 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic: SIS v2
+        - button:
+          - img
+      - navigation:
+        - generic:
+          - paragraph: Overview
+          - generic:
+            - link:
+              - /url: /dashboard
+              - img
+              - generic: Dashboard
+        - generic:
+          - paragraph: Student Management
+          - generic:
+            - link:
+              - /url: /students
+              - img
+              - generic: Students
+            - link:
+              - /url: /student-fees
+              - img
+              - generic: Student Fees
+        - generic:
+          - paragraph: Administration
+          - generic:
+            - link:
+              - /url: /fees
+              - img
+              - generic: Fee Structures
+            - link:
+              - /url: /invoices
+              - img
+              - generic: Invoices
+            - link:
+              - /url: /admin/transactions
+              - img
+              - generic: Transaction Log
+            - link:
+              - /url: /admin/assessments
+              - img
+              - generic: Assessments
+            - link:
+              - /url: /admin/promotions
+              - img
+              - generic: Promotions
+            - link:
+              - /url: /admin/subjects
+              - img
+              - generic: Subjects
+            - link:
+              - /url: /admin/audit-log
+              - img
+              - generic: Audit Log
+            - link:
+              - /url: /admin/settings
+              - img
+              - generic: Settings
+      - generic:
+        - generic: admin@school.edu
+        - button:
+          - img
+    - main:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - img
+              - generic:
+                - heading [level=1]: Invoices
+                - paragraph: Generate, send, and track invoices across the school
+            - button: Generate Invoice
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - img
+                  - searchbox
+                - generic:
+                  - combobox:
+                    - generic: All classes
+                    - img
+                - generic:
+                  - combobox:
+                    - generic: All campuses
+                    - img
+                - generic:
+                  - combobox:
+                    - generic: 2026-2027
+                    - img
+                - button [disabled]:
+                  - img
+                  - text: Export CSV
+              - tablist:
+                - tab [selected]:
+                  - text: All
+                  - generic: "1"
+                - tab:
+                  - text: Draft
+                  - generic: "1"
+                - tab:
+                  - text: Sent
+                  - generic: "0"
+                - tab:
+                  - text: Overdue
+                  - generic: "0"
+                - tab:
+                  - text: Paid
+                  - generic: "0"
+                - tab:
+                  - text: Voided
+                  - generic: "0"
+          - generic:
+            - generic:
+              - generic:
+                - generic: Total Invoiced
+                - img
+              - generic:
+                - generic: ৳15,500
+            - generic:
+              - generic:
+                - generic: Total Collected
+                - img
+              - generic:
+                - generic: ৳0
+            - generic:
+              - generic:
+                - generic: Total Outstanding
+                - img
+              - generic:
+                - generic: ৳15,500
+            - generic:
+              - generic:
+                - generic: Total Overdue
+                - img
+              - generic:
+                - generic: ৳0
+          - generic:
+            - generic:
+              - generic:
+                - table:
+                  - rowgroup:
+                    - row:
+                      - columnheader:
+                        - checkbox [checked]:
+                          - generic:
+                            - img
+                      - columnheader: "Invoice #"
+                      - columnheader: Student
+                      - columnheader: Class
+                      - columnheader: Campus
+                      - columnheader: Issue Date
+                      - columnheader: Due Date
+                      - columnheader: Status
+                      - columnheader: Total
+                      - columnheader: Balance
+                      - columnheader
+                  - rowgroup:
+                    - row:
+                      - cell:
+                        - checkbox [checked]:
+                          - generic:
+                            - img
+                      - cell: INV-2026-001
+                      - cell:
+                        - generic:
+                          - paragraph: Zainab Rahman
+                          - paragraph: STD-2025-0007
+                      - cell: Grade Eight
+                      - cell: Campus 3
+                      - cell: 03/06/2026
+                      - cell: 10/07/2026
+                      - cell:
+                        - generic: Draft
+                      - cell: ৳15,500
+                      - cell: ৳15,500
+                      - cell:
+                        - button:
+                          - img
+                  - rowgroup:
+                    - row:
+                      - cell: Totals (filtered)
+                      - cell: ৳15,500
+                      - cell: ৳15,500
+                      - cell
+          - region "1 invoice selected":
+            - generic:
+              - generic: 1 selected
+              - generic: · ৳15,500
+              - button "Send selected invoices to parents":
+                - img
+                - text: Send
+              - button "Download selected invoices as PDFs":
+                - img
+                - text: PDF
+              - button "Void selected invoices":
+                - img
+                - text: Void
+              - button "Clear selection":
+                - img
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e9] [cursor=pointer]:
+    - img [ref=e10]
+  - alert
+  - dialog "Invoice preview" [active] [ref=e227]:
+    - generic [ref=e228]:
+      - heading "Invoice preview" [level=2]
+      - paragraph: Preview of the selected invoice document.
+    - generic [ref=e229]:
+      - generic [ref=e230]:
+        - generic [ref=e231]:
+          - button "Close invoice" [ref=e232]:
+            - img [ref=e233]
+          - generic [ref=e236]: Preview
+        - generic [ref=e237]:
+          - button "Print invoice" [disabled]:
+            - img
+            - text: Print
+          - button "Download invoice as PDF" [ref=e238]:
+            - img
+            - text: PDF
+          - button "Send invoice to parent" [disabled]:
+            - img
+            - text: Send to Parent
+      - generic [ref=e240]:
+        - generic [ref=e241]:
+          - generic [ref=e243]:
+            - paragraph [ref=e244]: Al-Noor Islamic School
+            - paragraph [ref=e245]: P.O. Box 1234, Lagos, Nigeria
+          - generic [ref=e246]:
+            - paragraph [ref=e247]: INVOICE
+            - paragraph [ref=e248]: INV-2026-001
+            - generic [ref=e250]: Draft
+        - generic [ref=e251]:
+          - generic [ref=e252]:
+            - paragraph [ref=e253]: Bill To
+            - paragraph [ref=e254]: Zainab Rahman
+            - paragraph [ref=e255]: STD-2025-0007 · Grade Eight
+            - paragraph [ref=e256]: Campus 3
+            - paragraph [ref=e257]: 2026-2027
+          - generic [ref=e258]:
+            - generic [ref=e259]:
+              - generic [ref=e260]: Issue Date
+              - generic [ref=e261]: 03/06/2026
+            - generic [ref=e262]:
+              - generic [ref=e263]: Due Date
+              - generic [ref=e264]: 10/07/2026
+        - table [ref=e265]:
+          - rowgroup [ref=e266]:
+            - row "Description Amount" [ref=e267]:
+              - columnheader "Description" [ref=e268]
+              - columnheader "Amount" [ref=e269]
+          - rowgroup [ref=e270]:
+            - row "Admission Fee ৳14,000" [ref=e271]:
+              - cell "Admission Fee" [ref=e272]
+              - cell "৳14,000" [ref=e273]
+            - row "Sports Fee ৳1,500" [ref=e274]:
+              - cell "Sports Fee" [ref=e275]
+              - cell "৳1,500" [ref=e276]
+        - generic [ref=e277]:
+          - generic [ref=e278]:
+            - generic [ref=e279]: Subtotal
+            - generic [ref=e280]: ৳15,500
+          - generic [ref=e281]:
+            - generic [ref=e282]: Balance Due
+            - generic [ref=e283]: ৳15,500
+        - paragraph [ref=e284]: Thank you for your prompt payment. For queries, contact finance@alnoor.edu.ng

@@ -1,0 +1,205 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic: SIS v2
+        - button:
+          - img
+      - navigation:
+        - generic:
+          - paragraph: Overview
+          - generic:
+            - link:
+              - /url: /dashboard
+              - img
+              - generic: Dashboard
+        - generic:
+          - paragraph: Student Management
+          - generic:
+            - link:
+              - /url: /students
+              - img
+              - generic: Students
+            - link:
+              - /url: /student-fees
+              - img
+              - generic: Student Fees
+        - generic:
+          - paragraph: Administration
+          - generic:
+            - link:
+              - /url: /fees
+              - img
+              - generic: Fee Structures
+            - link:
+              - /url: /invoices
+              - img
+              - generic: Invoices
+            - link:
+              - /url: /admin/transactions
+              - img
+              - generic: Transaction Log
+            - link:
+              - /url: /admin/assessments
+              - img
+              - generic: Assessments
+            - link:
+              - /url: /admin/promotions
+              - img
+              - generic: Promotions
+            - link:
+              - /url: /admin/subjects
+              - img
+              - generic: Subjects
+            - link:
+              - /url: /admin/audit-log
+              - img
+              - generic: Audit Log
+            - link:
+              - /url: /admin/settings
+              - img
+              - generic: Settings
+      - generic:
+        - generic: admin@school.edu
+        - button:
+          - img
+    - main:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - img
+              - generic:
+                - heading [level=1]: Invoices
+                - paragraph: Generate, send, and track invoices across the school
+            - button: Generate Invoice
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - img
+                  - searchbox
+                - generic:
+                  - combobox:
+                    - generic: All classes
+                    - img
+                - generic:
+                  - combobox:
+                    - generic: All campuses
+                    - img
+                - generic:
+                  - combobox:
+                    - generic: 2026-2027
+                    - img
+                - button [disabled]:
+                  - img
+                  - text: Export CSV
+              - tablist:
+                - tab [selected]:
+                  - text: All
+                  - generic: "1"
+                - tab:
+                  - text: Draft
+                  - generic: "0"
+                - tab:
+                  - text: Issued
+                  - generic: "0"
+                - tab:
+                  - text: Overdue
+                  - generic: "0"
+                - tab:
+                  - text: Paid
+                  - generic: "0"
+                - tab:
+                  - text: Voided
+                  - generic: "1"
+          - generic:
+            - generic:
+              - generic:
+                - generic: Total Invoiced
+                - img
+              - generic:
+                - generic: ৳0
+            - generic:
+              - generic:
+                - generic: Total Collected
+                - img
+              - generic:
+                - generic: ৳0
+            - generic:
+              - generic:
+                - generic: Total Outstanding
+                - img
+              - generic:
+                - generic: ৳0
+            - generic:
+              - generic:
+                - generic: Total Overdue
+                - img
+              - generic:
+                - generic: ৳0
+          - generic:
+            - generic:
+              - generic:
+                - table:
+                  - rowgroup:
+                    - row:
+                      - columnheader:
+                        - checkbox
+                      - columnheader: "Invoice #"
+                      - columnheader: Student
+                      - columnheader: Class
+                      - columnheader: Campus
+                      - columnheader: Issue Date
+                      - columnheader: Due Date
+                      - columnheader: Status
+                      - columnheader: Total
+                      - columnheader: Balance
+                      - columnheader
+                  - rowgroup:
+                    - row:
+                      - cell:
+                        - checkbox
+                      - cell: INV-2026-001
+                      - cell:
+                        - generic:
+                          - paragraph: Zainab Rahman
+                          - paragraph: STD-2025-0007
+                      - cell: Grade Eight
+                      - cell: Campus 03
+                      - cell: 03/06/2026
+                      - cell: 10/07/2026
+                      - cell:
+                        - generic: Voided
+                      - cell: ৳15,500
+                      - cell: ৳15,500
+                      - cell:
+                        - button [expanded]:
+                          - img
+                  - rowgroup:
+                    - row:
+                      - cell: Totals (filtered)
+                      - cell: ৳0
+                      - cell: ৳0
+                      - cell
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e9] [cursor=pointer]:
+    - img [ref=e10]
+  - alert
+  - menu "Open actions for invoice INV-2026-001" [active] [ref=e207]:
+    - menuitem "View" [ref=e208]:
+      - img
+      - text: View
+    - menuitem "Edit" [disabled]:
+      - img
+      - text: Edit
+    - menuitem "Send to Parent" [ref=e209]:
+      - img
+      - text: Send to Parent
+    - menuitem "Download PDF" [ref=e210]:
+      - img
+      - text: Download PDF
+    - separator [ref=e211]
+    - menuitem "Void Invoice" [disabled]:
+      - img
+      - text: Void Invoice

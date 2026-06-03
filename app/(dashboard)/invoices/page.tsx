@@ -163,9 +163,11 @@ function InvoicesPageContent() {
   // ── Action handlers ─────────────────────────────────────────────────────
   const handleView = (invoiceId: Id<"invoices">) => openPreview(invoiceId);
 
-  const handleSend = (invoiceId: Id<"invoices">) => {
-    toast.info("Send action lands in issue #31", { id: `send-${invoiceId}` });
-  };
+  // Compose Email / Mark as Issued / Record Payment all live inside the
+  // preview Sheet's action toolbar (issue #31). The row's "Send" entry opens
+  // the Sheet so the admin can pick whichever action matches the invoice's
+  // current status.
+  const handleSend = (invoiceId: Id<"invoices">) => openPreview(invoiceId);
 
   const handleDownloadPdf = (invoiceId: Id<"invoices">) => {
     void downloadSingle(invoiceId);
@@ -178,8 +180,11 @@ function InvoicesPageContent() {
   const handleBulkPdfDownload = () => {
     void downloadBulk(Array.from(selectedIds));
   };
+  // Bulk send is repurposed as Bulk Mark as Issued in issue #30 (ADR-0001).
+  // Until that lands, fire a stub so the selection bar still exposes the
+  // affordance and surfaces the planned path.
   const handleBulkSend = () =>
-    toast.info("Bulk send lands in issue #31", { id: "bulk-send" });
+    toast.info("Bulk Mark as Issued lands in issue #30", { id: "bulk-send" });
   const handleBulkVoid = () => setBulkVoidOpen(true);
 
   return (

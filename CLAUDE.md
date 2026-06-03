@@ -547,7 +547,7 @@ Do not start the next phase until the current is approved and logged complete.
 1. Project scaffold (Next.js, Tailwind v4, shadcn New York)
 2. Convex project setup and schema
 3. Convex Auth setup (email/password, roles)
-4. `middleware.ts` route protection
+4. `proxy.ts` route protection
 5. Dashboard shell (sidebar, navbar, role-aware navigation)
 
 ### Phase 2 — Core Student Management

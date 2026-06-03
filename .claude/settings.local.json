@@ -9,7 +9,11 @@
       "Bash(npx convex:*)",
       "Bash(git remote *)",
       "Bash(gh label *)",
-      "Bash(gh issue *)"
+      "Bash(gh issue *)",
+      "Bash(wait)",
+      "Bash(gh repo *)",
+      "Bash(find *)",
+      "Bash(grep -E \"\\\\.tsx?$\")"
     ]
   },
   "enabledPlugins": {

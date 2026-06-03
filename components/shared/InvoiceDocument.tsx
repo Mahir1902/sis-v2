@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertCircle, Download, Loader2, Printer, Send, X } from "lucide-react";
+import { AlertCircle, Download, Loader2, Printer, X } from "lucide-react";
 import Image from "next/image";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,7 +58,12 @@ export interface InvoiceDocumentProps {
    */
   onPrint?: () => void;
   onDownloadPdf?: () => void;
-  onSend?: () => void;
+  /**
+   * Slot for status-aware action buttons (Compose Email, Mark as Issued,
+   * Record Payment — see issue #31). Rendered after the PDF button on the
+   * toolbar's right side. Owns its own dialogs.
+   */
+  actions?: ReactNode;
 }
 
 /**
@@ -80,7 +86,7 @@ export function InvoiceDocument({
   onClose,
   onPrint,
   onDownloadPdf,
-  onSend,
+  actions,
 }: InvoiceDocumentProps) {
   const result = useInvoiceDocument(invoiceId);
   const pdf = useInvoicePdfDownload();
@@ -112,7 +118,7 @@ export function InvoiceDocument({
         onPrint={onPrint}
         onDownloadPdf={effectiveDownloadPdf}
         isGeneratingPdf={pdf.isGenerating}
-        onSend={onSend}
+        actions={actions}
       />
 
       {/* Document body */}
@@ -268,23 +274,24 @@ interface ToolbarProps {
   onDownloadPdf?: () => void;
   /** When true, the PDF button shows a spinner and disables to prevent double-click. */
   isGeneratingPdf?: boolean;
-  onSend?: () => void;
+  /** Status-aware action buttons (Compose Email / Mark Issued / Record Payment). */
+  actions?: ReactNode;
 }
 
 /**
  * Toolbar layout: close button on the LEFT (when provided), action buttons on
  * the RIGHT. Issue #29 depends on this layout — do not move the close button.
  *
- * Action buttons render disabled when their handler prop is undefined, so the
- * layout remains consistent in the side-sheet preview before wiring is done in
- * later issues.
+ * The right-side `actions` slot owns status-driven invoice actions (issue #31).
+ * Print and PDF buttons are kept inline because they apply uniformly across
+ * every invoice status.
  */
 function Toolbar({
   onClose,
   onPrint,
   onDownloadPdf,
   isGeneratingPdf,
-  onSend,
+  actions,
 }: ToolbarProps) {
   return (
     <div className="flex items-center justify-between border-b px-4 py-3 md:px-6">
@@ -304,7 +311,7 @@ function Toolbar({
           Preview
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -332,16 +339,7 @@ function Toolbar({
           )}{" "}
           PDF
         </Button>
-        <Button
-          size="sm"
-          className="gap-1.5 bg-school-green text-xs text-white hover:bg-school-green/90"
-          onClick={onSend}
-          disabled={!onSend}
-          aria-label="Send invoice to parent"
-          data-testid="invoice-send-button"
-        >
-          <Send className="h-3.5 w-3.5" aria-hidden="true" /> Send to Parent
-        </Button>
+        {actions}
       </div>
     </div>
   );
