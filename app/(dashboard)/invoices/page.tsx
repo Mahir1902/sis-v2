@@ -10,7 +10,14 @@ import { Card } from "@/components/ui/card";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useInvoiceFilters } from "@/hooks/use-invoice-filters";
+import { useInvoicePdfDownload } from "@/hooks/use-invoice-pdf-download";
+import { useInvoicePreview } from "@/hooks/use-invoice-preview";
+import { useInvoiceSelection } from "@/hooks/use-invoice-selection";
+import { BulkVoidInvoicesDialog } from "./_components/BulkVoidInvoicesDialog";
+import { GenerateInvoiceDialog } from "./_components/GenerateInvoiceDialog";
 import { InvoiceFilterToolbar } from "./_components/InvoiceFilterToolbar";
+import { InvoicePreviewSheet } from "./_components/InvoicePreviewSheet";
+import { InvoiceSelectionBar } from "./_components/InvoiceSelectionBar";
 import { InvoiceSummaryCards } from "./_components/InvoiceSummaryCards";
 import {
   type InvoiceRow,
@@ -106,24 +113,20 @@ function InvoicesPageContent() {
     number: string;
   } | null>(null);
 
-  // ── Action handlers (TODO placeholders for sibling issues) ──────────────
-  const handleView = (invoiceId: Id<"invoices">) => {
-    // Issue #29 — wires the preview Sheet. Until then, surface a toast so the
-    // user can see the action flow without us silently swallowing the click.
-    toast.info("Preview sheet lands in issue #29", { id: `view-${invoiceId}` });
-  };
+  // Generate-invoice dialog state. Single dialog drives both the header
+  // button and the empty state CTA.
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
 
-  const handleSend = (invoiceId: Id<"invoices">) => {
-    toast.info("Send action lands in issue #31", { id: `send-${invoiceId}` });
-  };
+  // Bulk-void dialog state — opened from the floating selection bar.
+  const [bulkVoidOpen, setBulkVoidOpen] = useState(false);
 
-  const handleDownloadPdf = (invoiceId: Id<"invoices">) => {
-    toast.info("PDF download lands in issue #28", { id: `pdf-${invoiceId}` });
-  };
+  // PDF download hook — issue #28. Wires both the row action and the bulk bar.
+  const { downloadSingle, downloadBulk, isGenerating } =
+    useInvoicePdfDownload();
 
-  const handleGenerateInvoice = () => {
-    toast.info("Invoice generation lands in a follow-up issue");
-  };
+  // Preview Sheet open state — Issue #29. URL-param backed so the sheet
+  // survives refresh and is shareable as `/invoices?invoiceId=...`.
+  const { openInvoiceId, openPreview, closePreview } = useInvoicePreview();
 
   // ── Derived state ───────────────────────────────────────────────────────
   // `now` is captured per render so dueDate red-highlighting and the dynamic
@@ -144,9 +147,44 @@ function InvoicesPageContent() {
       }
     : undefined;
 
+  // ── Selection ───────────────────────────────────────────────────────────
+  // Composite filter signature — when this changes the hook clears the
+  // selection and emits a toast. Single string keeps the effect's dependency
+  // list honest for biome's exhaustive-deps rule.
+  const filterSig = `${filters.status}|${filters.academicYearId ?? ""}|${filters.standardLevelId ?? ""}|${filters.campusId ?? ""}|${filters.search}`;
+  const {
+    selectedIds,
+    selectionTotalValue,
+    toggleRow,
+    toggleAll,
+    clearSelection,
+  } = useInvoiceSelection({ visibleRows: rows, filterSig });
+
+  // ── Action handlers ─────────────────────────────────────────────────────
+  const handleView = (invoiceId: Id<"invoices">) => openPreview(invoiceId);
+
+  const handleSend = (invoiceId: Id<"invoices">) => {
+    toast.info("Send action lands in issue #31", { id: `send-${invoiceId}` });
+  };
+
+  const handleDownloadPdf = (invoiceId: Id<"invoices">) => {
+    void downloadSingle(invoiceId);
+  };
+
+  const handleGenerateInvoice = () => {
+    setGenerateDialogOpen(true);
+  };
+
+  const handleBulkPdfDownload = () => {
+    void downloadBulk(Array.from(selectedIds));
+  };
+  const handleBulkSend = () =>
+    toast.info("Bulk send lands in issue #31", { id: "bulk-send" });
+  const handleBulkVoid = () => setBulkVoidOpen(true);
+
   return (
     <div className="space-y-6">
-      <InvoicesHeader />
+      <InvoicesHeader onGenerate={handleGenerateInvoice} />
 
       <InvoiceFilterToolbar
         searchInput={searchInput}
@@ -187,6 +225,9 @@ function InvoicesPageContent() {
             onDownloadPdf={handleDownloadPdf}
             onVoid={(id, number) => setVoidTarget({ id, number })}
             footerTotals={footerTotals}
+            selectedIds={selectedIds}
+            onToggleRow={toggleRow}
+            onToggleAll={toggleAll}
           />
           {/* Load more */}
           {(canLoadMore || isLoadingMore) && (
@@ -211,24 +252,64 @@ function InvoicesPageContent() {
           if (!open) setVoidTarget(null);
         }}
       />
+
+      <InvoicePreviewSheet invoiceId={openInvoiceId} onClose={closePreview} />
+
+      <InvoiceSelectionBar
+        count={selectedIds.size}
+        totalValue={selectionTotalValue}
+        onSend={handleBulkSend}
+        onDownloadPdf={handleBulkPdfDownload}
+        onVoid={handleBulkVoid}
+        onClear={clearSelection}
+        isGenerating={isGenerating}
+      />
+
+      <GenerateInvoiceDialog
+        open={generateDialogOpen}
+        onOpenChange={setGenerateDialogOpen}
+      />
+
+      <BulkVoidInvoicesDialog
+        open={bulkVoidOpen}
+        onOpenChange={setBulkVoidOpen}
+        invoiceIds={Array.from(selectedIds)}
+        onSuccess={clearSelection}
+      />
     </div>
   );
 }
 
 // ── Header ──────────────────────────────────────────────────────────────────
 
-function InvoicesHeader() {
+interface InvoicesHeaderProps {
+  onGenerate?: () => void;
+}
+
+function InvoicesHeader({ onGenerate }: InvoicesHeaderProps = {}) {
   return (
-    <div className="flex items-center gap-3">
-      <Receipt className="h-7 w-7 text-school-green" aria-hidden="true" />
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-          Invoices
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Generate, send, and track invoices across the school
-        </p>
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <Receipt className="h-7 w-7 text-school-green" aria-hidden="true" />
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+            Invoices
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Generate, send, and track invoices across the school
+          </p>
+        </div>
       </div>
+      {onGenerate && (
+        <Button
+          type="button"
+          onClick={onGenerate}
+          className="bg-school-green text-white hover:bg-school-green/90"
+          aria-label="Generate a new invoice"
+        >
+          Generate Invoice
+        </Button>
+      )}
     </div>
   );
 }

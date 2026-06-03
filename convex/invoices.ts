@@ -1,5 +1,6 @@
 import { type PaginationResult, paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import { formatBillingPeriod } from "../lib/formatBillingPeriod";
 import {
   computeInvoiceAggregates,
   matchesInvoiceSearch,
@@ -39,7 +40,7 @@ function buildLineItemDescription(
     studentFee.billingPeriod &&
     studentFee.billingPeriod.length > 0
   ) {
-    return `${feeStructure.name} — ${studentFee.billingPeriod}`;
+    return `${feeStructure.name} — ${formatBillingPeriod(studentFee.billingPeriod)}`;
   }
   return feeStructure.name;
 }
@@ -304,6 +305,100 @@ export const voidInvoice = mutation({
   },
 });
 
+// ─── Invoiceable fees (for the Generate Invoice dialog) ────────────────────
+
+/**
+ * Maximum number of invoices we scan when computing which fees are already
+ * reserved on a non-voided invoice for a (student, year) bucket. The same cap
+ * the `generateInvoice` mutation uses for the post-validation conflict scan.
+ */
+const STUDENT_INVOICE_SCAN_CAP = 1000;
+
+/**
+ * Returns the list of `unpaid` student fees that are eligible to appear on a
+ * new invoice for the given (student, academicYear). Admin-only.
+ *
+ * Eligibility rules:
+ *   1. `status === "unpaid"` (paid and partial fees are not invoiceable).
+ *   2. Fee is NOT already a line item on a non-voided invoice for this
+ *      student + year (mirrors the server-side rule in `generateInvoice`).
+ *
+ * Returns enriched rows with the fee structure name + frequency so the dialog
+ * can render a descriptive label without a second round-trip.
+ */
+export const getInvoiceableFeesForStudent = query({
+  args: {
+    studentId: v.id("students"),
+    academicYearId: v.id("academicYears"),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["admin"]);
+
+    // 1. All fees for this student + year. Composite index keeps this narrow.
+    const fees = await ctx.db
+      .query("studentFees")
+      .withIndex("by_student_year", (q) =>
+        q
+          .eq("studentId", args.studentId)
+          .eq("academicYear", args.academicYearId),
+      )
+      .take(500);
+
+    const unpaidFees = fees.filter((f) => f.status === "unpaid");
+    if (unpaidFees.length === 0) return [];
+
+    // 2. All invoices for this student + year — gather every studentFeeId
+    // already on a non-voided invoice and exclude them from the result.
+    const studentInvoices = await ctx.db
+      .query("invoices")
+      .withIndex("by_student_year", (q) =>
+        q
+          .eq("studentId", args.studentId)
+          .eq("academicYearId", args.academicYearId),
+      )
+      .take(STUDENT_INVOICE_SCAN_CAP);
+
+    const reservedFeeIds = new Set<string>();
+    for (const inv of studentInvoices) {
+      if (inv.status === "voided") continue;
+      for (const li of inv.lineItems) {
+        reservedFeeIds.add(li.studentFeeId);
+      }
+    }
+
+    const eligibleFees = unpaidFees.filter((f) => !reservedFeeIds.has(f._id));
+    if (eligibleFees.length === 0) return [];
+
+    // 3. Enrich each eligible fee with its fee structure (batched — no N+1).
+    const uniqueStructureIds = [
+      ...new Set(eligibleFees.map((f) => f.feeStructureId)),
+    ];
+    const structureDocs = await Promise.all(
+      uniqueStructureIds.map((id) => ctx.db.get(id)),
+    );
+    const structureMap = new Map<
+      Id<"feeStructure">,
+      { name: string; frequency: string }
+    >();
+    for (const s of structureDocs) {
+      if (s) structureMap.set(s._id, { name: s.name, frequency: s.frequency });
+    }
+
+    return eligibleFees.map((fee) => {
+      const structure = structureMap.get(fee.feeStructureId);
+      return {
+        _id: fee._id,
+        feeStructureId: fee.feeStructureId,
+        feeStructureName: structure?.name ?? "Fee",
+        frequency: structure?.frequency ?? "one-time",
+        billingPeriod: fee.billingPeriod,
+        balance: fee.balance,
+        dueDate: fee.dueDate,
+      };
+    });
+  },
+});
+
 // ─── List / Detail Queries ──────────────────────────────────────────────────
 
 /**
@@ -393,6 +488,7 @@ async function enrichInvoices(
     standardLevelName: string;
     campusId: Id<"campuses">;
     campusName: string;
+    campusAddress: string;
     academicYearId: Id<"academicYears">;
     academicYearName: string;
     totalAmount: number;
@@ -431,13 +527,19 @@ async function enrichInvoices(
   }
   const levelMap = new Map<Id<"standardLevels">, string>();
   for (const l of levels) if (l) levelMap.set(l._id, l.name);
-  const campusMap = new Map<Id<"campuses">, string>();
-  for (const c of campuses) if (c) campusMap.set(c._id, c.name);
+  const campusMap = new Map<
+    Id<"campuses">,
+    { name: string; address: string }
+  >();
+  for (const c of campuses) {
+    if (c) campusMap.set(c._id, { name: c.name, address: c.address });
+  }
   const yearMap = new Map<Id<"academicYears">, string>();
   for (const y of years) if (y) yearMap.set(y._id, y.name);
 
   return invoices.map((inv) => {
     const student = studentMap.get(inv.studentId);
+    const campus = campusMap.get(inv.campusId);
     return {
       _id: inv._id,
       _creationTime: inv._creationTime,
@@ -448,7 +550,8 @@ async function enrichInvoices(
       standardLevelId: inv.standardLevelId,
       standardLevelName: levelMap.get(inv.standardLevelId) ?? "Unknown Level",
       campusId: inv.campusId,
-      campusName: campusMap.get(inv.campusId) ?? "Unknown Campus",
+      campusName: campus?.name ?? "Unknown Campus",
+      campusAddress: campus?.address ?? "",
       academicYearId: inv.academicYearId,
       academicYearName: yearMap.get(inv.academicYearId) ?? "Unknown Year",
       totalAmount: inv.totalAmount,
@@ -799,6 +902,7 @@ export const getInvoiceById = query({
       standardLevelName: level?.name ?? "Unknown Level",
       campusId: invoice.campusId,
       campusName: campus?.name ?? "Unknown Campus",
+      campusAddress: campus?.address ?? "",
       academicYearId: invoice.academicYearId,
       academicYearName: year?.name ?? "Unknown Year",
       lineItems,

@@ -1,23 +1,18 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { AlertCircle, Download, Printer, Send, X } from "lucide-react";
+import { AlertCircle, Download, Loader2, Printer, Send, X } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useInvoiceDocument } from "@/hooks/use-invoice-document";
+import { useInvoicePdfDownload } from "@/hooks/use-invoice-pdf-download";
 import { formatCurrency } from "@/lib/currency";
 import { fmtDayMonthYear } from "@/lib/dateFormat";
+import type { InvoiceStatus } from "@/lib/invoiceDocumentDisplay";
+import { SCHOOL_NAME } from "@/lib/schoolBrand";
 import { cn } from "@/lib/utils";
-
-/**
- * Status of an invoice as stored in the `invoices` table. Kept local to this
- * file so the component compiles without pulling Convex schema types at the
- * type-system level — the runtime value still comes from the query.
- */
-type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "voided";
 
 /**
  * Tailwind utility class string for the invoice status pill. Co-located with
@@ -71,6 +66,14 @@ export interface InvoiceDocumentProps {
  * Data is fetched via `api.invoices.getInvoiceById` (admin-only). Handles
  * loading skeleton, "not found" error state, and the happy path. Visually
  * modelled on the prototype, but uses production data and project tokens.
+ *
+ * The PDF toolbar button has a built-in default: if `onDownloadPdf` is not
+ * supplied, the component calls `useInvoicePdfDownload().downloadSingle`
+ * with its own `invoiceId`. This means side-sheet callers (e.g. issue #29)
+ * get PDF download for free without re-wiring the prop. The hook is invoked
+ * unconditionally to satisfy React's rules of hooks even when the prop is
+ * supplied (the hook itself is cheap; the heavy modules are dynamic-imported
+ * only when the click fires).
  */
 export function InvoiceDocument({
   invoiceId,
@@ -79,21 +82,24 @@ export function InvoiceDocument({
   onDownloadPdf,
   onSend,
 }: InvoiceDocumentProps) {
-  const invoice = useQuery(api.invoices.getInvoiceById, { invoiceId });
+  const result = useInvoiceDocument(invoiceId);
+  const pdf = useInvoicePdfDownload();
 
-  if (invoice === undefined) {
+  // Default the PDF handler to the hook's downloadSingle so consumers that
+  // don't supply onDownloadPdf still get a working button.
+  const effectiveDownloadPdf =
+    onDownloadPdf ?? (() => void pdf.downloadSingle(invoiceId));
+
+  if (result.state === "loading") {
     return <InvoiceDocumentLoading onClose={onClose} />;
   }
 
-  if (invoice === null) {
+  if (result.state === "not-found") {
     return <InvoiceDocumentNotFound onClose={onClose} />;
   }
 
-  const status = invoice.status as InvoiceStatus;
+  const { invoice, status, balanceClass, dueDateClass } = result;
   const balance = invoice.balance;
-  const balanceClass = balance > 0 ? "text-red-600" : "text-green-700";
-  const dueDateClass =
-    status === "overdue" ? "text-red-600 font-medium" : "font-medium";
 
   return (
     <div
@@ -104,7 +110,8 @@ export function InvoiceDocument({
       <Toolbar
         onClose={onClose}
         onPrint={onPrint}
-        onDownloadPdf={onDownloadPdf}
+        onDownloadPdf={effectiveDownloadPdf}
+        isGeneratingPdf={pdf.isGenerating}
         onSend={onSend}
       />
 
@@ -123,12 +130,12 @@ export function InvoiceDocument({
                 priority
               />
               <div>
-                <p className="text-sm font-bold text-gray-900">
-                  Al-Noor Islamic School
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  P.O. Box 1234, Lagos, Nigeria
-                </p>
+                <p className="text-sm font-bold text-gray-900">{SCHOOL_NAME}</p>
+                {invoice.campusAddress && (
+                  <p className="text-xs text-muted-foreground">
+                    {invoice.campusAddress}
+                  </p>
+                )}
               </div>
             </div>
             <div className="text-left md:text-right">
@@ -245,8 +252,7 @@ export function InvoiceDocument({
           )}
 
           <p className="mt-8 text-center text-xs text-muted-foreground">
-            Thank you for your prompt payment. For queries, contact
-            finance@alnoor.edu.ng
+            Thank you for your prompt payment.
           </p>
         </div>
       </div>
@@ -260,6 +266,8 @@ interface ToolbarProps {
   onClose?: () => void;
   onPrint?: () => void;
   onDownloadPdf?: () => void;
+  /** When true, the PDF button shows a spinner and disables to prevent double-click. */
+  isGeneratingPdf?: boolean;
   onSend?: () => void;
 }
 
@@ -271,7 +279,13 @@ interface ToolbarProps {
  * layout remains consistent in the side-sheet preview before wiring is done in
  * later issues.
  */
-function Toolbar({ onClose, onPrint, onDownloadPdf, onSend }: ToolbarProps) {
+function Toolbar({
+  onClose,
+  onPrint,
+  onDownloadPdf,
+  isGeneratingPdf,
+  onSend,
+}: ToolbarProps) {
   return (
     <div className="flex items-center justify-between border-b px-4 py-3 md:px-6">
       <div className="flex items-center gap-3">
@@ -300,18 +314,23 @@ function Toolbar({ onClose, onPrint, onDownloadPdf, onSend }: ToolbarProps) {
           aria-label="Print invoice"
           data-testid="invoice-print-button"
         >
-          <Printer className="h-3.5 w-3.5" /> Print
+          <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print
         </Button>
         <Button
           variant="ghost"
           size="sm"
           className="gap-1.5 text-xs"
           onClick={onDownloadPdf}
-          disabled={!onDownloadPdf}
+          disabled={!onDownloadPdf || isGeneratingPdf}
           aria-label="Download invoice as PDF"
           data-testid="invoice-pdf-button"
         >
-          <Download className="h-3.5 w-3.5" /> PDF
+          {isGeneratingPdf ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
+          )}{" "}
+          PDF
         </Button>
         <Button
           size="sm"
@@ -321,7 +340,7 @@ function Toolbar({ onClose, onPrint, onDownloadPdf, onSend }: ToolbarProps) {
           aria-label="Send invoice to parent"
           data-testid="invoice-send-button"
         >
-          <Send className="h-3.5 w-3.5" /> Send to Parent
+          <Send className="h-3.5 w-3.5" aria-hidden="true" /> Send to Parent
         </Button>
       </div>
     </div>

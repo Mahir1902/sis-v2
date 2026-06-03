@@ -2,6 +2,7 @@
 
 import { Download, FileText, MoreHorizontal, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +30,7 @@ import {
   shouldDisableVoid,
   shouldRenderDueDateRed,
 } from "@/lib/invoiceTableUtils";
+import { cn } from "@/lib/utils";
 
 /**
  * The shape of a row delivered by `api.invoices.getInvoices` — kept narrow so
@@ -63,6 +65,12 @@ interface Props {
     totalAmount: number;
     balance: number;
   };
+  /** Set of selected invoice ids (drives row highlight + checkbox state). */
+  selectedIds: Set<Id<"invoices">>;
+  /** Toggle one row in or out of the selection. */
+  onToggleRow: (invoiceId: Id<"invoices">) => void;
+  /** Toggle every row in the current visible slice in or out of the selection. */
+  onToggleAll: () => void;
 }
 
 export function InvoiceTable({
@@ -73,13 +81,36 @@ export function InvoiceTable({
   onDownloadPdf,
   onVoid,
   footerTotals,
+  selectedIds,
+  onToggleRow,
+  onToggleAll,
 }: Props) {
+  // Tri-state header checkbox semantics. Radix's `checked` accepts the literal
+  // string "indeterminate" for the mixed state.
+  const allSelected =
+    rows.length > 0 && rows.every((r) => selectedIds.has(r._id));
+  const someSelected =
+    rows.length > 0 && rows.some((r) => selectedIds.has(r._id));
+  const headerCheckedValue: boolean | "indeterminate" = allSelected
+    ? true
+    : someSelected
+      ? "indeterminate"
+      : false;
+
   return (
     <div className="rounded-lg border bg-white">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
+              <TableHead className="w-10 pl-4">
+                <Checkbox
+                  checked={headerCheckedValue}
+                  onCheckedChange={onToggleAll}
+                  aria-label="Select all visible invoices"
+                  data-testid="invoice-table-select-all"
+                />
+              </TableHead>
               <TableHead className="min-w-[140px]">Invoice #</TableHead>
               <TableHead className="min-w-[180px]">Student</TableHead>
               <TableHead className="min-w-[100px]">Class</TableHead>
@@ -104,13 +135,15 @@ export function InvoiceTable({
                 onSend={onSend}
                 onDownloadPdf={onDownloadPdf}
                 onVoid={onVoid}
+                isSelected={selectedIds.has(row._id)}
+                onToggle={onToggleRow}
               />
             ))}
           </TableBody>
           {footerTotals && rows.length > 0 && (
             <tfoot className="border-t bg-gray-50/50 text-sm">
               <tr>
-                <td className="px-4 py-3 font-medium text-gray-700" colSpan={7}>
+                <td className="px-4 py-3 font-medium text-gray-700" colSpan={8}>
                   Totals (filtered)
                 </td>
                 <td className="px-4 py-3 text-right font-semibold">
@@ -136,6 +169,8 @@ interface RowProps {
   onSend: (invoiceId: Id<"invoices">) => void;
   onDownloadPdf: (invoiceId: Id<"invoices">) => void;
   onVoid: (invoiceId: Id<"invoices">, invoiceNumber: string) => void;
+  isSelected: boolean;
+  onToggle: (invoiceId: Id<"invoices">) => void;
 }
 
 function InvoiceTableRow({
@@ -145,12 +180,28 @@ function InvoiceTableRow({
   onSend,
   onDownloadPdf,
   onVoid,
+  isSelected,
+  onToggle,
 }: RowProps) {
   const dueRed = shouldRenderDueDateRed(row.status, row.dueDate, now);
   const voidDisabled = shouldDisableVoid(row.status);
 
   return (
-    <TableRow>
+    <TableRow className={cn(isSelected && "bg-green-50 hover:bg-green-50")}>
+      <TableCell
+        className="pl-4"
+        // Stop propagation so the checkbox click never bubbles to a future
+        // row click handler. Cheap to leave in even before such a handler
+        // exists.
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => onToggle(row._id)}
+          aria-label={`Select invoice ${row.invoiceNumber}`}
+          data-testid={`invoice-row-checkbox-${row._id}`}
+        />
+      </TableCell>
       <TableCell className="font-mono text-sm">{row.invoiceNumber}</TableCell>
       <TableCell>
         <div className="min-w-[140px]">
@@ -257,6 +308,9 @@ export function InvoiceTableSkeleton() {
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
+              <TableHead className="w-10 pl-4">
+                <Skeleton className="h-4 w-4 rounded" />
+              </TableHead>
               <TableHead className="min-w-[140px]">Invoice #</TableHead>
               <TableHead className="min-w-[180px]">Student</TableHead>
               <TableHead className="min-w-[100px]">Class</TableHead>
@@ -274,6 +328,9 @@ export function InvoiceTableSkeleton() {
           <TableBody>
             {Array.from({ length: 6 }, (_, i) => `sk-${i}`).map((key) => (
               <TableRow key={key}>
+                <TableCell className="pl-4">
+                  <Skeleton className="h-4 w-4 rounded" />
+                </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-28" />
                 </TableCell>

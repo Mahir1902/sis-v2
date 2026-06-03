@@ -688,9 +688,9 @@ Invoice list query, aggregates, and overdue cron:
 
 ---
 
-## Invoicing Feature — Issue #27 (2026-05-28)
-**Status**: AWAITING FRONTEND REVIEW
-**Active Agent**: FRONTEND AGENT
+## Invoicing Feature — Issue #27 (2026-05-28) + follow-up refactor (2026-06-01)
+**Status**: APPROVED
+**Active Agent**: FRONTEND REVIEW AGENT
 **Branch**: feature/invoicing
 
 ### Scope
@@ -702,9 +702,17 @@ Build the reusable production InvoiceDocument component that the side-sheet prev
 - [x] INV27-3 components/shared/InvoiceDocument.tsx — happy path + loading skeleton + not-found error state. Toolbar with close on LEFT, Print/PDF/Send on RIGHT (each disabled when handler prop missing). All dates DD/MM/YYYY. Balance red/green. Overdue due-date red. Status pill via co-located `statusBadgeClass`. data-testids: invoice-document, invoice-document-loading, invoice-document-error, invoice-balance, invoice-due-date, invoice-close-button, invoice-print-button, invoice-pdf-button, invoice-send-button — DONE
 - [x] INV27-4 Verification — `npm run test` 184/184, `npx biome check` on changed files clean, `npm run build` success, `npx convex dev --once` deploys — DONE
 - [x] INV27-5 FRONTEND REVIEW AGENT approval — APPROVED (2026-05-28)
+- [x] INV27-6 TDD refactor — `lib/invoiceDocumentDisplay.ts` + `hooks/use-invoice-document.ts` + updated `InvoiceDocument.tsx` to satisfy AC #10 strictly — DONE
+- [x] INV27-7 FRONTEND REVIEW AGENT follow-up approval — APPROVED (2026-06-01)
+- [x] INV27-8 Post-review cleanup — exposed `status: InvoiceStatus` on the hook's `ready` branch so the component no longer re-casts `invoice.status` (removes the duplicate `as InvoiceStatus` flagged as non-blocking in the review) — DONE
+- [x] INV27-9 Verification (post-cleanup) — `npm test` 218/218, `npx tsc --noEmit` clean, `npx biome check` on 4 changed files clean, `npm run build` success, `npx convex dev --once` deploys, Playwright smoke check at `/invoices` loads with no console errors — DONE
 
 ### Review Notes
 **Frontend Review (INV27-1 through INV27-4):** APPROVED 2026-05-28. All CLAUDE.md frontend checklist items satisfied: loading skeleton matches the document shape, error state with icon + message + close affordance, no TypeScript `any` (one justified `as InvoiceStatus` cast on Convex union return), no hardcoded hex (school-green via Tailwind, all status/balance colors via palette utilities), every icon-only button carries an `aria-label`, mobile responsive at 375px (flex-col → md:flex-row for header, grid-cols-1 → md:grid-cols-2 for bill-to, p-4 → md:p-8 padding), shadcn primitives used throughout (Button, Separator, Skeleton, next/Image), close button on the LEFT of toolbar per Issue #29 contract, all dates DD/MM/YYYY via `fmtDayMonthYear`, currency via `formatCurrency` re-exported from the project's single source of truth, no business logic in component bodies (status badge class + label are presentational helpers). data-testids present for E2E hookup. `aria-busy`/`aria-live="polite"` on loading and `role="alert"` on error are nice extras. Non-blocking observations: (1) school name, address, and finance email are hardcoded to match the prototype — fine for now, should be configurable in a follow-up; (2) toolbar action buttons render disabled when handler is undefined (intentional, keeps layout consistent in the side-sheet preview before later issues wire actions).
+
+**Frontend Review (INV27-6 follow-up refactor):** APPROVED 2026-06-01. AC #10 fix is genuine: `useQuery` is absent from `InvoiceDocument.tsx` (confirmed by grep); the component only calls `useInvoiceDocument(invoiceId)` from `hooks/use-invoice-document.ts`. All 10 vitest cases pass. TypeScript strict mode and Biome both clean across all four files. `FunctionReturnType<typeof api.invoices.getInvoiceById>` + `NonNullable<...>` is idiomatic Convex — the `null` branch is handled explicitly in the hook so callers only ever see `InvoiceDocumentData` on the ready branch. Reviewer flagged one non-blocking observation (duplicate `as InvoiceStatus` cast in the component) — addressed in INV27-8 by exposing `status` on the hook's `ready` branch. Loading skeleton, error state, all data-testids, aria attributes, and responsive layout preserved verbatim. All 10 regression-guard tests pass.
+
+**Verification (INV27-9 post-cleanup):** Run on 2026-06-01. `npm test` → 218/218 (13 files); `npx tsc --noEmit` → clean (no output); `npx biome check` on `components/shared/InvoiceDocument.tsx hooks/use-invoice-document.ts lib/invoiceDocumentDisplay.ts lib/invoiceDocumentDisplay.test.ts` → "Checked 4 files in 28ms. No fixes applied."; `npm run build` → ✓ Compiled successfully; `npx convex dev --once` → ✔ Convex functions ready! (6.67s); Playwright smoke check → logged in as `admin@school.edu`, navigated to `/invoices`, empty state renders ("No invoices yet" with "Generate Invoice" CTA), summary cards show `৳0`, 0 console errors. The production `InvoiceDocument` itself has no live consumer yet (#28 PDF / #29 preview-sheet not implemented), so its rendered output will be visually exercised when #29 lands.
 
 ### Notes
 - Currency: the spec asked for NGN, but every other production component in the repo uses BDT (`৳`) via `lib/transactionLogUtils.ts#formatCurrency`. To avoid fragmenting the currency formatter across the app, `lib/currency.ts` re-exports the existing BDT formatter. If the school is genuinely changing currency to NGN, that is a one-line edit in `transactionLogUtils.ts` and should be coordinated across all financial UI in a single follow-up.
@@ -747,3 +755,296 @@ Invoice list page — table, filter toolbar, and summary cards. The main `/invoi
 - Row action handlers (View/Send/Download PDF/Edit) are placeholder toasts pointing to their owning issues (#29, #31, #28). Void is fully wired.
 - `biome.json` was updated to exclude `.sandcastle`, `.agents`, `.claude/skills`, `.claude/agent-memory`, `.playwright-cli`, `.tmp`, and `app/(dashboard)/invoices/prototype` so `npm run lint` runs cleanly against production code. The prototype directory is scheduled for deletion in issue #32.
 - `components/shared/PrototypeSwitcher.tsx` was fixed to satisfy lint: hooks moved above the `process.env.NODE_ENV === "production"` early return; `prev`/`next` wrapped in `useCallback` to make `useEffect` deps exhaustive; `type="button"` added to every `<button>`.
+
+---
+
+## Issue #28 — Client-side PDF generation for invoices
+**Status**: REJECTED by FRONTEND REVIEW AGENT (2026-06-01)
+**Active Agent**: FRONTEND REVIEW AGENT
+
+### Files Reviewed
+- `lib/invoicePdfFilename.ts` + `.test.ts`
+- `lib/invoiceBulkPdf.ts` + `.test.ts`
+- `lib/invoicePdfLogo.ts` + `.test.ts`
+- `components/shared/InvoicePDF.tsx`
+- `hooks/use-invoice-pdf-download.tsx`
+- `app/(dashboard)/invoices/_components/InvoiceSelectionBar.tsx`
+- `components/shared/InvoiceDocument.tsx` (modified)
+- `app/(dashboard)/invoices/_components/InvoiceTable.tsx` (modified)
+- `app/(dashboard)/invoices/page.tsx` (modified)
+
+### Verification Results
+- `npm test`: 237/237 PASSING
+- `npx tsc --noEmit`: CLEAN
+- `npx biome check` (9 files): CLEAN
+- `npm run build`: CLEAN (exit 0, no warnings)
+- `@react-pdf` dynamic import confirmed: not present in invoices route static chunks (27KB/35KB/37KB); lives in lazy chunk `117~3u1yftp.p.js` (1.4MB) loaded on-demand
+- Hard cap of 25 enforced before `setIsGenerating(true)` — confirmed
+- Serial `for (let i = 0; i < invoiceIds.length; i++)` loop confirmed — no Promise.all on PDFs
+- Blob URL cleanup `useEffect` confirmed: tracks all URLs in `objectUrlsRef`, revokes on unmount
+- Conditional `paidAmount > 0` Paid row: confirmed in both InvoicePDF.tsx and InvoiceDocument.tsx
+- Notes split on `\n`: confirmed `data.notes.split("\n").map(...)` in InvoicePDF.tsx
+- Zero line items defensive row: confirmed `"No items billed"` placeholder
+- Hex values in InvoicePDF.tsx match brand tokens: `#018737` = school-green, `#F88B0E` = school-yellow
+
+### Required Changes (REJECTED)
+1. REQUIRED — Component Structure (rule 9): Selection state management (`selectedIdsRef`, `selectionVersion`, `bumpSelection`, `handleToggleRow`, `handleToggleAllVisible`, `handleClearSelection`, `selectionTotalValue` useMemo) must be extracted to `hooks/use-invoice-selection.ts`. The `selectionTotalValue` useMemo derives from `rows` (Convex query data) — this is the same pattern that was rejected on the audit-log page. The hook should return `{ selectedIds, selectionTotalValue, toggleRow, toggleAll, clearSelection }`.
+2. REQUIRED — Accessibility: `<Printer>` icon (line 317) and `<Send>` icon (line 343) in `InvoiceDocument`'s `Toolbar` component are missing `aria-hidden="true"`. The Download and Loader2 icons in the same toolbar already have it. Add `aria-hidden="true"` to both missing icons.
+
+### Non-blocking Suggestions
+- The clear X button in InvoiceSelectionBar uses `rounded-md p-1` (~28px touch target). On mobile, consider upgrading to `Button variant="ghost" size="icon"` (h-9 w-9 = 36px) to approach the 44px WCAG target — consistent with the similar suggestion made on the Sidebar sign-out button (see review note 2026-04-13).
+- The InvoiceSelectionBar has no `max-w` or `flex-wrap` on the inner content div. On a 375px screen with 3+ buttons it could overflow the viewport. Consider adding `max-w-[calc(100vw-2rem)]` and `flex-wrap` or compressing button text to abbreviations on `xs:` breakpoint.
+- `now = Date.now()` at the top of the render body recalculates on every re-render. Non-blocking since rows only re-render when query data changes, but wrapping in `useMemo(() => Date.now(), [rows])` would clarify intent.
+
+### Second-Pass Review — APPROVED by FRONTEND REVIEW AGENT (2026-06-01)
+Both blockers resolved:
+1. Selection state extracted to `hooks/use-invoice-selection.ts` — `useRef`-backed Set with version counter, `toggleRow`/`toggleAll`/`clearSelection` callbacks, `selectionTotalValue` useMemo, filter-change `useEffect` with skip-first-render guard and Sonner toast. `toggleAll` operates on `visibleRows` from hook args — semantically equivalent to the suggested signature. `app/(dashboard)/invoices/page.tsx` import list confirms `useCallback`/`useMemo`/`useRef`/`useEffect` removed.
+2. `aria-hidden="true"` added to both `<Printer>` (line 317) and `<Send>` (line 343) in `components/shared/InvoiceDocument.tsx`.
+Additionally: `lib/invoicePdfFilename.ts` dedupes the `INV-` prefix correctly; all tests pass (237/237); `npx tsc --noEmit` and `npx biome check` clean.
+
+### E2E Verification (Playwright, against real Convex data) — 2026-06-01
+A temporary `convex/seedTestInvoice.ts` internalMutation was used to insert a draft invoice (`TEST-PDF-001` for student "Ali Khan", ৳20,000), then the full flow was exercised in a real browser session against `npm run dev`:
+1. Login admin@school.edu → `/invoices`: page renders cleanly, summary cards update to `All, 1`/`Draft, 1`, 0 console errors.
+2. Three-dot row menu → "Download PDF" → browser downloaded `INV-TEST-PDF-001_Ali Khan.pdf` (116KB, valid PDF v1.3, 1 page, metadata title `Invoice TEST-PDF-001`). 0 console errors during generation.
+3. Row checkbox ticked → `<section aria-label="1 invoice selected">` selection bar appears at fixed bottom-center with `1 selected · ৳20,000`, Send / PDF / Void / Clear buttons all with aria-labels.
+4. Selection bar PDF button → browser downloaded `invoices-20260601-0406.zip` (valid zip, UTC filename pattern, contains the correctly-named PDF inside). 0 console errors during generation.
+5. Filename dedupe verified: `TEST-PDF-001` (no INV prefix) correctly produced `INV-TEST-PDF-001_…`; real `INV-2025-001` would produce `INV-2025-001_…` (no doubling) per unit test.
+
+The temporary `convex/seedTestInvoice.ts` was deleted after verification; the test invoice was removed via the matching `deleteTestInvoice` mutation; `npx convex dev --once` re-deployed cleanly afterward.
+
+### Status — COMPLETE (2026-06-01)
+- `npm test` — **237/237 passing** (16 files), +19 new vitest cases vs. prior baseline of 218
+- `npx tsc --noEmit` — clean
+- `npx biome check` on all 13 created/modified files — clean
+- `npm run build` — clean
+- `npx convex dev --once` — clean
+- Bundle exclusion confirmed: `grep -l "@react-pdf\|jszip" .next/server/chunks/ssr/app_*invoices*.js` returns empty; `@react-pdf` lives in a separate lazy chunk loaded on click
+- Playwright E2E: single PDF + bulk zip both download successfully against real Convex data with 0 console errors
+
+### Files (final)
+- **Created:** `lib/invoicePdfFilename.ts` (+ test, 10 cases), `lib/invoiceBulkPdf.ts` (+ test, 5 cases), `lib/invoicePdfLogo.ts` (+ test, 4 cases), `components/shared/InvoicePDF.tsx`, `hooks/use-invoice-pdf-download.tsx`, `hooks/use-invoice-selection.ts`, `app/(dashboard)/invoices/_components/InvoiceSelectionBar.tsx`, `public/SIS_Logo.png` (512×512 rasterized from SVG).
+- **Modified:** `components/shared/InvoiceDocument.tsx` (toolbar `onDownloadPdf` default + spinner + aria-hidden fixes), `app/(dashboard)/invoices/_components/InvoiceTable.tsx` (checkbox column + selection props), `app/(dashboard)/invoices/page.tsx` (selection hook usage + handler wiring), `package.json` (`@react-pdf/renderer`, `jszip`, `@types/jszip`).
+
+---
+
+## Invoice Generation UI (gap-fill, 2026-06-03)
+**Status**: COMPLETE (2026-06-03)
+**Active Agent**: CODING AGENT (orchestrating)
+
+### Summary
+Wires a UI surface to the existing `generateInvoice` mutation. No schema change, no new backend logic. Two entry points share one dialog: a header button on `/invoices` (with student picker step) and a button on the student Fees tab (student pre-selected). Glossary cleanup also in scope (`CONTEXT.md` Invoice/Fee Notice/Receipt entries are out of date with the implemented architecture).
+
+Pre-grilling decisions captured in `/Users/mahirhaque/.claude/plans/before-i-continue-with-encapsulated-wall.md`:
+- Manual generation only (no auto-on-assignment); PRD's "no auto-generation" decision preserved
+- Two entry points (one shared dialog component)
+- Eligible fees = `status: "unpaid"` only (`partial` is being deprecated)
+- Due date defaults to the 10th of the next month
+- All eligible fees pre-checked on dialog open
+- Post-generate: toast with `View` action; no forced redirect
+- Overdue / resend NOT in scope — absorbed by issues #28 (done) + #31
+- Academic year inferred from student's active enrollment
+
+### Sub-tasks
+| # | Task | Agent | Status |
+|---|------|-------|--------|
+| IG-1 | Build `GenerateInvoiceDialog.tsx` (student picker, fee table, due date, notes, submit). Build supporting hook(s) for invoiceable-fees lookup. Wire `/invoices` page header button + replace empty-state toast. Wire Generate Invoice button on student `FeesTab.tsx`. | FRONTEND AGENT | [x] DONE |
+| IG-2 | Frontend review against CLAUDE.md frontend checklist. | FRONTEND REVIEW AGENT | [x] REJECTED (2026-06-03) — 3 required fixes: (1) formSchema must move from GenerateInvoiceDialog.tsx to lib/validations/invoiceSchema.ts, (2) selectedFees + runningTotal useMemo calls in component body must be extracted (hook or moved lower into sub-component props), (3) Dialog onOpenChange not guarded during isSubmitting (Escape/X can dismiss mid-submit). See review notes below. |
+| IG-2b | Frontend review — second pass (three required fixes addressed). | FRONTEND REVIEW AGENT | [x] APPROVED (2026-06-03) — all 3 blockers resolved. See review notes below. |
+| IG-1b | Added one new Convex read query `convex/invoices.ts → getInvoiceableFeesForStudent` (admin-only, bounded `.take()`, `by_student_year` indexes, batched structure lookups). | BACKEND AGENT | [x] APPROVED by BACKEND REVIEW AGENT (2026-06-03) |
+| IG-3 | Rewrote `CONTEXT.md`: Invoice now defined as pre-payment bill with `draft → sent → paid/overdue → voided` lifecycle; Receipt added as informal label for a paid Invoice; Fee Notice kept; Fee Collection Session added; Relationships and Flagged ambiguities sections added. | CODING AGENT | [x] DONE (2026-06-03) |
+| IG-4 | `npm run lint` (Biome, 198 files) — clean. `npx tsc --noEmit` — clean. `npm run build` (Next 16.2.2 Turbopack, 17 routes) — clean. | CODING AGENT | [x] DONE (2026-06-03) |
+| IG-5 | Update TASK_LOG.md with completion status and review notes. | CODING AGENT | [x] DONE (2026-06-03) |
+
+### Files (final)
+- **Created:** `app/(dashboard)/invoices/_components/GenerateInvoiceDialog.tsx`, `lib/validations/invoiceSchema.ts`, `hooks/use-generate-invoice-fees.ts`
+- **Modified:** `convex/invoices.ts` (added `getInvoiceableFeesForStudent` query), `app/(dashboard)/invoices/page.tsx` (header button + dialog mount), `app/(dashboard)/students/[studentId]/_components/FeesTab.tsx` (Generate Invoice button + Tooltip + dialog mount), `CONTEXT.md` (full glossary rewrite)
+
+### Backend Review Notes (IG-1b — APPROVED 2026-06-03)
+`getInvoiceableFeesForStudent` is admin-only, indexes used (`studentFees.by_student_year`, `invoices.by_student_year`) match schema declarations, `.take(500)` and `.take(1000)` caps in place, structure lookups batched with `Promise.all`, voided invoices correctly skipped when building `reservedFeeIds` (mirroring `generateInvoice`'s write-side rule), no error-message leakage, no over-filter by enrollment status. Non-blocking: explicit return-type annotation would mirror `enrichInvoices` style.
+
+### Decisions Made
+- 2026-06-03: No auto-generation on fee assignment. PRD's "Implementation Decisions" preserved.
+- 2026-06-03: Eligible fee filter = `status === "unpaid"` only (`partial` deprecated).
+- 2026-06-03: Due date defaults to the 10th of next month (matches Fee Notice convention).
+- 2026-06-03: Student picker filters to `status === "active"` only.
+- 2026-06-03: Added the new `getInvoiceableFeesForStudent` read query rather than filtering client-side, because `getInvoices` does not return `lineItems` and client filtering would have required iterating every invoice's full doc.
+- 2026-06-03: Receipt is not a separate entity. A paid Invoice IS the receipt.
+
+### Out of scope (intentional)
+- PDF generation already shipped in issue #28 — the success toast's `View` action deep-links to `/invoices?invoiceId={id}` for issue #29's preview sheet to consume later.
+- Send action + Record Payment flow remains in issue #31.
+- "Resend overdue invoice" is naturally absorbed by #28 (manual PDF share) + #31 (Send timestamp).
+- Late-fee runtime calculation — separate future work.
+- Parent email field on `students` — not added.
+
+### Review Notes (IG-2b — APPROVED 2026-06-03)
+**Frontend Review (IG-2b — second pass):** APPROVED. All 3 blockers confirmed resolved. (1) `lib/validations/invoiceSchema.ts` exists, exports `generateInvoiceFormSchema` and `GenerateInvoiceFormValues`, NOTES_MAX constant is co-located, style matches feesSchema.ts. No inline schema remains in GenerateInvoiceDialog.tsx. (2) `hooks/use-generate-invoice-fees.ts` exists with clean generic API (`InvoiceableFee` interface, typed args/result, `feeListKey` + `lastAppliedKey` ref + two effects + `selectedFees` + `runningTotal` + `toggleFee` all encapsulated). Component calls hook and no longer derives selectedFees/runningTotal inline. Hook type-safe throughout — no `any`. (3) `<Dialog onOpenChange={(o) => { if (form.formState.isSubmitting && !o) return; onOpenChange(o); }>` at line 254 correctly guards close during submission. Rest of close logic (resetFees, resetPickedStudent) still handled via the open-false useEffect at line 122. No regression on previously-passing items.
+
+### Review Notes (IG-2 — REJECTED 2026-06-03)
+**Frontend Review (IG-2):** REJECTED. 3 blocking issues. (1) `formSchema` (z.object with dueDate + notes) defined inline at line 94 of `_components/GenerateInvoiceDialog.tsx` — must be extracted to `lib/validations/invoiceSchema.ts` per project rule (feedback memory: Zod schemas in _components/ files are always a required fix). (2) `selectedFees` (line 229) and `runningTotal` (line 234) are useMemo calls in the component body that filter/aggregate Convex query data — per the feedback rule, this must be extracted (either into a `hooks/use-generate-invoice.ts` or resolved via sub-component props). `feeListKey` (line 203) is a key-derivation for the pre-check effect and may stay co-located since it drives a ref, not a rendered dataset. (3) `<Dialog open={open} onOpenChange={onOpenChange}>` at line 291 passes the raw prop with no isSubmitting guard — pressing Escape or clicking X during submission closes the dialog while the mutation is still in-flight; wrap as `onOpenChange={(o) => { if (form.formState.isSubmitting && !o) return; onOpenChange(o); }}`. Non-blocking observations: (A) `strictlyUnpaidCount` useMemo in FeesTab.tsx (line 88) is a count-derivation from fees — technically borderline on the rule; flag as suggested, not required, given the pre-existing useMemo calls in FeesTab were previously approved and a count is not a dataset filter. (B) Student picker active filter (`status: ["active"]`) is correct — invoicing withdrawn/graduated students would be wrong. (C) December edge case is safe: `new Date(y, 12, 10)` normalises to January 10 of the next year. (D) `as Id<"studentFees">` cast at line 267 is safe — `_id` on returned docs is always `Id<"studentFees">`, the cast is redundant but harmless. (E) View action navigates to `/invoices?invoiceId={id}` — matches spec. (F) Tooltip on disabled FeesTab button uses shadcn Tooltip correctly (not native `title`). All accessibility, loading/empty/error states, mobile layout, and TypeScript checks pass except the 3 above.
+
+---
+
+## Issue #29 — Invoice Preview Sheet (View action) (2026-06-03)
+**Status**: Planning
+**Active Agent**: PLANNING AGENT
+
+### Summary
+Wire the "View" row action in the three-dot menu of the `/invoices` table to open a
+side-panel Sheet that renders the full `InvoiceDocument` component. The sheet is
+672px wide on desktop and full-width on mobile. No backend changes are required —
+`InvoiceDocument` already consumes `hooks/use-invoice-document.ts` which calls the
+existing `api.invoices.getInvoiceById` query.
+
+State is managed via a URL search param (`?invoiceId=`) so the sheet survives a
+browser refresh and shares links. Filter state, scroll position, and row selection are
+all preserved because the Sheet overlays the existing page tree without remounting it.
+
+### Files in Scope
+- `app/(dashboard)/invoices/page.tsx` — replace `handleView` toast placeholder with URL-param write; mount `<InvoicePreviewSheet>`
+- `app/(dashboard)/invoices/_components/InvoicePreviewSheet.tsx` — **new** Sheet wrapper component (thin, no business logic)
+- `hooks/use-invoice-preview.ts` — **new** hook encapsulating `openInvoiceId` read/write via `useSearchParams` + `useRouter`
+
+### Devil's Advocate Review
+
+| # | Concern | Mitigation |
+|---|---------|------------|
+| 1 | Double-opening: user clicks "View" on the same row twice → two URL pushes → back button takes you to the open sheet before taking you off the page | Use `router.replace` (not `router.push`) for both open and close, so only one history entry per view |
+| 2 | Closing the sheet resets scroll position if a `router.replace` triggers a full re-render of the page | shadcn Sheet is a portal overlay; `router.replace` on the same pathname only updates the search param and does NOT remount `InvoicesPageContent` in Next.js 15 App Router — scroll is safe. Verify in E2E. |
+| 3 | Selection state lives in `useInvoiceSelection` which uses a `useRef`-backed Set — closing the sheet must not clear selection | The hook's filter-change `useEffect` only fires when `filterSig` changes, not when `invoiceId` param changes. So closing the sheet (removing `?invoiceId`) will not clear selection provided `filterSig` does not change. Confirm `useInvoiceFilters` does not include `invoiceId` in its URL parsing. |
+| 4 | `useSearchParams` in a Server Component causes a build error in Next.js App Router | `InvoicesPageContent` is already a Client Component (`"use client"`); the new hook uses `useSearchParams` which is only legal in Client Components — no risk. |
+| 5 | PDF download inside the sheet: does pressing "Download PDF" in the sheet also require the download hook, or does `InvoiceDocument` handle it internally? | Per spec: `InvoiceDocument`'s `onDownloadPdf` prop is wired to `downloadSingle(invoiceId)` from the already-imported `useInvoicePdfDownload` hook in `page.tsx`. Pass this down through the Sheet. No new logic needed. |
+| 6 | Sheet `showCloseButton={false}` with `onClose` on the LEFT of the toolbar — if a user lands via a direct deep-link (`/invoices?invoiceId=abc`) and then presses browser Back, do they return to the sheet-closed page? | `router.replace` means Back goes to the previous history entry — if the user navigated to `/invoices` fresh, Back exits to wherever they were before. If they deep-linked, Back exits the page entirely. This is correct and expected. |
+| 7 | Mobile: Sheet 672px on a 375px viewport — what does the Sheet look like? | Spec calls for `max-w-full sm:max-w-[672px]`. On mobile (< 640px breakpoint) the sheet takes full width. On sm+ it is capped at 672px. `InvoiceDocument` is already responsive at 375px (confirmed in INV27 review). |
+| 8 | Keyboard accessibility: Escape should close the sheet — does suppressing `showCloseButton` also suppress Escape handling in shadcn Sheet? | No. `showCloseButton={false}` only hides the default `X` button; shadcn Dialog's `onEscapeKeyDown` and overlay click dismissal remain active. No additional wiring is needed. |
+| 9 | Is the `invoiceId` URL param validated before being passed to the hook? | `use-invoice-preview.ts` reads the raw string from `useSearchParams` and casts it as `Id<"invoices"> | null`. The backend `getInvoiceById` query will return `null` for an invalid ID, and `InvoiceDocument` already renders an error state in that case — no client-side validation needed beyond the null guard. |
+| 10 | Will adding `?invoiceId=` to the URL cause `useInvoiceFilters` to misparse it as a filter param? | `useInvoiceFilters` must only read its known param keys (`status`, `academicYearId`, `standardLevelId`, `campusId`, `search`). Verify it does not read `invoiceId`. If it does, the filter hook must explicitly ignore it. Flag for the Frontend Agent to grep-confirm before wiring. |
+
+### Sub-tasks
+
+| # | ID | Task | Agent | Status | Dependencies |
+|---|----|------|-------|--------|-------------|
+| 1 | INV29-1 | Create `hooks/use-invoice-preview.ts`. Exports `useInvoicePreview()` returning `{ openInvoiceId: Id<"invoices"> \| null, openPreview: (id: Id<"invoices">) => void, closePreview: () => void }`. Reads `invoiceId` from `useSearchParams()`. `openPreview` calls `router.replace` with `?invoiceId={id}` appended to current pathname + existing search params (preserving all filter params). `closePreview` calls `router.replace` without the `invoiceId` param. No business logic — state management only. | FRONTEND AGENT | [x] DONE — awaiting FRONTEND REVIEW (INV29-4) | None |
+| 2 | INV29-2 | Create `app/(dashboard)/invoices/_components/InvoicePreviewSheet.tsx`. Renders a shadcn `<Sheet>` with `open={!!openInvoiceId}` and `onOpenChange` that calls `closePreview()` when set to `false`. Props: `openInvoiceId`, `closePreview`, `onDownloadPdf`. Sheet has `showCloseButton={false}`. `SheetContent` width: `w-full sm:max-w-[672px]`. No padding override — `InvoiceDocument` manages its own internal padding. Renders `<InvoiceDocument invoiceId={openInvoiceId} onClose={closePreview} onDownloadPdf={onDownloadPdf} />` when `openInvoiceId` is non-null. No data fetching — `InvoiceDocument` handles that internally via its hook. | FRONTEND AGENT | [x] DONE — awaiting FRONTEND REVIEW (INV29-4) | INV29-1 |
+| 3 | INV29-3 | Wire `page.tsx`. (a) Call `useInvoicePreview()` inside `InvoicesPageContent`. (b) Replace the `handleView` toast placeholder (line 154) with `openPreview(invoiceId)`. (c) Mount `<InvoicePreviewSheet openInvoiceId={openInvoiceId} closePreview={closePreview} onDownloadPdf={handleDownloadPdf} />` at the bottom of the returned JSX, below `<VoidInvoiceDialog>`. (d) Confirm that `useInvoiceFilters` does not read the `invoiceId` search param — grep `use-invoice-filters.ts` for `"invoiceId"` and add an explicit ignore comment if found. No new imports except `InvoicePreviewSheet` and the hook. | FRONTEND AGENT | [x] DONE — awaiting FRONTEND REVIEW (INV29-4) | INV29-1, INV29-2 |
+| 4 | INV29-4 | Frontend review of INV29-1 through INV29-3. Full CLAUDE.md frontend checklist. Additional checks: (a) `router.replace` used (not `push`) in both `openPreview` and `closePreview`; (b) `showCloseButton={false}` present on Sheet; (c) close button is on the LEFT of the InvoiceDocument toolbar (verified by reading InvoiceDocument.tsx line 282 — do not re-implement); (d) sheet width is `w-full sm:max-w-[672px]`; (e) `InvoicePreviewSheet` contains no data-fetching or business logic; (f) filter params are preserved when `openPreview` writes the URL param; (g) no `any` types; (h) no hardcoded hex. | FRONTEND REVIEW AGENT | [x] APPROVED (2026-06-03) | INV29-3 |
+| 5 | INV29-5 | Playwright E2E verification. Steps: (1) Login as admin. (2) Navigate to `/invoices`. (3) If table is empty, generate a test invoice first. (4) Click three-dot menu on a row → "View". (5) Assert Sheet is visible (`data-testid="invoice-close-button"` present). (6) Assert URL contains `?invoiceId=`. (7) Assert InvoiceDocument renders (invoice number visible). (8) Click the close button (left toolbar X) → assert Sheet closes, URL param removed. (9) Reopen sheet → press Escape → assert Sheet closes. (10) Reopen sheet → click overlay → assert Sheet closes. (11) Assert filter toolbar is still visible and unchanged. (12) Assert row selection is unchanged (if a row was selected before opening). (13) Click "Download PDF" in the sheet toolbar → assert download triggered (file downloaded or download hook called — check console, no error). Capture console.log output and screenshots at each step. | CODING AGENT | [x] PASSED (2026-06-03) | INV29-4 |
+| 6 | INV29-6 | Run `npm run build` and `npm run lint` (Biome). Confirm 0 errors. Update TASK_LOG.md with result. | CODING AGENT | [x] PASSED (2026-06-03) | INV29-5 |
+
+### Dependencies and Blockers
+- INV29-1 (hook) has no external blockers. It is pure URL-state management.
+- INV29-2 (Sheet component) depends on INV29-1 only for the prop contract.
+- INV29-3 (page wiring) depends on both INV29-1 and INV29-2. All three can be written in a single Frontend Agent session in order (1 → 2 → 3).
+- INV29-4 (frontend review) gates E2E and build. No frontend work proceeds after review without approval.
+- INV29-5 (Playwright E2E) is blocked by INV29-4 approval.
+- INV29-6 (build/lint) is blocked by INV29-5.
+- No backend changes are needed — `getInvoiceById` is already in production and `InvoiceDocument` already calls it internally.
+
+### Agent Notes — INV29-1 (FRONTEND AGENT)
+- Import `useSearchParams` from `"next/navigation"` and `useRouter` from `"next/navigation"`.
+- When building the URL for `openPreview`: read `searchParams.toString()` to get the current query string, then construct a new `URLSearchParams` from it, call `.set("invoiceId", id)`, then `router.replace(\`\${pathname}?\${params.toString()}\`)`.
+- When building the URL for `closePreview`: same approach but call `.delete("invoiceId")` instead of `.set(...)`.
+- Import `usePathname` from `"next/navigation"` to get the current pathname for the replace call.
+- Do not use `window.location` — always use Next.js router for SSR compatibility.
+- The hook file is `hooks/use-invoice-preview.ts` — no `.tsx` extension needed (no JSX).
+
+### Agent Notes — INV29-2 (FRONTEND AGENT)
+- Import `Sheet`, `SheetContent` from `"@/components/ui/sheet"`. Do NOT import `SheetClose`, `SheetHeader`, or `SheetTitle` — `InvoiceDocument` already provides its own toolbar and title.
+- The `onOpenChange` handler: `(open: boolean) => { if (!open) closePreview(); }`.
+- `SheetContent` must NOT have `p-0` unless the shadcn sheet default padding would conflict with `InvoiceDocument`'s internal padding — read `InvoiceDocument.tsx` first to see if its outermost div manages its own padding.
+- Do NOT add a `SheetTitle` or `SheetDescription` inside this component. `InvoiceDocument` renders its own header. Add a visually-hidden title (`<VisuallyHidden>` or `className="sr-only"`) if shadcn warns about missing accessible title on the Dialog.
+- `showCloseButton={false}` is a prop on `SheetContent` (confirmed already installed in shadcn Sheet per spec).
+- Guard the render: only pass `invoiceId={openInvoiceId}` when `openInvoiceId` is non-null. Use a conditional render or non-null assertion inside the `open={!!openInvoiceId}` guard.
+
+### Agent Notes — INV29-3 (FRONTEND AGENT)
+- The import for `InvoicePreviewSheet` goes at the top with the other `_components` imports.
+- Place `<InvoicePreviewSheet ... />` after `<VoidInvoiceDialog ... />` in the JSX — both are portals and order does not affect z-index stacking in shadcn.
+- `handleDownloadPdf` is already defined in `page.tsx` at line 164 — pass it directly as `onDownloadPdf`.
+- Grep `hooks/use-invoice-filters.ts` for the string `"invoiceId"`. If found, flag it. If not found, add a one-line comment `// NOTE: invoiceId param is managed by use-invoice-preview.ts, not here` in the hook for future readers.
+- Do NOT change any existing hook call order in `InvoicesPageContent` — only add the `useInvoicePreview()` call and the JSX mount. Biome's exhaustive-deps rule may flag the new hook if it uses a callback defined in the component — check for this.
+
+### Agent Notes — INV29-4 (FRONTEND REVIEW AGENT)
+- Pay specific attention to: (1) that `InvoicePreviewSheet` contains zero `useQuery` or `useMutation` calls — all data lives in `InvoiceDocument` via its hook; (2) that the hook uses `router.replace` not `router.push`; (3) that the Sheet close via overlay and Escape key are NOT disabled (no `onInteractOutside={(e) => e.preventDefault()}` or similar blocking pattern); (4) that `SheetContent` carries `aria-label` or the component provides an accessible sheet title for screen readers.
+
+**Frontend Review (INV29-1 through INV29-3):** APPROVED 2026-06-03. `npx tsc --noEmit` clean, `npx biome check` (3 files) clean, `npm run build` success. All acceptance criteria verified: (1) `handleView` in `page.tsx` calls `openPreview` — no more toast placeholder; (2) `<InvoicePreviewSheet>` mounted below `<VoidInvoiceDialog>` with `invoiceId={openInvoiceId}` and `onClose={closePreview}`; (3) Sheet `open` bound to `invoiceId !== null`, `showCloseButton={false}`, width `w-full sm:max-w-[672px] overflow-y-auto p-0`; (4) `onOpenChange` calls `onClose()` when set to false — overlay click and Escape close the sheet (no `onInteractOutside` override found); (5) `<SheetHeader className="sr-only">` with `<SheetTitle>` and `<SheetDescription>` present — Radix a11y requirement satisfied; (6) `InvoiceDocument` rendered only when `invoiceId !== null`; (7) `useInvoicePreview` hook uses `new URLSearchParams(searchParams.toString())` in both `openPreview` and `closePreview` — filter params preserved; (8) `router.replace` (not `push`) with `{ scroll: false }` in both paths; (9) `InvoiceDocument`'s default PDF handler resolves to `useInvoicePdfDownload().downloadSingle` (confirmed in `InvoiceDocument.tsx` line 90); (10) No `useQuery`/`useMutation` in `InvoicePreviewSheet.tsx`; (11) No `any` types; (12) No hardcoded hex values; (13) All props interfaces explicitly typed.
+
+### Agent Notes — INV29-5 (CODING AGENT)
+- Use the Playwright CLI skill. Run a headed browser session against `npm run dev`.
+- The test invoice used in Issue #28 verification was deleted — a new one may need to be generated via the "Generate Invoice" dialog before the View action can be tested. Document the invoice number used.
+- The `data-testid="invoice-close-button"` attribute is already present on the X button inside `InvoiceDocument` (confirmed at line 299 of `InvoiceDocument.tsx`) — use it as the primary assertion target for sheet-open detection.
+- Capture a screenshot of the sheet open state for the record.
+
+### Decisions Made
+- 2026-06-03: URL search param (`?invoiceId=`) chosen over plain `useState` to match the deep-link contract already promised by Issue #29 spec and the existing success-toast deep-link from Issue #28's `generateInvoice` mutation (`/invoices?invoiceId={id}`).
+- 2026-06-03: `router.replace` chosen over `router.push` to avoid polluting browser history with sheet open/close pairs.
+- 2026-06-03: `InvoicePreviewSheet` is a thin wrapper — no data fetching, no business logic. Kept in `_components/` as it is single-page use.
+- 2026-06-03: No backend changes. `getInvoiceById` already exists and `InvoiceDocument` already calls it internally via `use-invoice-document.ts`.
+- 2026-06-03: PDF download wired by passing `handleDownloadPdf` (already defined in `page.tsx`) as `onDownloadPdf` to the Sheet, which threads it to `InvoiceDocument`. `InvoiceDocument`'s default PDF behavior uses `useInvoicePdfDownload` internally — but the explicit prop takes precedence, keeping the singleton hook instance in `page.tsx` rather than creating a second one.
+
+### E2E Verification (Playwright, 2026-06-03) — PASSED
+Live session against `npm run dev` (port 3000), logged in as `admin@school.edu` against real Convex data using existing invoice `INV-2026-001` (Zainab Rahman, Grade Eight, ৳15,500, Draft).
+1. Selected row checkbox → selection bar shows "1 invoice selected".
+2. Three-dot menu → "View" → URL became `/invoices?invoiceId=pd735bg4ma3t8bbd6hat7cnjh987yda3`. Sheet opened with dialog "Invoice preview" (sr-only SheetTitle + SheetDescription) and full `InvoiceDocument` rendered (school header, INVOICE label, INV-2026-001, Draft pill, Bill To Zainab Rahman + Grade Eight, line items Admission Fee ৳14,000 + Sports Fee ৳1,500, Subtotal ৳15,500, Balance Due ৳15,500, footer note).
+3. Close button on LEFT of toolbar (`data-testid="invoice-close-button"`) — verified present; Print and Send buttons on RIGHT (correctly disabled — owned by issue #31). PDF button enabled.
+4. Escape key → Sheet closed, URL reverted to `/invoices` (invoiceId param removed). **Selection bar still visible, checkbox still checked** → filter+selection state preserved across close.
+5. Re-opened via deep-link `?invoiceId=...` → Sheet opened on page load. URL deep-link contract honored.
+6. Toolbar close button (X on left) → Sheet closed, URL cleaned.
+7. Re-opened via deep-link → mouse click at (50, 300) on overlay → Sheet closed, URL cleaned. Overlay click dismissal works.
+8. PDF download from inside Sheet → browser downloaded `INV-2026-001_Zainab Rahman.pdf` (116KB, PDF v1.3, 1 page). 0 console errors during generation. Issue #28 generator correctly triggered from within Sheet.
+9. Throughout the session: 0 console errors observed across all interactions.
+
+### Final Verification (INV29-6)
+- `npx tsc --noEmit` — clean
+- `npm run lint` (Biome) — clean, 200 files checked
+- `npm run build` — clean (17 routes generated, includes `/invoices`)
+- `npm test` — 237/237 passing (16 files)
+
+### Status — COMPLETE (2026-06-03)
+All 8 acceptance criteria from Issue #29 verified live in a real browser session against real Convex data. Issue ready to close.
+
+### Files (final)
+- **Created:** `hooks/use-invoice-preview.ts` (65 lines), `app/(dashboard)/invoices/_components/InvoicePreviewSheet.tsx` (64 lines)
+- **Modified:** `app/(dashboard)/invoices/page.tsx` (+6 net lines — 2 imports, 1 hook call, replaced 5-line `handleView` toast with 1-line `openPreview` call, mounted `<InvoicePreviewSheet>`)
+
+---
+
+## Issue #30 — Bulk Void Invoices Dialog (2026-06-03)
+
+**Status**: Complete
+**Active Agent**: CODING AGENT (orchestrating)
+
+### Summary
+Final missing slice of issue #30. Checkbox column, header "Select all", row highlight, floating selection bar, bulk-PDF and dismiss × were already in place from prior slices. This slice adds the **bulk-void confirmation dialog** with Sonner summary toast and selection clearing.
+
+### Sub-tasks
+- [x] BV-1 TDD: `lib/bulkVoidInvoices.ts` — `summarizeBulkVoidResults` + `formatBulkVoidMessage` pure helpers (success/warning/error tone, singular/plural) — RED→GREEN cycle, 8 vitest cases — DONE
+- [x] BV-2 `app/(dashboard)/invoices/_components/BulkVoidInvoicesDialog.tsx` — shadcn AlertDialog, `Promise.allSettled` parallel mutations, first-unique-failure surfaces in toast description, dialog stays open on total failure for retry — DONE
+- [x] BV-3 Wire into `app/(dashboard)/invoices/page.tsx` — `bulkVoidOpen` state replaces placeholder toast, dialog mounted alongside `GenerateInvoiceDialog`, `onSuccess={clearSelection}` — DONE
+- [x] BV-4 Frontend Review — APPROVED 2026-06-03 (see below)
+- [x] BV-5 Build / lint / vitest — `npm run build` PASS (17 routes), `npm run lint` PASS (Biome 204 files, 0 errors), `npx vitest run` PASS (17 files, 245 tests)
+- [x] BV-6 E2E verification with playwright-cli (see below)
+
+### Frontend Review (2026-06-03)
+**Verdict: APPROVED**
+
+Files reviewed:
+- `app/(dashboard)/invoices/_components/BulkVoidInvoicesDialog.tsx` (full file)
+- `app/(dashboard)/invoices/page.tsx` (bulk void integration points only)
+- `lib/bulkVoidInvoices.ts` (helper consumption verification only)
+
+All acceptance criteria from issue #30 satisfied. All Frontend Review checklist items pass. No blocking issues found. One non-blocking suggestion: the `description` variable on line 89 uses a redundant ternary (`firstUniqueReason ? firstUniqueReason : undefined`) that can be simplified to just `firstUniqueReason ?? undefined` or simply `firstUniqueReason || undefined`, but this is a style note only and does not block merge.
+
+### E2E Verification (2026-06-03, playwright-cli)
+1. Logged in as `admin@school.edu`, navigated to `/invoices`.
+2. Selected INV-2026-001 (Zainab Rahman, Draft, ৳15,500) via row checkbox → floating selection bar appeared showing `1 selected · ৳15,500` with Send / PDF / Void / × buttons.
+3. Clicked Void on the selection bar → AlertDialog opened with title "Void selected invoices" and description "You are about to void 1 invoice. This action cannot be undone…".
+4. Filled Reason field "E2E test for issue #30", clicked "Void 1 invoice".
+5. Mutation succeeded → Sonner toast displayed "1 invoice voided" (singular). Status column changed Draft → Voided. Status tab counts updated (Draft: 1→0, Voided: 0→1). Selection bar disappeared (selection cleared).
+6. Zero console errors throughout the flow.
+
+Screenshot: `bulk-void-success.png`
+
+### Files (final)
+- **Created:** `lib/bulkVoidInvoices.ts`, `lib/bulkVoidInvoices.test.ts`, `app/(dashboard)/invoices/_components/BulkVoidInvoicesDialog.tsx`
+- **Modified:** `app/(dashboard)/invoices/page.tsx` (+9 net lines — 1 import, 1 state hook, 1 handler change, 6-line dialog mount)
+
