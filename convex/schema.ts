@@ -128,6 +128,23 @@ export default defineSchema({
     guardianNidNumber: v.string(),
     guardianPhoneNumber: v.string(),
 
+    // Billing contact emails — used by the invoice Compose Email launcher
+    // (ADR-0001). All three are optional because the school does not always
+    // capture all three on intake; they are widened here ahead of the parent
+    // intake form picking them up.
+    fatherEmail: v.optional(v.string()),
+    motherEmail: v.optional(v.string()),
+    guardianEmail: v.optional(v.string()),
+
+    // Billing Contact (CONTEXT.md domain term) — designates which parent/
+    // guardian is financially responsible. Required after the issue #33
+    // backfill migration; default for backfilled records was "father".
+    primaryBillingContact: v.union(
+      v.literal("father"),
+      v.literal("mother"),
+      v.literal("guardian"),
+    ),
+
     // Financial
     familyAnnualIncome: v.string(),
 
@@ -477,9 +494,12 @@ export default defineSchema({
     paidAmount: v.float64(), // initially 0
     balance: v.float64(), // initially totalAmount
 
+    // Status union. `"issued"` is the canonical billing-state name (CONTEXT.md
+    // "Issued"); the legacy `"sent"` value was removed by the issue #33
+    // migration. See ADR-0001 for the launcher-architecture motivation.
     status: v.union(
       v.literal("draft"),
-      v.literal("sent"),
+      v.literal("issued"),
       v.literal("paid"),
       v.literal("overdue"),
       v.literal("voided"),
@@ -490,6 +510,24 @@ export default defineSchema({
     sentAt: v.optional(v.float64()),
     sentBy: v.optional(v.id("users")),
     notes: v.optional(v.string()),
+
+    // Delivery tracking (ADR-0001 launcher architecture). Both optional —
+    // populated by the Mark as Issued action recording the admin's
+    // self-reported attestation. Schema lives separately from invoice
+    // lifecycle status so a billing transition can never silently imply
+    // delivery success.
+    deliveryChannel: v.optional(
+      v.union(
+        v.literal("email"),
+        v.literal("in_person"),
+        v.literal("phone"),
+        v.literal("whatsapp"),
+        v.literal("other"),
+      ),
+    ),
+    deliveryStatus: v.optional(
+      v.union(v.literal("delivered"), v.literal("failed")),
+    ),
 
     createdBy: v.id("users"),
     createdAt: v.float64(),

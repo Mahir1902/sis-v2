@@ -264,7 +264,7 @@ const STATUS_PILL: Record<
   { background: string; color: string }
 > = {
   draft: { background: "#e5e7eb", color: "#374151" },
-  sent: { background: "#dbeafe", color: COLOR.blue700 },
+  issued: { background: "#dbeafe", color: COLOR.blue700 },
   paid: { background: "#dcfce7", color: COLOR.green700 },
   overdue: { background: "#fee2e2", color: COLOR.red600 },
   voided: { background: "#e5e7eb", color: COLOR.gray500 },

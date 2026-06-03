@@ -24,7 +24,7 @@ function round2(n: number): number {
 export type InvoiceAggregateInput = {
   totalAmount: number;
   paidAmount: number;
-  status: "draft" | "sent" | "paid" | "overdue" | "voided";
+  status: "draft" | "issued" | "paid" | "overdue" | "voided";
   dueDate: number;
 };
 
@@ -39,9 +39,9 @@ export type InvoiceAggregateInput = {
  *   - `totalOutstanding` = sum of `max(0, totalAmount - paidAmount)` for all
  *     non-voided invoices (overpayments do not subtract from outstanding).
  *   - `totalOverdue` = sum of `max(0, totalAmount - paidAmount)` for non-voided
- *     invoices that are either stored as `overdue` OR currently `sent` AND past
- *     due (`dueDate < now`). Computed dynamically so the UI does not need to
- *     wait for the daily cron to flip statuses.
+ *     invoices that are either stored as `overdue` OR currently `issued` AND
+ *     past due (`dueDate < now`). Computed dynamically so the UI does not need
+ *     to wait for the daily cron to flip statuses.
  *
  * All return values are rounded to 2 decimal places.
  */
@@ -70,10 +70,11 @@ export function computeInvoiceAggregates(
       totalOutstanding += balance;
     }
 
-    // Overdue: stored status is overdue, OR sent + past due.
+    // Overdue: stored status is overdue, OR issued + past due.
     const isOverdueByStatus = inv.status === "overdue";
-    const isOverdueBySentPastDue = inv.status === "sent" && inv.dueDate < now;
-    if ((isOverdueByStatus || isOverdueBySentPastDue) && balance > 0) {
+    const isOverdueByIssuedPastDue =
+      inv.status === "issued" && inv.dueDate < now;
+    if ((isOverdueByStatus || isOverdueByIssuedPastDue) && balance > 0) {
       totalOverdue += balance;
     }
   }
@@ -113,18 +114,18 @@ export function matchesInvoiceSearch(
 }
 
 /**
- * True iff the invoice's stored status is `sent` AND its dueDate is strictly
+ * True iff the invoice's stored status is `issued` AND its dueDate is strictly
  * before `now`. Used to dynamically detect invoices that the daily overdue cron
  * has not yet flipped.
  *
  * Note: an invoice whose stored status is already `overdue` returns false here
  * — `isInvoiceOverdue` answers the narrower question "should we treat this
- * sent invoice as overdue right now?". Callers that need the broader sense
+ * issued invoice as overdue right now?". Callers that need the broader sense
  * (overdue by status OR by date) should check both explicitly.
  */
 export function isInvoiceOverdue(
   invoice: { status: string; dueDate: number },
   now: number,
 ): boolean {
-  return invoice.status === "sent" && invoice.dueDate < now;
+  return invoice.status === "issued" && invoice.dueDate < now;
 }

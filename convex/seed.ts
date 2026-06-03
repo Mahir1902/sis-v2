@@ -76,16 +76,16 @@ export const seedReferenceData = mutation({
 
     // ── Campuses ──────────────────────────────────────────────────────────
     await ctx.db.insert("campuses", {
-      name: "Main Campus",
-      address: "123 Education Street",
+      name: "Campus 01",
+      address: "Sector 11, Road 05/A, House 30/A, Uttara, Dhaka-1230",
     });
     await ctx.db.insert("campuses", {
-      name: "East Campus",
-      address: "456 East Avenue",
+      name: "Campus 02",
+      address: "House 32, Road 28, Sector 7, Dhaka-1230",
     });
     await ctx.db.insert("campuses", {
-      name: "West Campus",
-      address: "789 West Boulevard",
+      name: "Campus 03",
+      address: "Sector 7, Road 32, House 1, Uttara",
     });
 
     // ── Standard Levels ───────────────────────────────────────────────────

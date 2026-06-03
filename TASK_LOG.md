@@ -1048,3 +1048,52 @@ Screenshot: `bulk-void-success.png`
 - **Created:** `lib/bulkVoidInvoices.ts`, `lib/bulkVoidInvoices.test.ts`, `app/(dashboard)/invoices/_components/BulkVoidInvoicesDialog.tsx`
 - **Modified:** `app/(dashboard)/invoices/page.tsx` (+9 net lines — 1 import, 1 state hook, 1 handler change, 6-line dialog mount)
 
+---
+
+## Issue #33 — Invoice Schema Migration (Billing Contact, delivery fields, "sent" → "issued") (2026-06-03)
+
+**Status**: DONE — awaiting BACKEND REVIEW
+**Active Agent**: BACKEND AGENT
+
+### Summary
+Schema foundation for #31 (Compose Email + Mark as Issued) and #30-bulk-issued. Adds four `students` fields (`fatherEmail?`, `motherEmail?`, `guardianEmail?`, `primaryBillingContact`), two `invoices` fields (`deliveryChannel?`, `deliveryStatus?`), and renames the `invoices.status` value `"sent"` → `"issued"` across every storage + call site. Follows the widen-migrate-narrow pattern using the `@convex-dev/migrations` component (per ADR-0001).
+
+### Sub-tasks
+- [x] 33.1 Install `@convex-dev/migrations`; create `convex/convex.config.ts` registering it. — DONE
+- [x] 33.2 Widen schema: 4 new student fields (all optional), 2 new invoice fields (optional), `invoices.status` accepts both `"sent"` and `"issued"`. Deploy. — DONE
+- [x] 33.3 Add component-based migrations to `convex/migrations.ts`: `backfillPrimaryBillingContact` (processed 27 student rows) and `renameInvoiceStatusSentToIssued` (processed 0 — dev dataset had no `"sent"` invoices). — DONE
+- [x] 33.4 Narrow schema: drop `"sent"` from `invoices.status`; make `primaryBillingContact` required. Update every call site (Convex + frontend + lib tests). — DONE
+- [x] 33.5 Remove resolved flagged-ambiguity bullet from `CONTEXT.md`. — DONE
+- [x] 33.6 Verify `npm run build` (17 routes), `npm run lint` (205 files, 0 errors), `npx vitest run` (17 files, 245 tests). — DONE
+
+### Migration runs (dev deployment hushed-bass-123)
+- `migrations:runBackfillPrimaryBillingContact` — `processed: 27`, `Status: Migration was started and finished in one batch`. Spot-checked 3 students post-run: all show `primaryBillingContact: "father"`.
+- `migrations:runRenameInvoiceStatusSentToIssued` — `processed: 0` (only 1 invoice in dev, already in `"voided"` status; no `"sent"` rows existed).
+
+### Files changed
+- `package.json` / `package-lock.json` — added `@convex-dev/migrations`.
+- `convex/convex.config.ts` — new file, registers the migrations component.
+- `convex/schema.ts` — students: `fatherEmail?`, `motherEmail?`, `guardianEmail?`, `primaryBillingContact` (required). invoices: `deliveryChannel?`, `deliveryStatus?`, status union dropped `"sent"`, added `"issued"`.
+- `convex/migrations.ts` — `migrations` client init with schema, `backfillPrimaryBillingContact` + runner, `runIssue33Migrations` series runner, doc-block explaining removal of the `renameInvoiceStatusSentToIssued` migration post-narrow + how to re-run on prod via git history.
+- `convex/invoices.ts` — `statusFilterValidator`, `InvoiceFilters`, statusCounts initialisers, dynamic-overdue check, and `transitionOverdueInvoices` cron handler all switched from `"sent"` → `"issued"`.
+- `convex/crons.ts` — docstring update.
+- `convex/students.ts` — `createStudent` mutation: added optional `fatherEmail`, `motherEmail`, `guardianEmail`, `primaryBillingContact` args; defaults `primaryBillingContact` to `"father"` server-side when not supplied (preserves backwards compatibility with the admission form pending #31).
+- `lib/invoiceAggregates.ts` — `InvoiceAggregateInput.status` narrowed to drop `"sent"`; `isInvoiceOverdue` checks `"issued"`; docstrings updated.
+- `lib/invoiceTableUtils.ts` — `InvoiceStatus` union, `formatStatusDotClass`, `formatStatusBadgeClass`, `shouldRenderDueDateRed` all switched to `"issued"`.
+- `lib/invoiceDocumentDisplay.ts` — `InvoiceStatus` union switched to `"issued"`; docstring update.
+- `lib/invoiceAggregates.test.ts`, `lib/invoiceTableUtils.test.ts`, `lib/invoiceDocumentDisplay.test.ts` — assertions and `InvoiceStatus` arrays now use `"issued"`.
+- `components/shared/InvoiceDocument.tsx` — `statusBadgeClass` updated.
+- `components/shared/InvoicePDF.tsx` — `STATUS_PILL` mapping updated.
+- `app/(dashboard)/invoices/_components/InvoiceFilterToolbar.tsx` — `StatusCounts` interface and `STATUS_TABS` entry.
+- `hooks/use-invoice-filters.ts` — `STATUS_VALUES` array switched to `"issued"`.
+- `CONTEXT.md` — removed resolved flagged-ambiguity bullet.
+
+### Notes / blockers
+- The `renameInvoiceStatusSentToIssued` migration was REMOVED from `convex/migrations.ts` after running on dev, because the narrowed schema no longer permits the `"sent"` literal in `customRange`. To re-run this migration on prod (where `"sent"` rows still exist), the operator must temporarily widen the schema again, restore the migration from this commit's history, run it, then re-narrow. The procedure is documented inline in `convex/migrations.ts` with a reference to ADR-0001.
+- The prototype route at `app/(dashboard)/invoices/prototype/` (file headers explicitly mark it "PROTOTYPE — delete with prototype") is self-contained with its own local `InvoiceStatus` type using `"sent"`. It still compiles cleanly because it does not import from the production status union. Intentionally left unchanged to avoid scope creep — the entire prototype route is scheduled for deletion in a later cleanup.
+- New `students.createStudent` args (`fatherEmail`, `motherEmail`, `guardianEmail`, `primaryBillingContact`) are all `v.optional` — existing admission-form callers are NOT broken. The admission form will be updated to pass them in issue #31. The server defaults `primaryBillingContact` to `"father"` to satisfy the now-required schema field whenever the client omits it.
+
+### Hand-off
+- The FRONTEND AGENT for #31 can now read these student fields (`fatherEmail`, `motherEmail`, `guardianEmail`, `primaryBillingContact`) and these invoice fields (`deliveryChannel`, `deliveryStatus`) directly from `Doc<"students">` / `Doc<"invoices">`. The `getInvoiceById` and `getInvoices` queries already return all invoice fields — no extra projection work needed there. To expose the new student fields to the Billing Contact UI, the FRONTEND AGENT may need a thin selector helper in `lib/billingContact.ts`; flag this if you want me (BACKEND AGENT) to wire it.
+- `transitionOverdueInvoices` cron continues to operate against the `by_status` index, now looking up `status === "issued"` — unchanged behaviour from the operator's perspective.
+

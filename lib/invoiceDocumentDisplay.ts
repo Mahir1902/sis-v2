@@ -13,7 +13,7 @@
  * components and hooks can share a single source of truth without reaching
  * into Convex schema types at the type-system level.
  */
-export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "voided";
+export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "voided";
 
 /**
  * Tailwind class for the "Balance Due" amount.
@@ -31,7 +31,7 @@ export function balanceClassFor(balance: number): string {
  * Tailwind class for the "Due Date" label.
  *
  * Red emphasis is reserved for invoices whose stored status is `overdue` —
- * the daily cron flips `sent` invoices to `overdue` once their due date has
+ * the daily cron flips `issued` invoices to `overdue` once their due date has
  * passed, so we trust the stored status rather than re-computing here.
  */
 export function dueDateClassFor(status: InvoiceStatus): string {

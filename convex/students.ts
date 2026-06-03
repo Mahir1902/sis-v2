@@ -63,12 +63,27 @@ export const createStudent = mutation({
     familyAnnualIncome: v.string(),
     siblingIds: v.optional(v.array(v.id("students"))),
     consultantName: v.string(),
+
+    // Issue #33 fields. Currently optional in the mutation args because the
+    // admission form (issue #31) has not yet wired them. The server defaults
+    // `primaryBillingContact` to `"father"` so the schema stays satisfied —
+    // matching the backfill rule used for pre-existing students.
+    fatherEmail: v.optional(v.string()),
+    motherEmail: v.optional(v.string()),
+    guardianEmail: v.optional(v.string()),
+    primaryBillingContact: v.optional(
+      v.union(v.literal("father"), v.literal("mother"), v.literal("guardian")),
+    ),
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
 
     const studentId = await ctx.db.insert("students", {
       ...args,
+      // Default Billing Contact to "father" until the admission form (#31)
+      // captures the caller's explicit choice. Stays consistent with the
+      // backfill default applied to pre-existing students.
+      primaryBillingContact: args.primaryBillingContact ?? "father",
       status: "active",
       admissionDate: Date.now(),
       createdAt: new Date().toISOString(),

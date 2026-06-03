@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
  * needs them, promote to `lib/invoiceStatus.ts`.
  *
  * - draft   → neutral gray (work in progress)
- * - sent    → blue (awaiting payment, not yet late)
+ * - issued  → blue (awaiting payment, not yet late)
  * - paid    → green (closed)
  * - overdue → red (action required)
  * - voided  → dim, struck-through visual upstream (color still gray)
@@ -30,7 +30,7 @@ function statusBadgeClass(status: InvoiceStatus): string {
   switch (status) {
     case "draft":
       return "bg-gray-400/40 text-gray-700";
-    case "sent":
+    case "issued":
       return "bg-blue-400/40 text-blue-700";
     case "paid":
       return "bg-green-400/40 text-green-700";

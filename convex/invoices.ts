@@ -411,16 +411,16 @@ export const getInvoiceableFeesForStudent = query({
 const AGGREGATE_SCAN_CAP = 2000;
 
 /**
- * Maximum number of `sent` invoices the daily overdue cron will scan per run.
- * `by_status` keeps the read narrow; if the school ever produces more than 1k
- * outstanding sent invoices the cron will simply process the next batch the
- * following day. The cap is documented here so it isn't accidentally removed.
+ * Maximum number of `issued` invoices the daily overdue cron will scan per
+ * run. `by_status` keeps the read narrow; if the school ever produces more
+ * than 1k outstanding issued invoices the cron will simply process the next
+ * batch the following day. Documented here so it isn't accidentally removed.
  */
 const OVERDUE_SCAN_CAP = 1000;
 
 const statusFilterValidator = v.union(
   v.literal("draft"),
-  v.literal("sent"),
+  v.literal("issued"),
   v.literal("paid"),
   v.literal("overdue"),
   v.literal("voided"),
@@ -429,7 +429,7 @@ const statusFilterValidator = v.union(
 
 type InvoiceFilters = {
   academicYearId?: Id<"academicYears">;
-  status?: "draft" | "sent" | "paid" | "overdue" | "voided" | "all";
+  status?: "draft" | "issued" | "paid" | "overdue" | "voided" | "all";
   standardLevelId?: Id<"standardLevels">;
   campusId?: Id<"campuses">;
 };
@@ -750,7 +750,7 @@ export const getInvoiceAggregates = query({
           statusCounts: {
             all: 0,
             draft: 0,
-            sent: 0,
+            issued: 0,
             paid: 0,
             overdue: 0,
             voided: 0,
@@ -809,19 +809,19 @@ export const getInvoiceAggregates = query({
     const aggregates = computeInvoiceAggregates(aggregateSet, now);
 
     // For `statusCounts` ignore the status filter. Counts respect the
-    // dynamic "sent + past due → overdue" rule so the user sees the tab they
-    // would land on if the cron had run.
+    // dynamic "issued + past due → overdue" rule so the user sees the tab
+    // they would land on if the cron had run.
     const statusCounts = {
       all: 0,
       draft: 0,
-      sent: 0,
+      issued: 0,
       paid: 0,
       overdue: 0,
       voided: 0,
     };
     for (const inv of baseFiltered) {
       statusCounts.all += 1;
-      const dynamicallyOverdue = inv.status === "sent" && inv.dueDate < now;
+      const dynamicallyOverdue = inv.status === "issued" && inv.dueDate < now;
       if (dynamicallyOverdue) {
         statusCounts.overdue += 1;
       } else if (inv.status in statusCounts) {
@@ -929,8 +929,9 @@ export const getInvoiceById = query({
 
 /**
  * Internal mutation invoked by the daily cron (see `convex/crons.ts`).
- * Walks up to `OVERDUE_SCAN_CAP` invoices in `sent` status via the `by_status`
- * index, and for each whose `dueDate < now` patches the status to `overdue`.
+ * Walks up to `OVERDUE_SCAN_CAP` invoices in `issued` status via the
+ * `by_status` index, and for each whose `dueDate < now` patches the status to
+ * `overdue`.
  *
  * Crucially, this does NOT touch `paid` or `voided` invoices — both can have
  * a past dueDate legitimately, and re-flipping them would corrupt audit
@@ -944,22 +945,22 @@ export const transitionOverdueInvoices = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
 
-    const sentInvoices = await ctx.db
+    const issuedInvoices = await ctx.db
       .query("invoices")
-      .withIndex("by_status", (q) => q.eq("status", "sent"))
+      .withIndex("by_status", (q) => q.eq("status", "issued"))
       .take(OVERDUE_SCAN_CAP);
 
     let transitioned = 0;
-    for (const inv of sentInvoices) {
-      // Defensive: belt and suspenders. The index narrows to status="sent",
+    for (const inv of issuedInvoices) {
+      // Defensive: belt and suspenders. The index narrows to status="issued",
       // but guard against any future change in semantics.
-      if (inv.status !== "sent") continue;
+      if (inv.status !== "issued") continue;
       if (inv.dueDate < now) {
         await ctx.db.patch(inv._id, { status: "overdue" });
         transitioned += 1;
       }
     }
 
-    return { scanned: sentInvoices.length, transitioned };
+    return { scanned: issuedInvoices.length, transitioned };
   },
 });

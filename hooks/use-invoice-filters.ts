@@ -25,7 +25,7 @@ import type { InvoiceStatus } from "@/lib/invoiceTableUtils";
 const STATUS_VALUES = [
   "all",
   "draft",
-  "sent",
+  "issued",
   "paid",
   "overdue",
   "voided",

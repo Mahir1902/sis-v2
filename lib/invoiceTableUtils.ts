@@ -7,8 +7,8 @@
  *
  * Status palette is co-located with `InvoiceDocument.tsx` — invoice statuses
  * use slightly different colours from the student statuses listed in CLAUDE.md:
- *   - draft   → neutral gray (work in progress, not yet sent)
- *   - sent    → blue        (awaiting payment, not yet late)
+ *   - draft   → neutral gray (work in progress, not yet issued)
+ *   - issued  → blue        (awaiting payment, not yet late)
  *   - paid    → green       (closed)
  *   - overdue → red         (action required)
  *   - voided  → muted gray  (closed, ignored from aggregates)
@@ -16,7 +16,7 @@
  * If a third caller needs the same palette, promote to `lib/invoiceStatus.ts`.
  */
 
-export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "voided";
+export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "voided";
 
 /**
  * Tailwind utility class for a small colored dot rendered before the status
@@ -27,7 +27,7 @@ export function formatStatusDotClass(status: InvoiceStatus): string {
   switch (status) {
     case "draft":
       return "bg-gray-400";
-    case "sent":
+    case "issued":
       return "bg-blue-500";
     case "paid":
       return "bg-green-500";
@@ -47,7 +47,7 @@ export function formatStatusBadgeClass(status: InvoiceStatus): string {
   switch (status) {
     case "draft":
       return "bg-gray-400/40 text-gray-700";
-    case "sent":
+    case "issued":
       return "bg-blue-400/40 text-blue-700";
     case "paid":
       return "bg-green-400/40 text-green-700";
@@ -71,7 +71,7 @@ export function formatStatusLabel(status: InvoiceStatus): string {
  *
  * Rule (matches the aggregate / cron logic in `lib/invoiceAggregates.ts`):
  *   - true if the invoice's stored status is `overdue`
- *   - OR if the invoice is `sent` AND its `dueDate` is strictly before `now`
+ *   - OR if the invoice is `issued` AND its `dueDate` is strictly before `now`
  *     (the daily overdue cron has not yet flipped it).
  *
  * Returns false for every other status — drafts and paid invoices never show a
@@ -83,7 +83,7 @@ export function shouldRenderDueDateRed(
   now: number,
 ): boolean {
   if (status === "overdue") return true;
-  if (status === "sent" && dueDate < now) return true;
+  if (status === "issued" && dueDate < now) return true;
   return false;
 }
 

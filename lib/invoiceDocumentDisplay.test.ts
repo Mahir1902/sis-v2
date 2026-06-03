@@ -39,10 +39,10 @@ describe("dueDateClassFor", () => {
     expect(dueDateClassFor("draft")).toBe("font-medium");
   });
 
-  it("returns the neutral utility for sent invoices", () => {
-    // 'sent' may visually become 'overdue' after the daily cron flips it, but
-    // until that happens the due date is rendered without red emphasis.
-    expect(dueDateClassFor("sent")).toBe("font-medium");
+  it("returns the neutral utility for issued invoices", () => {
+    // 'issued' may visually become 'overdue' after the daily cron flips it,
+    // but until that happens the due date is rendered without red emphasis.
+    expect(dueDateClassFor("issued")).toBe("font-medium");
   });
 
   it("returns the neutral utility for paid invoices", () => {
@@ -58,7 +58,7 @@ describe("dueDateClassFor", () => {
     // to add a colour rule for the new status.
     const statuses: InvoiceStatus[] = [
       "draft",
-      "sent",
+      "issued",
       "paid",
       "overdue",
       "voided",

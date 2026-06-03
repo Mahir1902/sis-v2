@@ -21,7 +21,7 @@ const ALL_YEARS = "__all__";
 export interface StatusCounts {
   all: number;
   draft: number;
-  sent: number;
+  issued: number;
   paid: number;
   overdue: number;
   voided: number;
@@ -49,7 +49,7 @@ interface Props {
 const STATUS_TABS: { key: InvoiceStatusFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "draft", label: "Draft" },
-  { key: "sent", label: "Sent" },
+  { key: "issued", label: "Issued" },
   { key: "overdue", label: "Overdue" },
   { key: "paid", label: "Paid" },
   { key: "voided", label: "Voided" },

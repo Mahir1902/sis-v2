@@ -15,7 +15,7 @@ const FUTURE = NOW + 7 * ONE_DAY_MS;
 type InvoiceFixture = {
   totalAmount: number;
   paidAmount: number;
-  status: "draft" | "sent" | "paid" | "overdue" | "voided";
+  status: "draft" | "issued" | "paid" | "overdue" | "voided";
   dueDate: number;
 };
 
@@ -32,7 +32,7 @@ describe("computeInvoiceAggregates", () => {
   it("sums totalInvoiced over all non-voided invoices regardless of status", () => {
     const invoices: InvoiceFixture[] = [
       { totalAmount: 1000, paidAmount: 0, status: "draft", dueDate: FUTURE },
-      { totalAmount: 500, paidAmount: 200, status: "sent", dueDate: FUTURE },
+      { totalAmount: 500, paidAmount: 200, status: "issued", dueDate: FUTURE },
       { totalAmount: 750, paidAmount: 750, status: "paid", dueDate: PAST },
     ];
     const result = computeInvoiceAggregates(invoices, NOW);
@@ -41,7 +41,7 @@ describe("computeInvoiceAggregates", () => {
 
   it("sums totalCollected over all non-voided invoices", () => {
     const invoices: InvoiceFixture[] = [
-      { totalAmount: 1000, paidAmount: 100, status: "sent", dueDate: FUTURE },
+      { totalAmount: 1000, paidAmount: 100, status: "issued", dueDate: FUTURE },
       { totalAmount: 500, paidAmount: 500, status: "paid", dueDate: PAST },
       { totalAmount: 200, paidAmount: 0, status: "draft", dueDate: FUTURE },
     ];
@@ -51,7 +51,7 @@ describe("computeInvoiceAggregates", () => {
 
   it("computes totalOutstanding as sum of (totalAmount - paidAmount) for invoices with positive balance", () => {
     const invoices: InvoiceFixture[] = [
-      { totalAmount: 1000, paidAmount: 200, status: "sent", dueDate: FUTURE }, // 800
+      { totalAmount: 1000, paidAmount: 200, status: "issued", dueDate: FUTURE }, // 800
       { totalAmount: 500, paidAmount: 500, status: "paid", dueDate: PAST }, // 0
       { totalAmount: 300, paidAmount: 0, status: "draft", dueDate: FUTURE }, // 300
     ];
@@ -67,10 +67,10 @@ describe("computeInvoiceAggregates", () => {
     expect(result.totalOverdue).toBe(800);
   });
 
-  it("treats 'sent' invoices whose dueDate has passed as overdue (dynamic detection)", () => {
+  it("treats 'issued' invoices whose dueDate has passed as overdue (dynamic detection)", () => {
     const invoices: InvoiceFixture[] = [
-      { totalAmount: 1000, paidAmount: 100, status: "sent", dueDate: PAST }, // overdue: 900
-      { totalAmount: 500, paidAmount: 0, status: "sent", dueDate: FUTURE }, // not yet
+      { totalAmount: 1000, paidAmount: 100, status: "issued", dueDate: PAST }, // overdue: 900
+      { totalAmount: 500, paidAmount: 0, status: "issued", dueDate: FUTURE }, // not yet
     ];
     const result = computeInvoiceAggregates(invoices, NOW);
     expect(result.totalOverdue).toBe(900);
@@ -100,7 +100,7 @@ describe("computeInvoiceAggregates", () => {
 
   it("excludes voided invoices but includes the rest in a mixed set", () => {
     const invoices: InvoiceFixture[] = [
-      { totalAmount: 1000, paidAmount: 0, status: "sent", dueDate: PAST }, // overdue 1000
+      { totalAmount: 1000, paidAmount: 0, status: "issued", dueDate: PAST }, // overdue 1000
       { totalAmount: 500, paidAmount: 500, status: "paid", dueDate: PAST },
       { totalAmount: 300, paidAmount: 0, status: "draft", dueDate: FUTURE },
       { totalAmount: 9999, paidAmount: 0, status: "voided", dueDate: PAST }, // excluded
@@ -117,7 +117,7 @@ describe("computeInvoiceAggregates", () => {
       {
         totalAmount: 100.123,
         paidAmount: 10.456,
-        status: "sent",
+        status: "issued",
         dueDate: PAST,
       },
       { totalAmount: 50.789, paidAmount: 0, status: "draft", dueDate: FUTURE },
@@ -149,9 +149,9 @@ describe("computeInvoiceAggregates", () => {
     expect(result.totalOutstanding).toBe(0);
   });
 
-  it("handles a sent invoice whose dueDate equals now as NOT overdue (strict <)", () => {
+  it("handles an issued invoice whose dueDate equals now as NOT overdue (strict <)", () => {
     const invoices: InvoiceFixture[] = [
-      { totalAmount: 100, paidAmount: 0, status: "sent", dueDate: NOW },
+      { totalAmount: 100, paidAmount: 0, status: "issued", dueDate: NOW },
     ];
     const result = computeInvoiceAggregates(invoices, NOW);
     expect(result.totalOverdue).toBe(0);
@@ -205,18 +205,22 @@ describe("matchesInvoiceSearch", () => {
 });
 
 describe("isInvoiceOverdue", () => {
-  it("returns true when status is 'sent' AND dueDate is strictly before now", () => {
-    expect(isInvoiceOverdue({ status: "sent", dueDate: PAST }, NOW)).toBe(true);
+  it("returns true when status is 'issued' AND dueDate is strictly before now", () => {
+    expect(isInvoiceOverdue({ status: "issued", dueDate: PAST }, NOW)).toBe(
+      true,
+    );
   });
 
-  it("returns false when status is 'sent' and dueDate is in the future", () => {
-    expect(isInvoiceOverdue({ status: "sent", dueDate: FUTURE }, NOW)).toBe(
+  it("returns false when status is 'issued' and dueDate is in the future", () => {
+    expect(isInvoiceOverdue({ status: "issued", dueDate: FUTURE }, NOW)).toBe(
       false,
     );
   });
 
-  it("returns false when status is 'sent' and dueDate equals now (strict <)", () => {
-    expect(isInvoiceOverdue({ status: "sent", dueDate: NOW }, NOW)).toBe(false);
+  it("returns false when status is 'issued' and dueDate equals now (strict <)", () => {
+    expect(isInvoiceOverdue({ status: "issued", dueDate: NOW }, NOW)).toBe(
+      false,
+    );
   });
 
   it("returns false when status is 'paid' regardless of dueDate", () => {
@@ -231,7 +235,7 @@ describe("isInvoiceOverdue", () => {
     );
   });
 
-  it("returns false when status is 'overdue' (it is stored-overdue, not sent-becoming-overdue)", () => {
+  it("returns false when status is 'overdue' (it is stored-overdue, not issued-becoming-overdue)", () => {
     expect(isInvoiceOverdue({ status: "overdue", dueDate: PAST }, NOW)).toBe(
       false,
     );

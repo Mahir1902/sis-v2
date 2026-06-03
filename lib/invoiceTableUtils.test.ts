@@ -18,8 +18,8 @@ describe("formatStatusDotClass", () => {
     expect(cls).toContain("gray");
   });
 
-  it("returns blue for sent", () => {
-    const cls = formatStatusDotClass("sent");
+  it("returns blue for issued", () => {
+    const cls = formatStatusDotClass("issued");
     expect(cls).toContain("blue");
   });
 
@@ -52,8 +52,8 @@ describe("formatStatusBadgeClass", () => {
     expect(cls).toContain("text-green-700");
   });
 
-  it("returns the project palette blue class for sent", () => {
-    const cls = formatStatusBadgeClass("sent");
+  it("returns the project palette blue class for issued", () => {
+    const cls = formatStatusBadgeClass("issued");
     expect(cls).toContain("bg-blue-400/40");
     expect(cls).toContain("text-blue-700");
   });
@@ -87,16 +87,16 @@ describe("shouldRenderDueDateRed", () => {
     expect(shouldRenderDueDateRed("overdue", PAST, NOW)).toBe(true);
   });
 
-  it("returns true when status is sent AND dueDate is strictly past", () => {
-    expect(shouldRenderDueDateRed("sent", PAST, NOW)).toBe(true);
+  it("returns true when status is issued AND dueDate is strictly past", () => {
+    expect(shouldRenderDueDateRed("issued", PAST, NOW)).toBe(true);
   });
 
-  it("returns false when status is sent and dueDate is in the future", () => {
-    expect(shouldRenderDueDateRed("sent", FUTURE, NOW)).toBe(false);
+  it("returns false when status is issued and dueDate is in the future", () => {
+    expect(shouldRenderDueDateRed("issued", FUTURE, NOW)).toBe(false);
   });
 
-  it("returns false when status is sent and dueDate equals now (strict <)", () => {
-    expect(shouldRenderDueDateRed("sent", NOW, NOW)).toBe(false);
+  it("returns false when status is issued and dueDate equals now (strict <)", () => {
+    expect(shouldRenderDueDateRed("issued", NOW, NOW)).toBe(false);
   });
 
   it("returns false for draft, even when dueDate is in the past", () => {
@@ -125,8 +125,8 @@ describe("shouldDisableVoid", () => {
     expect(shouldDisableVoid("draft")).toBe(false);
   });
 
-  it("returns false for sent invoices", () => {
-    expect(shouldDisableVoid("sent")).toBe(false);
+  it("returns false for issued invoices", () => {
+    expect(shouldDisableVoid("issued")).toBe(false);
   });
 
   it("returns false for overdue invoices", () => {
