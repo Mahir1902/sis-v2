@@ -1242,7 +1242,7 @@ Single rip-out slice that removes every artefact of the Invoice domain (supersed
 ---
 
 ## ▶ HANDOFF TO ISSUE #36 (Phase 1 — Schema)
-**Status**: NOT STARTED. Pick up here next session.
+**Status**: COMPLETE — see "Issue #36 — Phase 1: Schema (2026-06-09)" below for what shipped.
 **GitHub**: https://github.com/Mahir1902/sis-v2/issues/36 (assumed; verify number)
 **Read first** (still authoritative, do not re-litigate):
 - `docs/adr/0002-receipt-first-billing-no-invoicing.md`
@@ -1289,3 +1289,82 @@ Single schema PR. Convex deploy must pass; no business logic changes. Sub-tasks 
 - ADR-0002 + ADR-0003 are the contract; do not re-litigate the receipt-first model or the three-mutation correction model (edit / void / void-and-reissue).
 - CLAUDE.md agent workflow stays in force: Planning → Devil's Advocate → Backend → Backend Review for every sub-task. No code lands without review.
 - Use the `convex-migration-helper` skill — it's the only way to do widen-migrate-narrow safely.
+
+---
+
+## Issue #36 — Phase 1: Schema (2026-06-09)
+
+**Status**: COMPLETE — backend reviewed and approved.
+**Active Agent**: CODING AGENT (orchestrator) → BACKEND AGENT → BACKEND REVIEW AGENT
+**GitHub**: https://github.com/Mahir1902/sis-v2/issues/36
+**Branch**: `feature/money-receipts`
+**Contract**: ADR-0002, ADR-0003, `plans/HANDOFF_issue_36.md`, the Issue #36 block above.
+
+### Summary
+Two widen-migrate-narrow cycles + two additive tables. Pure schema reshape (with the minimum runtime cleanup required to keep `tsc` and `npx convex deploy` green). No new mutations, no new queries, no new UI features. The receipt-first billing model (ADR-0002) is now schema-realized: Sessions are pure transaction-log primitives, `studentFees.status` is two-state, and `receipts` + `receiptCounters` are in place for Phase 2 to wire up.
+
+### Sub-tasks
+- [x] 36-1 Audit `"partial"` and `invoiceNumber` references across the repo (9 + 8 callsites identified)
+- [x] 36-2 TDD: `lib/migratePartialStatus.ts` + `.test.ts` (7 cases, all green)
+- [x] 36-3 Widen `feeCollectionSessions.invoiceNumber` to optional; deploy
+- [x] 36-4 Run `migrations:runStripFeeCollectionInvoiceNumber` on dev — processed 9 rows
+- [x] 36-5 Run `migrations:runMigratePartialStudentFees` on dev — scanned 664 rows, 0 partials existed (no-op)
+- [x] 36-6 Narrow: drop `invoiceNumber` field + `by_invoice` index; delete `generateInvoiceNumber()` helper + test
+- [x] 36-7 Narrow: drop `v.literal("partial")` from `studentFees.status`; delete all partial branches
+- [x] 36-8 Add `receipts` + `receiptCounters` tables with snapshot fields, cross-link fields, and indexes
+- [x] 36-9 BACKEND REVIEW — APPROVED, 10/10 checklist items pass, no required changes
+- [x] 36-10 Verify: `npx convex dev --once`, `npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run build`, `npm run test:e2e` — all green
+
+### Backend Review (2026-06-09)
+**Verdict: APPROVED**, 10/10 items pass.
+- ADR-0002 snapshot exhaustiveness: every parent-visible PDF field is in `receipts.lineItems` or top-level snapshot columns; no live joins needed for the document body.
+- ADR-0003 cross-link optionality: both `supersedes` and `supersededBy` correctly `v.optional` — required would forbid the standalone-void path.
+- Counter race safety: `receiptCounters.{year}` doc supports single-mutation read-write (Phase 2's wiring problem, not Phase 1's).
+- Indexes: 4 on `receipts` cover all ADR-documented Phase 2/3 reads; `by_supersedes` correctly deferred.
+- Pure helper: `resolvePartialStatus` matches handoff rule verbatim; 7 unit tests cover every branch.
+- Removed partial / invoiceNumber branches: zero runtime writes of either remain (greps clean).
+- Migration removal pattern: matches issue #33 doc-block structure; recoverable from git for prod re-run.
+- `feeTransactions.createTransaction` partial guard: rejects with an ADR-citing error; no UI caller exists.
+- No leftover `Id<"invoices">` references.
+
+Minor non-blocking observations: `computeNewFeeStatus`'s `_currentPaidAmount` is unused (future cleanup); `receiptCounters.nextNumber` is `v.float64()` per Convex conventions (Phase 2 must use integer arithmetic); `receipts.lineItems` does not carry reverse-pointers to `studentFees` (correct per ADR-0002).
+
+### Decisions made (log)
+1. **Widen step bundled with new tables.** Step A (`invoiceNumber → optional`) and the additive `receipts` + `receiptCounters` tables shipped in the same Convex deploy, since additive table creation does not need a narrow phase and bundling kept the deploy count to 2 (widen vs. narrow) instead of 3+.
+2. **Migration code removed after running**, mirroring the issue #33 `renameInvoiceStatusSentToIssued` pattern. The narrowed schema no longer permits `invoiceNumber` or `"partial"` as literal patch targets — leaving the migrations in would break `tsc`. The doc-block at `convex/migrations.ts:114-191` carries the full re-run recipe for prod.
+3. **`computeNewFeeStatus` throws on partial** rather than returning a third value. This makes the receipt-first invariant ("payments clear the full balance") enforceable at the type level — any caller that tries to compute a partial status now fails loudly, not silently.
+4. **`feeTransactions.createTransaction` rejects partial payments** with a new `args.amount < fee.balance` guard. Per ADR-0002 the receipt-first model has no partial-payment concept; the mutation now requires the full balance be paid in one transaction.
+5. **`studentDiscounts.applyDiscount` collapses to two-way status** (`paid` if balance ≤ 0 else `unpaid`). The `paidAmount > 0 && balance > 0` combo that produced `partial` is now an impossible state (the only way to reach it was via a partial payment, which the rest of the system rejects).
+6. **Admin transactions UI lost the "Invoice #" column** (`columns.tsx`, `SessionDetailSheet.tsx`'s monospace SheetTitle replaced with "Fee Collection"). The Receipt number — which replaces invoice number as the parent-facing identifier — will appear in this UI in Phase 3 once `listReceipts` exists and the Receipt PDF is wired.
+7. **CollectFees toast no longer references invoice number.** The toast now says `Payment recorded. Total: ৳N` — the Receipt number will go back into the toast in Phase 2 once `collectFees` is refactored to atomically issue the Receipt.
+
+### Migration runs (dev deployment hushed-bass-123.convex.cloud)
+- `migrations:runStripFeeCollectionInvoiceNumber` — `processed: 9`, finished in one batch. All 9 dev sessions stripped of `invoiceNumber`.
+- `migrations:runMigratePartialStudentFees` — `processed: 664`, status `success`. No `partial` rows existed in dev; the migration scanned every row and patched 0 (idempotent no-op path).
+
+### Files changed
+- **Created**: `lib/migratePartialStatus.ts`, `lib/migratePartialStatus.test.ts` (7 tests).
+- **Schema**: `convex/schema.ts` — dropped `feeCollectionSessions.invoiceNumber` + `by_invoice` index; narrowed `studentFees.status` to `("unpaid","paid")`; added `receipts` (10 columns + 4 indexes) and `receiptCounters` (2 columns + 1 index).
+- **Migrations**: `convex/migrations.ts` — temporarily added `stripFeeCollectionInvoiceNumber` + `migratePartialStudentFees`, ran them, then removed both (replaced with a 78-line removal doc-block carrying the prod re-run recipe).
+- **Convex runtime**: `convex/feeCollectionSessions.ts` (dropped `generateInvoiceNumber` import + call + field + auditLog metadata + return value); `convex/studentFees.ts` (two arg validators narrowed); `convex/feeTransactions.ts` (partial-payment guard + status collapse); `convex/studentDiscounts.ts` (status collapse); `convex/transactionLog.ts` (3 query projections de-`invoiceNumber`-ed).
+- **Lib**: `lib/feeCollectionUtils.ts` (`FeeStatus` narrowed, `computeNewFeeStatus` collapsed + throws on partial, `generateInvoiceNumber` deleted); `lib/feeCollectionUtils.test.ts` (partial cases dropped/swapped, `generateInvoiceNumber` test block deleted); `lib/csvExport.ts` (CSV header/shape/builder dropped `invoiceNumber`); `lib/csvExport.test.ts` (fixtures + column-index assertions adjusted).
+- **Frontend**: `app/(dashboard)/admin/transactions/columns.tsx` (column dropped); `_components/SessionDetailSheet.tsx` (title + prop shape); `app/(dashboard)/students/[studentId]/_components/CollectFeesDialog.tsx` (toast); `_components/FeesTab.tsx`, `_components/FeeDetailDialog.tsx`, `app/(dashboard)/student-fees/page.tsx` (partial CSS entry + status logic).
+
+### Verification (all green)
+- `npx convex dev --once` — schema valid, functions ready (8.06s widen, 6.82s narrow).
+- `npx tsc --noEmit` — clean.
+- `npm run lint` (Biome) — 178 files, no fixes applied.
+- `npm test` (vitest) — 13 files, 143/143 passing.
+- `npm run build` — clean, 15 routes (was 16; `/invoices` already gone since Issue #35).
+- `npm run test:e2e` (Playwright) — 7 passed / 15 skipped / 0 failed (same baseline as Issue #35; the 15 skipped require auth provisioning).
+- `graphify update .` — graph refreshed.
+
+### Hand-off to Phase 2 (Issue #37+)
+- The `collectFees` mutation in `convex/feeCollectionSessions.ts` must be refactored to:
+  1. Read-and-write `receiptCounters.{year}` atomically inside the mutation to allocate `RCP-YYYY-NNNNN`.
+  2. Insert the matching `receipts` row in the same mutation, snapshotting every PDF-renderable field from the live student / fees / collector at write time.
+  3. Re-add the Receipt number to the success toast (already wired to read `result.totalAmount` only — extend to read `result.receiptNumber` after the mutation returns it).
+- The Phase 2 author should use `lib/receiptNumber.ts` (does not yet exist — TDD candidate) for the BD-year format helper. The counter logic is small enough to inline but the format string is testable.
+- The three correction mutations (`editReceipt`, `voidReceipt`, `voidAndReissueReceipt`) per ADR-0003 are Phase 2 scope. `voidAndReissueReceipt` sets both `supersedes` and `supersededBy` atomically in one mutation.
+- Phase 3 wires the UI: `/receipts` list page, `ReceiptDocument.tsx`, the three action buttons on the Receipt sheet, the WhatsApp + Email compose launchers (carryover from `lib/composeEmailUrl.ts` already in place).
+

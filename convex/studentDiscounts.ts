@@ -33,10 +33,11 @@ export const applyDiscount = mutation({
     }
     discountAmount = Math.min(discountAmount, fee.balance);
 
-    // Update fee balance
+    // Update fee balance. Partial payments are not allowed (ADR-0002), so
+    // `paidAmount > 0` with `newBalance > 0` is an impossible state — the
+    // status collapses to a two-way split.
     const newBalance = fee.balance - discountAmount;
-    const newStatus =
-      newBalance <= 0 ? "paid" : fee.paidAmount > 0 ? "partial" : "unpaid";
+    const newStatus = newBalance <= 0 ? ("paid" as const) : ("unpaid" as const);
 
     const updatedDiscounts = [
       ...(fee.appliedDiscounts ?? []),

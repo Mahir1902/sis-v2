@@ -12,11 +12,7 @@ export const createStudentFee = mutation({
     originalAmount: v.float64(),
     paidAmount: v.float64(),
     balance: v.float64(),
-    status: v.union(
-      v.literal("unpaid"),
-      v.literal("partial"),
-      v.literal("paid"),
-    ),
+    status: v.union(v.literal("unpaid"), v.literal("paid")),
     dueDate: v.optional(v.float64()),
     billingPeriod: v.optional(v.string()),
   },
@@ -135,11 +131,7 @@ export const updateStudentFee = mutation({
     feeId: v.id("studentFees"),
     paidAmount: v.float64(),
     balance: v.float64(),
-    status: v.union(
-      v.literal("unpaid"),
-      v.literal("partial"),
-      v.literal("paid"),
-    ),
+    status: v.union(v.literal("unpaid"), v.literal("paid")),
     paymentDetails: v.array(
       v.object({
         paymentId: v.id("feeTransactions"),

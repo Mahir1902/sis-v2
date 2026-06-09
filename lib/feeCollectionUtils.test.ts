@@ -4,7 +4,6 @@ import {
   computeNewFeeStatus,
   filterAssignableStructures,
   generateBillingPeriods,
-  generateInvoiceNumber,
   generateTransactionReference,
   getAvailableMonths,
   getSequentialRemovalIds,
@@ -21,16 +20,20 @@ describe("computeNewFeeStatus", () => {
     expect(computeNewFeeStatus(3000, 2000, 3000)).toBe("paid");
   });
 
-  it("returns 'partial' when payment is less than balance", () => {
-    expect(computeNewFeeStatus(5000, 0, 3000)).toBe("partial");
+  it("throws when payment is less than balance (partial no longer supported)", () => {
+    expect(() => computeNewFeeStatus(5000, 0, 3000)).toThrow(
+      /partial payments are not supported/i,
+    );
   });
 
-  it("returns 'partial' when there was prior paid amount and balance remains", () => {
-    expect(computeNewFeeStatus(3000, 2000, 1000)).toBe("partial");
+  it("returns 'paid' when prior paid + payment covers full balance", () => {
+    expect(computeNewFeeStatus(1000, 2000, 1000)).toBe("paid");
   });
 
-  it("returns 'unpaid' when payment is zero and no prior paid amount", () => {
-    expect(computeNewFeeStatus(5000, 0, 0)).toBe("unpaid");
+  it("throws when payment is zero", () => {
+    expect(() => computeNewFeeStatus(5000, 0, 0)).toThrow(
+      /partial payments are not supported/i,
+    );
   });
 });
 
@@ -49,17 +52,6 @@ describe("computeGrandTotal", () => {
 
   it("handles decimal amounts", () => {
     expect(computeGrandTotal([100.5, 200.5])).toBeCloseTo(301);
-  });
-});
-
-describe("generateInvoiceNumber", () => {
-  it("produces INV- prefixed string", () => {
-    const ts = 1714742400000;
-    expect(generateInvoiceNumber(ts)).toBe("INV-1714742400000");
-  });
-
-  it("uses exact timestamp value", () => {
-    expect(generateInvoiceNumber(12345)).toBe("INV-12345");
   });
 });
 

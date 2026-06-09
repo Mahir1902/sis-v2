@@ -29,6 +29,12 @@ export const createTransaction = mutation({
       throw new Error("Payment amount must be greater than 0");
     if (args.amount > fee.balance)
       throw new Error("Payment amount exceeds outstanding balance");
+    // ADR-0002 receipt-first model: partial payments are not supported. A
+    // payment must clear the outstanding balance in full.
+    if (args.amount < fee.balance)
+      throw new Error(
+        "Partial payments are not supported; collect the full outstanding balance.",
+      );
 
     const referenceNumber = `TXN-${Date.now()}`;
 
@@ -44,11 +50,11 @@ export const createTransaction = mutation({
       remarks: args.remarks,
     });
 
-    // Update student fee atomically
+    // Update student fee atomically. By the partial-payment guard above,
+    // amount === fee.balance, so newBalance is always 0 and status is "paid".
     const newPaidAmount = fee.paidAmount + args.amount;
     const newBalance = fee.balance - args.amount;
-    const newStatus =
-      newBalance <= 0 ? "paid" : newPaidAmount > 0 ? "partial" : "unpaid";
+    const newStatus = "paid" as const;
 
     const updatedPaymentDetails = [
       ...(fee.paymentDetails ?? []),

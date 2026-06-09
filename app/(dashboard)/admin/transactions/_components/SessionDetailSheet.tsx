@@ -62,7 +62,6 @@ function SessionDetailContent({
   lineItems,
 }: {
   session: {
-    invoiceNumber: string;
     transactionDate: number;
     status: "completed" | "voided";
     campus: string | null;
@@ -85,9 +84,7 @@ function SessionDetailContent({
     <>
       <SheetHeader className="border-b px-6 pb-4">
         <div className="flex items-center gap-3">
-          <SheetTitle className="font-mono text-lg">
-            {session.invoiceNumber}
-          </SheetTitle>
+          <SheetTitle className="text-lg">Fee Collection</SheetTitle>
           <Badge
             variant="secondary"
             className={getStatusBadgeStyle(session.status)}

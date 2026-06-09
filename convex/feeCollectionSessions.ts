@@ -2,7 +2,6 @@ import { v } from "convex/values";
 import {
   computeNewFeeStatus,
   generateBillingPeriods,
-  generateInvoiceNumber,
   generateTransactionReference,
   resolveFutureMonths,
 } from "../lib/feeCollectionUtils";
@@ -62,7 +61,6 @@ export const collectFees = mutation({
 
     const now = Date.now();
     const totalAmount = fees.reduce((sum, fee) => sum + fee.balance, 0);
-    const invoiceNumber = generateInvoiceNumber(now);
 
     const enrollment = await ctx.db
       .query("enrollments")
@@ -74,7 +72,6 @@ export const collectFees = mutation({
       .first();
 
     const sessionId = await ctx.db.insert("feeCollectionSessions", {
-      invoiceNumber,
       studentId: args.studentId,
       academicYear: student.academicYear,
       campus: enrollment?.campus ?? student.campus,
@@ -149,14 +146,13 @@ export const collectFees = mutation({
       entityId: sessionId,
       description: `Collected ${fees.length} fee(s) totaling ${totalAmount}`,
       metadata: {
-        invoiceNumber,
         feeCount: fees.length,
         totalAmount,
         paymentMode: args.paymentMode,
       },
     });
 
-    return { sessionId, invoiceNumber, totalAmount, transactions };
+    return { sessionId, totalAmount, transactions };
   },
 });
 

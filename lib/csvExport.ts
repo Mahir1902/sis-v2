@@ -28,7 +28,6 @@ export function generateCSVContent(
 /** Shape of a line-item row for CSV export. */
 export type CSVLineItemRow = {
   transactionDate: number;
-  invoiceNumber: string;
   studentName: string;
   studentNumber: string;
   campus: string | null;
@@ -42,7 +41,6 @@ export type CSVLineItemRow = {
 
 export const CSV_EXPORT_HEADERS = [
   "Date",
-  "Invoice #",
   "Student Name",
   "Admission #",
   "Campus",
@@ -68,14 +66,13 @@ function formatBillingPeriod(period: string | null): string {
 
 /**
  * Converts line-item rows into string arrays matching the CSV column order:
- * Date, Invoice #, Student Name, Admission #, Campus, Fee Name, Billing Period, Amount, Payment Mode, Status, Collected By
+ * Date, Student Name, Admission #, Campus, Fee Name, Billing Period, Amount, Payment Mode, Status, Collected By
  */
 export function buildTransactionCSVRows(
   lineItems: CSVLineItemRow[],
 ): string[][] {
   return lineItems.map((item) => [
     format(new Date(item.transactionDate), "yyyy-MM-dd"),
-    item.invoiceNumber,
     item.studentName,
     item.studentNumber,
     item.campus ?? "",

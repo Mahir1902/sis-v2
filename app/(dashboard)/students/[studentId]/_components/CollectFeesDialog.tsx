@@ -303,7 +303,7 @@ export function CollectFeesDialog({
         remarks: remarks || undefined,
       });
       toast.success(
-        `Payment recorded. Invoice: ${result.invoiceNumber}. Total: ৳${result.totalAmount.toLocaleString()}`,
+        `Payment recorded. Total: ৳${result.totalAmount.toLocaleString()}`,
       );
       onClose();
     } catch (err: unknown) {

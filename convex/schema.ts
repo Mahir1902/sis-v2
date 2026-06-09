@@ -254,13 +254,11 @@ export default defineSchema({
     endDate: v.optional(v.string()),
   }),
 
+  // Issue #36 (ADR-0002): `invoiceNumber` and its `by_invoice` index were
+  // dropped in the narrow step. Sessions are pure transaction-log primitives;
+  // parent-facing numbering lives only on `receipts.receiptNumber`. UIs that
+  // need the Receipt while viewing a Session join via `receipts.by_session`.
   feeCollectionSessions: defineTable({
-    // Issue #36 widen step: made optional in this commit so the migration
-    // that strips the field can run before the narrow step removes it
-    // entirely. The Receipt-first model (ADR-0002) makes Sessions a pure
-    // transaction-log primitive — parent-facing numbering lives on
-    // `receipts.receiptNumber`, not here.
-    invoiceNumber: v.optional(v.string()),
     studentId: v.id("students"),
     academicYear: v.id("academicYears"),
     campus: v.optional(v.id("campuses")),
@@ -280,7 +278,6 @@ export default defineSchema({
     standardLevelId: v.optional(v.id("standardLevels")),
   })
     .index("by_student", ["studentId"])
-    .index("by_invoice", ["invoiceNumber"])
     .index("by_academic_year", ["academicYear"])
     .index("by_academic_year_date", ["academicYear", "transactionDate"])
     .index("by_campus", ["campus"])
@@ -294,11 +291,10 @@ export default defineSchema({
     originalAmount: v.float64(),
     paidAmount: v.float64(),
     balance: v.float64(),
-    status: v.union(
-      v.literal("unpaid"),
-      v.literal("partial"),
-      v.literal("paid"),
-    ),
+    // Issue #36 (ADR-0002): `"partial"` was dropped. Any payment that does
+    // not fully cover the outstanding balance is rejected upstream; partial
+    // tracking now lives in the Receipt snapshot, not on the live fee row.
+    status: v.union(v.literal("unpaid"), v.literal("paid")),
     billingPeriod: v.optional(v.string()),
     appliedDiscounts: v.array(
       v.object({

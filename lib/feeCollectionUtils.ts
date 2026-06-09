@@ -3,26 +3,29 @@
  * Extracted from the Convex mutation so it can be unit-tested without a database.
  */
 
-export type FeeStatus = "paid" | "partial" | "unpaid";
+export type FeeStatus = "paid" | "unpaid";
 
+/**
+ * Determines the post-payment status. With Issue #36's narrowing
+ * (ADR-0002 receipt-first model), partial payments are no longer modelled
+ * as their own status: any payment that does not fully cover the balance
+ * is rejected upstream by `collectFees`, so reaching this function with a
+ * non-zero leftover balance is a logic bug.
+ */
 export function computeNewFeeStatus(
   currentBalance: number,
-  currentPaidAmount: number,
+  _currentPaidAmount: number,
   paymentAmount: number,
 ): FeeStatus {
   const newBalance = currentBalance - paymentAmount;
-  const newPaidAmount = currentPaidAmount + paymentAmount;
   if (newBalance <= 0) return "paid";
-  if (newPaidAmount > 0) return "partial";
-  return "unpaid";
+  throw new Error(
+    "Partial payments are not supported; collect the full outstanding balance.",
+  );
 }
 
 export function computeGrandTotal(balances: number[]): number {
   return balances.reduce((sum, b) => sum + b, 0);
-}
-
-export function generateInvoiceNumber(timestamp: number): string {
-  return `INV-${timestamp}`;
 }
 
 export function generateTransactionReference(
