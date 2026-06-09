@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# graphify (local knowledge graph cache — not committed)
+/graphify-out
+
 # debug
 npm-debug.log*
 yarn-debug.log*

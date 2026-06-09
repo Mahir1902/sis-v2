@@ -18,7 +18,6 @@ import type * as auth from "../auth.js";
 import type * as backfillEnrollments from "../backfillEnrollments.js";
 import type * as campus from "../campus.js";
 import type * as computedGrades from "../computedGrades.js";
-import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as discounts from "../discounts.js";
 import type * as enrollments from "../enrollments.js";
@@ -26,7 +25,6 @@ import type * as feeCollectionSessions from "../feeCollectionSessions.js";
 import type * as feeStructure from "../feeStructure.js";
 import type * as feeTransactions from "../feeTransactions.js";
 import type * as http from "../http.js";
-import type * as invoices from "../invoices.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as migrations from "../migrations.js";
 import type * as promotions from "../promotions.js";
@@ -59,7 +57,6 @@ declare const fullApi: ApiFromModules<{
   backfillEnrollments: typeof backfillEnrollments;
   campus: typeof campus;
   computedGrades: typeof computedGrades;
-  crons: typeof crons;
   dashboard: typeof dashboard;
   discounts: typeof discounts;
   enrollments: typeof enrollments;
@@ -67,7 +64,6 @@ declare const fullApi: ApiFromModules<{
   feeStructure: typeof feeStructure;
   feeTransactions: typeof feeTransactions;
   http: typeof http;
-  invoices: typeof invoices;
   "lib/permissions": typeof lib_permissions;
   migrations: typeof migrations;
   promotions: typeof promotions;
@@ -111,91 +107,5 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  migrations: {
-    lib: {
-      cancel: FunctionReference<
-        "mutation",
-        "internal",
-        { name: string },
-        {
-          batchSize?: number;
-          cursor?: string | null;
-          error?: string;
-          isDone: boolean;
-          latestEnd?: number;
-          latestStart: number;
-          name: string;
-          next?: Array<string>;
-          processed: number;
-          state: "inProgress" | "success" | "failed" | "canceled" | "unknown";
-        }
-      >;
-      cancelAll: FunctionReference<
-        "mutation",
-        "internal",
-        { sinceTs?: number },
-        Array<{
-          batchSize?: number;
-          cursor?: string | null;
-          error?: string;
-          isDone: boolean;
-          latestEnd?: number;
-          latestStart: number;
-          name: string;
-          next?: Array<string>;
-          processed: number;
-          state: "inProgress" | "success" | "failed" | "canceled" | "unknown";
-        }>
-      >;
-      clearAll: FunctionReference<
-        "mutation",
-        "internal",
-        { before?: number },
-        null
-      >;
-      getStatus: FunctionReference<
-        "query",
-        "internal",
-        { limit?: number; names?: Array<string> },
-        Array<{
-          batchSize?: number;
-          cursor?: string | null;
-          error?: string;
-          isDone: boolean;
-          latestEnd?: number;
-          latestStart: number;
-          name: string;
-          next?: Array<string>;
-          processed: number;
-          state: "inProgress" | "success" | "failed" | "canceled" | "unknown";
-        }>
-      >;
-      migrate: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          batchSize?: number;
-          cursor?: string | null;
-          dryRun: boolean;
-          fnHandle: string;
-          name: string;
-          next?: Array<{ fnHandle: string; name: string }>;
-          oneBatchOnly?: boolean;
-          reset?: boolean;
-        },
-        {
-          batchSize?: number;
-          cursor?: string | null;
-          error?: string;
-          isDone: boolean;
-          latestEnd?: number;
-          latestStart: number;
-          name: string;
-          next?: Array<string>;
-          processed: number;
-          state: "inProgress" | "success" | "failed" | "canceled" | "unknown";
-        }
-      >;
-    };
-  };
+  migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
 };

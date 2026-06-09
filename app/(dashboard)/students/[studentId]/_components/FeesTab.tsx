@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
-import { DollarSign, FileText, MoreHorizontal, Plus } from "lucide-react";
+import { DollarSign, MoreHorizontal, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -34,17 +34,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatBillingPeriod } from "@/lib/formatBillingPeriod";
 import { cn } from "@/lib/utils";
-import { GenerateInvoiceDialog } from "../../../invoices/_components/GenerateInvoiceDialog";
 import { AssignFeeDialog } from "./AssignFeeDialog";
 import { CollectFeesDialog } from "./CollectFeesDialog";
 import { FeeDetailDialog } from "./FeeDetailDialog";
@@ -63,7 +56,6 @@ export function FeesTab({ studentId }: FeesTabProps) {
   const [selectedFeeIds, setSelectedFeeIds] = useState<Set<string>>(new Set());
   const [collectDialogOpen, setCollectDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [generateInvoiceOpen, setGenerateInvoiceOpen] = useState(false);
   const [deleteFeeId, setDeleteFeeId] = useState<Id<"studentFees"> | null>(
     null,
   );
@@ -80,13 +72,6 @@ export function FeesTab({ studentId }: FeesTabProps) {
 
   const unpaidFees = useMemo(
     () => (fees ?? []).filter((f) => f.status !== "paid"),
-    [fees],
-  );
-
-  // Strictly `unpaid` fees — drives the Generate Invoice button's disabled
-  // state. `partial` fees are not invoiceable (they already had a collection).
-  const strictlyUnpaidCount = useMemo(
-    () => (fees ?? []).filter((f) => f.status === "unpaid").length,
     [fees],
   );
 
@@ -205,33 +190,9 @@ export function FeesTab({ studentId }: FeesTabProps) {
         ))}
       </div>
 
-      {/* Top action row — Generate Invoice + Assign Fee */}
+      {/* Top action row — Assign Fee */}
       {currentEnrollment?.academicYearDoc && (
         <div className="flex justify-end gap-2">
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* Wrap disabled button in a span so the tooltip still fires */}
-                <span tabIndex={strictlyUnpaidCount === 0 ? 0 : -1}>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setGenerateInvoiceOpen(true)}
-                    disabled={strictlyUnpaidCount === 0}
-                    className="border-school-green text-school-green hover:bg-school-green/5"
-                    aria-label="Generate invoice for this student"
-                  >
-                    <FileText className="mr-1.5 h-4 w-4" />
-                    Generate Invoice
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {strictlyUnpaidCount === 0 && (
-                <TooltipContent>No unpaid fees to invoice</TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-
           <Button
             size="sm"
             variant="outline"
@@ -427,16 +388,6 @@ export function FeesTab({ studentId }: FeesTabProps) {
             setDetailFeeId(null);
             openCollectForSingle(detailFee._id);
           }}
-        />
-      )}
-
-      {/* Generate Invoice dialog */}
-      {currentEnrollment?.academicYear && (
-        <GenerateInvoiceDialog
-          open={generateInvoiceOpen}
-          onOpenChange={setGenerateInvoiceOpen}
-          studentId={studentId}
-          academicYearId={currentEnrollment.academicYear}
         />
       )}
 

@@ -1187,3 +1187,105 @@ Schema foundation for #31 (Compose Email + Mark as Issued) and #30-bulk-issued. 
 ### Hand-off
 - Bulk Mark as Issued (issue #30) can re-use `markAsIssued` and `recordInvoicePayment` directly; the toast in `handleBulkSend` already references #30.
 - The Receipt email template's `paidAt` falls back to `Date.now()` because the invoice document does not carry a paid-at timestamp. If the school wants the actual receipt date, add a `paidAt` projection in `getInvoiceById` (latest `transactionDate` on the linked feeCollectionSessions) and read it here.
+
+---
+
+## Issue #35 — Phase 0: Money Receipts Rip-Out (2026-06-09)
+**Status**: COMPLETE — build, lint, vitest, Playwright all green
+**Active Agent**: CODING AGENT (single-slice rip-out, no new features)
+**GitHub**: https://github.com/Mahir1902/sis-v2/issues/35
+**Branch**: `feature/money-receipts` (rename was already done before this session)
+
+### Summary
+Single rip-out slice that removes every artefact of the Invoice domain (superseded by ADR-0002 Receipt-first model). No new tables, queries, mutations, or UI in this commit. After this slice the codebase is in a "billing has no document" state — `feeCollectionSessions` still carries `invoiceNumber` because Phase 1 (issue #36) will drop it as part of the schema reshape.
+
+### Files deleted (per HANDOFF_money_receipts.md "Delete (Invoice-domain only)" + necessary extensions)
+- **Backend**: `convex/invoices.ts`, `convex/crons.ts` (the cron only scheduled `internal.invoices.transitionOverdueInvoices`).
+- **Routes**: `app/(dashboard)/invoices/` (entire tree including `_components/` and `prototype/`).
+- **Lib helpers**: `lib/invoiceAggregates{,.test}.ts`, `lib/invoiceUtils{,.test}.ts`, `lib/invoiceTableUtils{,.test}.ts`, `lib/invoiceDocumentDisplay{,.test}.ts`, `lib/invoicePdfFilename{,.test}.ts`, `lib/invoicePdfLogo{,.test}.ts`, `lib/invoiceEmailTemplates{,.test}.ts`, `lib/invoiceBulkPdf{,.test}.ts`, `lib/bulkVoidInvoices{,.test}.ts`, `lib/distributeInvoicePayment{,.test}.ts`, `lib/validations/invoiceSchema.ts`.
+- **Hooks**: `hooks/use-generate-invoice-fees.ts`, `hooks/use-invoice-filters.ts`, `hooks/use-invoice-selection.ts`, `hooks/use-invoice-document.ts`, **plus** `hooks/use-invoice-pdf-download.tsx` and `hooks/use-invoice-preview.ts` (the two "carryover" hooks — see decision below).
+- **Shared components**: `components/shared/InvoiceDocument.tsx`, `components/shared/InvoicePDF.tsx`.
+- **Root artefacts**: `PRD_INVOICING.md` + 10 PR screenshot PNGs (invoices-mobile, assign-fee-{dialog,monthly}, collect-dialog-{expanded,future-months,grouped,single}, bulk-void-success, delete-confirmation, fee-dropdown-with-delete).
+
+### Files modified
+- `convex/schema.ts` — `invoices` table block (77 lines) already removed in the uncommitted working tree; the BillingContact comment now references ADR-0002 + "Receipt Compose Email launcher" instead of the Invoice/ADR-0001 phrasing. **`feeCollectionSessions.invoiceNumber` and the `by_invoice` index intentionally remain** — Phase 1 (#36) owns dropping them.
+- `app/(dashboard)/students/[studentId]/_components/FeesTab.tsx` — Generate Invoice button + dialog removed; now-dead `Tooltip*` imports and the `strictlyUnpaidCount` memo deleted; `FileText` icon import dropped. The "partial" status branch is untouched here (Phase 1 will narrow `studentFees.status`).
+- `components/layout/Sidebar.tsx` — `/invoices` nav entry + `FileText` icon import removed.
+- `biome.json` — replaced now-dead `!app/(dashboard)/invoices/prototype` ignore with `!graphify-out` (new local tooling output added on this branch).
+- `.gitignore` — added `/graphify-out` so the local knowledge-graph cache stays out of commits.
+- `.claude/settings.json` — biome auto-format applied (trailing newline only).
+
+### Decisions made (log)
+1. **Carryover PDF hooks DELETED**, not preserved. HANDOFF_money_receipts.md said `use-invoice-pdf-download.tsx` and `use-invoice-preview.ts` are "renamed in slice 3, not here." That guidance is internally inconsistent with the acceptance criterion *"build passes"*: both hooks reference `Id<"invoices">` (the table type removed in this slice) and `use-invoice-pdf-download` additionally imports from `lib/invoiceBulkPdf`, `lib/invoicePdfFilename`, `lib/invoicePdfLogo` (all on the delete list). Three options were considered:
+   - (a) Keep them untouched → build fails. Rejected — violates the issue's "build passes" criterion.
+   - (b) Preserve their lib dependencies → leaves dead invoice-domain code on the branch and contradicts the explicit delete list. Rejected.
+   - (c) Delete them; slice 3 (frontend phase of Money Receipts) will write fresh `use-receipt-pdf-download` + `use-receipt-preview` from scratch. **Chosen.**
+   Slice 3 still has `lib/composeEmailUrl.ts`, `lib/schoolBrand.ts`, `lib/resolveBillingContact.ts`, `lib/currency.ts`, `lib/dateFormat.ts`, `lib/applyBillingContactBackfill.ts` and both logo assets as the actual reusable substrate — the deleted hooks were Invoice-specific glue, not generic primitives.
+2. **`convex/crons.ts` DELETED.** Not on the explicit delete list, but its only entry scheduled `internal.invoices.transitionOverdueInvoices` (deleted). ADR-0002 explicitly rejects "stored overdue status with a cron", so the file has no future purpose. User-authorised inline.
+3. **`components/shared/InvoiceDocument.tsx` + `InvoicePDF.tsx` DELETED.** Not on the explicit delete list but consumed only by deleted files (`hooks/use-invoice-pdf-download.tsx`, `app/(dashboard)/invoices/_components/InvoicePreviewSheet.tsx`, the prototype variants). Slice 3 will introduce `ReceiptDocument.tsx` per the second handoff.
+4. **`graphify-out/` ignored.** Added during this session as local tooling output; not relevant to git history. Suppressed at both `.gitignore` and `biome.json` to keep `npm run lint` clean.
+
+### Verification (all green)
+- `npm run build` — 16 routes compile, TypeScript clean, no `/invoices` route remains.
+- `npm run lint` — 177 files checked, 0 errors.
+- `npm test` (vitest) — 12 files, 138 tests, 0 failures. (Compare to pre-rip-out 22 files / 269 tests — the deleted invoice helper suites are responsible for the delta.)
+- `npm run test:e2e` (Playwright) — 22 tests, 7 passed, 15 skipped (the skipped ones require an authenticated session that the headless run doesn't provision; same skip count as before the rip-out), 0 failed. Smoke spec passes 6/6.
+
+### Acceptance criteria (issue #35)
+- [x] Branch renamed to `feature/money-receipts` (already done pre-session)
+- [x] Single commit removes every file from HANDOFF "Delete (Invoice-domain only)"
+- [x] `convex/schema.ts` has no `invoices` table and no `invoiceId` on `studentFees` (the table was already removed in the uncommitted working tree; `studentFees` never carried `invoiceId` — verified by grep)
+- [x] Carryover files (`lib/composeEmailUrl.ts`, `lib/currency.ts`, `lib/dateFormat.ts`, `lib/schoolBrand.ts`, `lib/resolveBillingContact.ts`, `lib/applyBillingContactBackfill.ts`, BillingContact fields on students, BillingContact code in `convex/students.ts`, both logo assets) present and untouched
+- [x] `npm run build` passes
+- [x] `npm run lint` passes
+
+---
+
+## ▶ HANDOFF TO ISSUE #36 (Phase 1 — Schema)
+**Status**: NOT STARTED. Pick up here next session.
+**GitHub**: https://github.com/Mahir1902/sis-v2/issues/36 (assumed; verify number)
+**Read first** (still authoritative, do not re-litigate):
+- `docs/adr/0002-receipt-first-billing-no-invoicing.md`
+- `docs/adr/0003-receipt-corrections-edit-void-reissue.md`
+- `CONTEXT.md` (Receipt, Overdue Fee, WhatsApp Reminder, Compose Email, Fee Collection Session, Student Fee, Billing Contact entries)
+- `plans/HANDOFF_money_receipts.md` Phase 1 section
+- `plans/HANDOFF_money_receipts_implementation.md` decisions 1–4 (schema additions/changes)
+
+### Phase 1 scope (do exactly this — no backend mutation or UI work)
+Single schema PR. Convex deploy must pass; no business logic changes. Sub-tasks for the next session:
+
+1. **Add `receipts` table** to `convex/schema.ts` per decision 1 of the second handoff. Fields (verify against the handoff if anything below is ambiguous):
+   - Live references: `studentId: v.id("students")`, `sessionId: v.id("feeCollectionSessions")`, `collectedBy: v.id("users")`.
+   - Identity + status: `receiptNumber: v.string()` (format `RCP-YYYY-NNNNN`), `status: v.union(v.literal("issued"), v.literal("voided"))`, `totalAmount: v.float64()`, `paymentMethod` (union mirroring `feeCollectionSessions.paymentMode`), `paymentDate: v.float64()`, `issuedAt: v.float64()`, `voidedAt: v.optional(v.float64())`, `voidedBy: v.optional(v.id("users"))`.
+   - **Snapshot fields** (frozen at issue time — every renderable field on the PDF):
+     - `payerName: v.string()`
+     - `payerRole: v.union(v.literal("father"), v.literal("mother"), v.literal("guardian"))`
+     - `studentNameSnapshot: v.string()`
+     - `studentNumberSnapshot: v.string()`
+     - `issuerName: v.string()`
+     - `lineItems: v.array(v.object({ feeStructureName: v.string(), billingPeriod: v.optional(v.string()), originalAmount: v.float64(), discountAmount: v.float64(), paidAmount: v.float64() }))`
+     - `remarks: v.optional(v.string())`
+   - **Cross-links** (re-issue chain): `supersedes: v.optional(v.id("receipts"))`, `supersededBy: v.optional(v.id("receipts"))`.
+   - Indexes: `by_student ["studentId"]`, `by_session ["sessionId"]` (unique by construction — one Receipt per Session), `by_receipt_number ["receiptNumber"]`, `by_status_and_date ["status", "paymentDate"]`. Consider `by_supersedes ["supersedes"]` only if performance audit shows the re-issue chain query needs it.
+2. **Add `receiptCounters` table** — one doc per year. Shape: `{ year: v.number(), nextNumber: v.number() }`. Index: `by_year ["year"]`. (Decision 4.)
+3. **Drop `feeCollectionSessions.invoiceNumber` and the `by_invoice` index** from `convex/schema.ts`. This requires a widen-migrate-narrow cycle because existing rows in dev carry the field:
+   - Step A (widen): make `invoiceNumber` optional in the schema, deploy.
+   - Step B (migrate): write a Convex migration (`convex/migrations.ts`) that strips the field from every row. Use the `@convex-dev/migrations` component (already wired in `convex/migrations.ts`).
+   - Step C (narrow): remove the field + `by_invoice` index entirely, deploy.
+   The same migrations file already contains a worked example of this pattern (the commented-out `renameInvoiceStatusSentToIssued` block). Follow it. Also delete `lib/feeCollectionUtils.ts`'s `generateInvoiceNumber()` helper as part of step C (decision 2).
+4. **Narrow `studentFees.status`** from `("unpaid","partial","paid")` → `("unpaid","paid")` (decision 3). Same widen-migrate-narrow:
+   - Step A (widen): nothing — the union already accepts all three.
+   - Step B (migrate): a migration that flips every `partial` row to either `unpaid` or `paid` based on whether `paidAmount >= originalAmount - sum(appliedDiscounts.amount)`. Verify with the user / a real query whether any `partial` rows exist in prod first; in dev there should be zero. If zero, the migration is a no-op and you proceed straight to step C.
+   - Step C (narrow): remove `v.literal("partial")` from the union. Then audit every reader: `lib/feeCollectionUtils.ts` (`FeeStatus` type, `computeNewFeeStatus()` — collapse to "if paid ≥ balance return `paid`, else throw"), the `partial` styling rule in `app/(dashboard)/students/[studentId]/_components/FeesTab.tsx:55-59` (delete the `partial` entry), and any backend query that branches on `partial`. **Do not coalesce** — delete the `partial` branches outright.
+5. **DO NOT** add `cancelled` to `studentFees.status` (decision 3) and **do not** introduce any UI changes — that's Phase 3.
+
+### Devil's Advocate questions to answer before approving Phase 1
+- What concurrent `collectFees` calls in 2026 could race on the `receiptCounters` doc? Convex serialises mutations per document, so the counter read-then-write is safe; verify the counter doc is read **inside** the same mutation that creates the Receipt, never outside.
+- Are there any prod `feeCollectionSessions` rows where `invoiceNumber` is currently required-but-empty? If so the widen step fails. Check via the dashboard before deploying.
+- Does any frontend component currently render `partial` styling that isn't covered by the FeesTab `statusStyles` map? Grep for `"partial"` (case-sensitive, quoted) across the whole repo before approving step C.
+- Are there any audit-log entries (`auditLogs` table) that reference an action involving Invoices that should be migrated to the Receipt model? Probably not — the audit-log entity type was `"invoices"`, and per ADR-0002 the prior Invoice attempts never shipped to prod, so the audit log should be empty for those.
+
+### Carryover into Phase 1
+- ADR-0002 + ADR-0003 are the contract; do not re-litigate the receipt-first model or the three-mutation correction model (edit / void / void-and-reissue).
+- CLAUDE.md agent workflow stays in force: Planning → Devil's Advocate → Backend → Backend Review for every sub-task. No code lands without review.
+- Use the `convex-migration-helper` skill — it's the only way to do widen-migrate-narrow safely.

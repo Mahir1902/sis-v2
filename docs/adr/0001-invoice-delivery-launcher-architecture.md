@@ -1,9 +1,11 @@
 ---
-status: accepted
+status: superseded by ADR-0002
 date: 2026-06-03
 ---
 
 # Invoice delivery uses a launcher architecture, not backend sending
+
+> **Superseded 2026-06-15 by [ADR-0002](./0002-receipt-first-billing-no-invoicing.md).** The school does not issue invoices, so "Invoice delivery" no longer exists as a concept. The launcher pattern described below (write nothing on Compose, attest separately if at all) **survives unchanged** and now applies to Receipt PDFs and WhatsApp overdue reminders. See ADR-0002 for the current model; this document is preserved as historical context for the v2 model that ran 2026-06-03 → 2026-06-15.
 
 ## Context and decision
 

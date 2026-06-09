@@ -128,8 +128,8 @@ export default defineSchema({
     guardianNidNumber: v.string(),
     guardianPhoneNumber: v.string(),
 
-    // Billing contact emails — used by the invoice Compose Email launcher
-    // (ADR-0001). All three are optional because the school does not always
+    // Billing contact emails — used by the Receipt Compose Email launcher
+    // (ADR-0002). All three are optional because the school does not always
     // capture all three on intake; they are widened here ahead of the parent
     // intake form picking them up.
     fatherEmail: v.optional(v.string()),
@@ -468,83 +468,6 @@ export default defineSchema({
     .index("by_enrollment_semester", ["enrollmentId", "semester"])
     .index("by_student", ["studentId"])
     .index("by_subject", ["subjectId"]),
-
-  // ─── Invoices ─────────────────────────────────────────────────────────────
-
-  invoices: defineTable({
-    invoiceNumber: v.string(), // INV-YYYY-NNN — unique across the system
-    studentId: v.id("students"),
-    academicYearId: v.id("academicYears"),
-    standardLevelId: v.id("standardLevels"),
-    campusId: v.id("campuses"),
-
-    // Snapshot of the line items at invoice creation. Stored verbatim so
-    // historical invoices remain immutable even if the source studentFee or
-    // feeStructure changes afterwards.
-    lineItems: v.array(
-      v.object({
-        studentFeeId: v.id("studentFees"),
-        feeStructureId: v.id("feeStructure"),
-        description: v.string(),
-        amount: v.float64(),
-      }),
-    ),
-
-    totalAmount: v.float64(),
-    paidAmount: v.float64(), // initially 0
-    balance: v.float64(), // initially totalAmount
-
-    // Status union. `"issued"` is the canonical billing-state name (CONTEXT.md
-    // "Issued"); the legacy `"sent"` value was removed by the issue #33
-    // migration. See ADR-0001 for the launcher-architecture motivation.
-    status: v.union(
-      v.literal("draft"),
-      v.literal("issued"),
-      v.literal("paid"),
-      v.literal("overdue"),
-      v.literal("voided"),
-    ),
-
-    issueDate: v.float64(), // Unix ms
-    dueDate: v.float64(),
-    sentAt: v.optional(v.float64()),
-    sentBy: v.optional(v.id("users")),
-    notes: v.optional(v.string()),
-
-    // Delivery tracking (ADR-0001 launcher architecture). Both optional —
-    // populated by the Mark as Issued action recording the admin's
-    // self-reported attestation. Schema lives separately from invoice
-    // lifecycle status so a billing transition can never silently imply
-    // delivery success.
-    deliveryChannel: v.optional(
-      v.union(
-        v.literal("email"),
-        v.literal("in_person"),
-        v.literal("phone"),
-        v.literal("whatsapp"),
-        v.literal("other"),
-      ),
-    ),
-    deliveryStatus: v.optional(
-      v.union(v.literal("delivered"), v.literal("failed")),
-    ),
-
-    createdBy: v.id("users"),
-    createdAt: v.float64(),
-
-    voidedAt: v.optional(v.float64()),
-    voidedBy: v.optional(v.id("users")),
-    voidReason: v.optional(v.string()),
-  })
-    .index("by_student_year", ["studentId", "academicYearId"])
-    .index("by_status", ["status"])
-    .index("by_year_level", ["academicYearId", "standardLevelId"])
-    .index("by_invoice_number", ["invoiceNumber"])
-    .index("by_due_date", ["dueDate"])
-    // by_year is used during invoice number generation to scan the YYYY bucket
-    // for the current max sequence. Without this, the scan would degenerate to
-    // a full-table read.
-    .index("by_year", ["academicYearId"]),
 
   // ─── Audit Logs ───────────────────────────────────────────────────────────
 
