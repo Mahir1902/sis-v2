@@ -143,7 +143,7 @@ export const getTransactionLog = query({
       const student = studentMap.get(session.studentId);
       return {
         _id: session._id,
-        invoiceNumber: session.invoiceNumber,
+        invoiceNumber: session.invoiceNumber ?? "",
         transactionDate: session.transactionDate,
         campus: session.campus
           ? (campusNameMap.get(session.campus) ?? null)
@@ -236,7 +236,7 @@ export const getSessionDetail = query({
     return {
       session: {
         _id: session._id,
-        invoiceNumber: session.invoiceNumber,
+        invoiceNumber: session.invoiceNumber ?? "",
         transactionDate: session.transactionDate,
         campus: campusDoc?.name ?? null,
         totalAmount: session.totalAmount,
@@ -398,7 +398,7 @@ export const getTransactionLogExport = query({
         const structureId = feeToStructureId.get(txn.feeId);
         return {
           transactionDate: session.transactionDate,
-          invoiceNumber: session.invoiceNumber,
+          invoiceNumber: session.invoiceNumber ?? "",
           studentName: student?.name ?? "Unknown Student",
           studentNumber: student?.number ?? "—",
           campus: session.campus

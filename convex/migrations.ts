@@ -1,6 +1,7 @@
 import { Migrations } from "@convex-dev/migrations";
 import { v } from "convex/values";
 import { applyBillingContactBackfill } from "../lib/applyBillingContactBackfill";
+import { resolvePartialStatus } from "../lib/migratePartialStatus";
 import { components, internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import schema from "./schema";
@@ -110,6 +111,76 @@ export const runBackfillPrimaryBillingContact = migrations.runner(
 // do not bypass it.
 //
 // See `docs/adr/0001-invoice-delivery-launcher-architecture.md` for context.
+
+// ─── Issue #36: widen → migrate → narrow ───────────────────────────────────
+//
+// Two cycles. Per HANDOFF_issue_36.md "Open landmines":
+//   1. `feeCollectionSessions.invoiceNumber` is being dropped because the
+//      Receipt-first model (ADR-0002) makes Sessions a pure transaction-log
+//      primitive. The narrow step (removing the field from the schema) fails
+//      if any row still carries the field, so we scrub every row first.
+//   2. `studentFees.status` is being narrowed from `("unpaid","partial",
+//      "paid")` to `("unpaid","paid")`. Each `partial` row gets flipped to
+//      `paid` (if paidAmount fully covers the discounted total) or `unpaid`
+//      (otherwise). See `lib/migratePartialStatus.ts` for the decision rule.
+
+/**
+ * Strips the legacy `invoiceNumber` field from every `feeCollectionSessions`
+ * row. Runs as part of the Issue #36 widen-migrate-narrow cycle that drops
+ * the field entirely. Idempotent — rows already missing the field are no-ops.
+ *
+ * Run via:
+ *   npx convex run migrations:runStripFeeCollectionInvoiceNumber
+ *   npx convex run migrations:runStripFeeCollectionInvoiceNumber '{"dryRun":true}'
+ *
+ * After this migration succeeds on every deployment that carried the
+ * field, the narrow step (removing `invoiceNumber` + `by_invoice` from
+ * `convex/schema.ts`) will deploy cleanly.
+ *
+ * NOTE: This migration is intended to be REMOVED after the narrow step,
+ * because the narrowed schema no longer permits the `invoiceNumber` field
+ * in patches. To re-run on a prod deployment that still has the field,
+ * restore from git history via the procedure documented for the issue-#33
+ * rename migration.
+ */
+export const stripFeeCollectionInvoiceNumber = migrations.define({
+  table: "feeCollectionSessions",
+  migrateOne: (_ctx, session) => {
+    if (session.invoiceNumber === undefined) return; // idempotent
+    return { invoiceNumber: undefined };
+  },
+});
+
+export const runStripFeeCollectionInvoiceNumber = migrations.runner(
+  internal.migrations.stripFeeCollectionInvoiceNumber,
+);
+
+/**
+ * Flips every `studentFees.status === "partial"` row to either `"paid"` or
+ * `"unpaid"` based on the pure-function decision rule in
+ * `lib/migratePartialStatus.ts`. Idempotent — non-partial rows are no-ops.
+ *
+ * Decision rule (per HANDOFF_issue_36.md): a partial row becomes `paid` iff
+ * `paidAmount >= originalAmount - sum(appliedDiscounts.amount)`, else `unpaid`.
+ *
+ * Run via:
+ *   npx convex run migrations:runMigratePartialStudentFees
+ *   npx convex run migrations:runMigratePartialStudentFees '{"dryRun":true}'
+ *
+ * NOTE: Same lifecycle as `stripFeeCollectionInvoiceNumber` — intended to be
+ * removed after the narrow step that drops `"partial"` from the union.
+ */
+export const migratePartialStudentFees = migrations.define({
+  table: "studentFees",
+  migrateOne: (_ctx, fee) => {
+    if (fee.status !== "partial") return; // idempotent
+    return { status: resolvePartialStatus(fee) };
+  },
+});
+
+export const runMigratePartialStudentFees = migrations.runner(
+  internal.migrations.migratePartialStudentFees,
+);
 
 // ─── Legacy one-shot migrations (kept for history / re-runnability) ────────
 

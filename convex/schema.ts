@@ -255,7 +255,12 @@ export default defineSchema({
   }),
 
   feeCollectionSessions: defineTable({
-    invoiceNumber: v.string(),
+    // Issue #36 widen step: made optional in this commit so the migration
+    // that strips the field can run before the narrow step removes it
+    // entirely. The Receipt-first model (ADR-0002) makes Sessions a pure
+    // transaction-log primitive — parent-facing numbering lives on
+    // `receipts.receiptNumber`, not here.
+    invoiceNumber: v.optional(v.string()),
     studentId: v.id("students"),
     academicYear: v.id("academicYears"),
     campus: v.optional(v.id("campuses")),
@@ -361,6 +366,84 @@ export default defineSchema({
     paymentDate: v.string(),
     status: v.string(), // "active" | "fully_applied"
   }).index("by_student_year", ["studentId", "academicYear"]),
+
+  // ─── Receipts (ADR-0002 + ADR-0003) ──────────────────────────────────────
+  //
+  // Money Receipt — the school's only parent-facing billing document. Issued
+  // 1:1 with `feeCollectionSessions` at payment time. Every PDF-renderable
+  // field is snapshotted at issue time so future fee edits cannot mutate an
+  // old document (the parent's copy and the school's copy must always agree).
+  //
+  // Correction model (ADR-0003) is three mutations: `editReceipt` (cosmetic
+  // fields only), `voidReceipt` (no replacement), and `voidAndReissueReceipt`
+  // (financial correction — cross-links via `supersedes` / `supersededBy`).
+
+  receipts: defineTable({
+    // Live references (NOT snapshotted — these point at current records)
+    studentId: v.id("students"),
+    sessionId: v.id("feeCollectionSessions"), // 1:1 by construction
+    collectedBy: v.id("users"),
+
+    // Identity + lifecycle
+    receiptNumber: v.string(), // RCP-YYYY-NNNNN, calendar-year reset
+    status: v.union(v.literal("issued"), v.literal("voided")),
+    totalAmount: v.float64(),
+    paymentMethod: v.union(
+      v.literal("Cash"),
+      v.literal("Bank Transfer"),
+      v.literal("Cheque"),
+      v.literal("UPI"),
+      v.literal("Online"),
+    ),
+    paymentDate: v.float64(),
+    issuedAt: v.float64(),
+    voidedAt: v.optional(v.float64()),
+    voidedBy: v.optional(v.id("users")),
+
+    // Snapshot fields (frozen at issue time — every renderable field on the
+    // PDF lives here, NOT joined from a live row, so the document is stable
+    // even if the underlying student/fee record changes later).
+    payerName: v.string(),
+    payerRole: v.union(
+      v.literal("father"),
+      v.literal("mother"),
+      v.literal("guardian"),
+    ),
+    studentNameSnapshot: v.string(),
+    studentNumberSnapshot: v.string(),
+    issuerName: v.string(),
+    lineItems: v.array(
+      v.object({
+        feeStructureName: v.string(),
+        billingPeriod: v.optional(v.string()),
+        originalAmount: v.float64(),
+        discountAmount: v.float64(),
+        paidAmount: v.float64(),
+      }),
+    ),
+    remarks: v.optional(v.string()),
+
+    // Re-issue chain (ADR-0003). Set atomically by `voidAndReissueReceipt`;
+    // never set by `voidReceipt` alone.
+    supersedes: v.optional(v.id("receipts")), // on the new replacement
+    supersededBy: v.optional(v.id("receipts")), // on the voided original
+  })
+    .index("by_student", ["studentId"])
+    .index("by_session", ["sessionId"])
+    .index("by_receipt_number", ["receiptNumber"])
+    .index("by_status_and_date", ["status", "paymentDate"]),
+
+  // ─── Receipt counters ────────────────────────────────────────────────────
+  //
+  // One document per calendar year, holding the next receipt sequence to
+  // allocate. Read-then-write happens INSIDE the same mutation that creates
+  // the Receipt — Convex serialises mutations per document, so the counter
+  // is race-safe by construction (see DA prompt #1 in HANDOFF_issue_36.md).
+
+  receiptCounters: defineTable({
+    year: v.float64(), // calendar year, e.g. 2026
+    nextNumber: v.float64(), // 1-based; first receipt of 2026 uses 1
+  }).index("by_year", ["year"]),
 
   // ─── Report Cards ─────────────────────────────────────────────────────────
 
