@@ -1,14 +1,27 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ArrowLeft, FileWarning, Printer } from "lucide-react";
+import { ArrowLeft, FileWarning, Mail, Printer } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { ReceiptDocument } from "@/components/receipts/ReceiptDocument";
 import { RoleGate } from "@/components/shared/RoleGate";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { buildGmailComposeUrl } from "@/lib/composeEmailUrl";
+import { formatCurrency } from "@/lib/currency";
+import { fmtDayMonthYear } from "@/lib/dateFormat";
+import { emailLauncherDisabledReason } from "@/lib/launcherDisabled";
+import { receiptEmailBody, receiptEmailSubject } from "@/lib/receiptTemplates";
+import { resolveBillingContact } from "@/lib/resolveBillingContact";
+import { SCHOOL_NAME } from "@/lib/schoolBrand";
 
 export default function ReceiptDetailPage() {
   return (
@@ -24,6 +37,10 @@ function ReceiptDetailContent() {
   const receiptId = params.receiptId as Id<"receipts">;
 
   const receipt = useQuery(api.receipts.getReceipt, { receiptId });
+  const student = useQuery(
+    api.students.getStudentById,
+    receipt ? { studentId: receipt.studentId } : "skip",
+  );
 
   return (
     <div className="space-y-6 pb-12">
@@ -37,15 +54,18 @@ function ReceiptDetailContent() {
           <ArrowLeft className="mr-1 h-4 w-4" />
           Back
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => window.print()}
-          disabled={receipt === undefined || receipt === null}
-        >
-          <Printer className="mr-1 h-4 w-4" />
-          Print
-        </Button>
+        <div className="flex items-center gap-2">
+          <EmailReceiptButton receipt={receipt ?? null} student={student} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            disabled={receipt === undefined || receipt === null}
+          >
+            <Printer className="mr-1 h-4 w-4" />
+            Print
+          </Button>
+        </div>
       </div>
 
       {receipt === undefined ? (
@@ -56,6 +76,97 @@ function ReceiptDetailContent() {
         <ReceiptDocument receipt={receipt} />
       )}
     </div>
+  );
+}
+
+type LauncherStudentProps = Pick<
+  Doc<"students">,
+  | "primaryBillingContact"
+  | "fatherName"
+  | "fatherEmail"
+  | "motherName"
+  | "motherEmail"
+  | "guardianName"
+  | "guardianEmail"
+>;
+
+function EmailReceiptButton({
+  receipt,
+  student,
+}: {
+  receipt: Doc<"receipts"> | null;
+  student: LauncherStudentProps | null | undefined;
+}) {
+  const loading = receipt === null || student === undefined || student === null;
+
+  const disabledReason = loading
+    ? null
+    : emailLauncherDisabledReason({
+        primaryBillingContact: student.primaryBillingContact,
+        fatherName: student.fatherName,
+        fatherEmail: student.fatherEmail,
+        motherName: student.motherName,
+        motherEmail: student.motherEmail,
+        guardianName: student.guardianName,
+        guardianEmail: student.guardianEmail,
+      });
+
+  const handleClick = () => {
+    if (loading || disabledReason !== null) return;
+    const billingContact = resolveBillingContact({
+      primaryBillingContact: student.primaryBillingContact,
+      fatherName: student.fatherName,
+      fatherEmail: student.fatherEmail,
+      motherName: student.motherName,
+      motherEmail: student.motherEmail,
+      guardianName: student.guardianName,
+      guardianEmail: student.guardianEmail,
+    });
+    if (!billingContact.email) return;
+    const url = buildGmailComposeUrl({
+      to: billingContact.email,
+      subject: receiptEmailSubject({
+        receiptNumber: receipt.receiptNumber,
+        schoolName: SCHOOL_NAME,
+      }),
+      body: receiptEmailBody({
+        payerName: receipt.payerName,
+        paymentDate: fmtDayMonthYear(receipt.paymentDate),
+        totalAmount: formatCurrency(receipt.totalAmount),
+        studentName: receipt.studentNameSnapshot,
+        schoolName: SCHOOL_NAME,
+      }),
+    });
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const isDisabled = loading || disabledReason !== null;
+
+  const button = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleClick}
+      disabled={isDisabled}
+    >
+      <Mail className="mr-1 h-4 w-4" />
+      Email Receipt
+    </Button>
+  );
+
+  if (disabledReason === null) {
+    return button;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>{button}</span>
+        </TooltipTrigger>
+        <TooltipContent>{disabledReason}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
