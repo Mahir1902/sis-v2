@@ -13,25 +13,25 @@ import {
 
 describe("computeNewFeeStatus", () => {
   it("returns 'paid' when payment covers full balance", () => {
-    expect(computeNewFeeStatus(5000, 0, 5000)).toBe("paid");
+    expect(computeNewFeeStatus(5000, 5000)).toBe("paid");
   });
 
   it("returns 'paid' when payment exceeds balance", () => {
-    expect(computeNewFeeStatus(3000, 2000, 3000)).toBe("paid");
+    expect(computeNewFeeStatus(3000, 4000)).toBe("paid");
   });
 
   it("throws when payment is less than balance (partial no longer supported)", () => {
-    expect(() => computeNewFeeStatus(5000, 0, 3000)).toThrow(
+    expect(() => computeNewFeeStatus(5000, 3000)).toThrow(
       /partial payments are not supported/i,
     );
   });
 
-  it("returns 'paid' when prior paid + payment covers full balance", () => {
-    expect(computeNewFeeStatus(1000, 2000, 1000)).toBe("paid");
+  it("returns 'paid' when payment exactly covers a small balance", () => {
+    expect(computeNewFeeStatus(1000, 1000)).toBe("paid");
   });
 
   it("throws when payment is zero", () => {
-    expect(() => computeNewFeeStatus(5000, 0, 0)).toThrow(
+    expect(() => computeNewFeeStatus(5000, 0)).toThrow(
       /partial payments are not supported/i,
     );
   });

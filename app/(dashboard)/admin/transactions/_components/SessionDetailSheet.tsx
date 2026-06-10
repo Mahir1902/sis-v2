@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { CreditCard, GraduationCap, Receipt } from "lucide-react";
+import { CreditCard, ExternalLink, GraduationCap, Receipt } from "lucide-react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
@@ -40,6 +41,10 @@ export function SessionDetailSheet({
     api.transactionLog.getSessionDetail,
     sessionId ? { sessionId } : "skip",
   );
+  const receipt = useQuery(
+    api.receipts.getBySession,
+    sessionId ? { sessionId } : "skip",
+  );
 
   return (
     <Sheet open={!!sessionId} onOpenChange={(open) => !open && onClose()}>
@@ -50,6 +55,7 @@ export function SessionDetailSheet({
           <SessionDetailContent
             session={detail.session}
             lineItems={detail.lineItems}
+            receipt={receipt ?? null}
           />
         )}
       </SheetContent>
@@ -60,6 +66,7 @@ export function SessionDetailSheet({
 function SessionDetailContent({
   session,
   lineItems,
+  receipt,
 }: {
   session: {
     transactionDate: number;
@@ -79,6 +86,7 @@ function SessionDetailContent({
     billingPeriod?: string;
     referenceNumber?: string;
   }>;
+  receipt: { _id: Id<"receipts">; receiptNumber: string } | null;
 }) {
   return (
     <>
@@ -98,6 +106,29 @@ function SessionDetailContent({
       </SheetHeader>
 
       <div className="space-y-5 px-6 py-5">
+        {/* Receipt Link */}
+        {receipt && (
+          <Link
+            href={`/receipts/${receipt._id}`}
+            className="flex items-center justify-between rounded-lg border border-school-green/30 bg-school-green/5 p-4 transition hover:bg-school-green/10"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-school-green/10 text-school-green">
+                <Receipt className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Money Receipt
+                </p>
+                <p className="truncate font-mono text-sm font-semibold text-school-green">
+                  {receipt.receiptNumber}
+                </p>
+              </div>
+            </div>
+            <ExternalLink className="size-4 shrink-0 text-school-green" />
+          </Link>
+        )}
+
         {/* Student Info */}
         <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-4">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-school-green/10 text-school-green">

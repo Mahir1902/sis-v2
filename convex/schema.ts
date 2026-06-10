@@ -314,7 +314,8 @@ export default defineSchema({
     lateFeeAmount: v.optional(v.float64()),
   })
     .index("by_student_year", ["studentId", "academicYear"])
-    .index("by_feeStructure", ["feeStructureId"]),
+    .index("by_feeStructure", ["feeStructureId"])
+    .index("by_status_and_due_date", ["status", "dueDate"]),
 
   feeTransactions: defineTable({
     studentId: v.id("students"),
@@ -427,7 +428,7 @@ export default defineSchema({
     .index("by_student", ["studentId"])
     .index("by_session", ["sessionId"])
     .index("by_receipt_number", ["receiptNumber"])
-    .index("by_status_and_date", ["status", "paymentDate"]),
+    .index("by_status_and_payment_date", ["status", "paymentDate"]),
 
   // ─── Receipt counters ────────────────────────────────────────────────────
   //

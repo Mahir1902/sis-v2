@@ -14,11 +14,9 @@ export type FeeStatus = "paid" | "unpaid";
  */
 export function computeNewFeeStatus(
   currentBalance: number,
-  _currentPaidAmount: number,
-  paymentAmount: number,
+  payment: number,
 ): FeeStatus {
-  const newBalance = currentBalance - paymentAmount;
-  if (newBalance <= 0) return "paid";
+  if (payment >= currentBalance) return "paid";
   throw new Error(
     "Partial payments are not supported; collect the full outstanding balance.",
   );

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { ChevronDown, ChevronRight, Loader2, Plus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -166,6 +167,7 @@ export function CollectFeesDialog({
   );
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
+  const router = useRouter();
   const collectFees = useMutation(api.feeCollectionSessions.collectFees);
   const createFutureMonthFees = useMutation(
     api.feeCollectionSessions.createFutureMonthFees,
@@ -302,9 +304,14 @@ export function CollectFeesDialog({
         paymentMode,
         remarks: remarks || undefined,
       });
-      toast.success(
-        `Payment recorded. Total: ৳${result.totalAmount.toLocaleString()}`,
-      );
+      toast.success(`Receipt ${result.receiptNumber} issued`, {
+        description: `Total: ৳${result.totalAmount.toLocaleString()}`,
+        action: {
+          label: "View Receipt",
+          onClick: () => router.push(`/receipts/${result.receiptId}`),
+        },
+        duration: 10000,
+      });
       onClose();
     } catch (err: unknown) {
       const message =
