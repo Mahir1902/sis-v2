@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -39,5 +40,80 @@ export const getBySession = query({
       .query("receipts")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
       .unique();
+  },
+});
+
+/**
+ * Cosmetic-edit correction (ADR-0003, issue #38). Admin can fix a typo in
+ * `payerName`, `payerRole`, or `remarks` on an issued Receipt — without
+ * producing a new Receipt number and without changing the lifecycle. The
+ * PDF re-renders silently with the new values; the cosmetic-edit history
+ * lives in the audit log only.
+ *
+ * Rejects voided receipts — those use `voidAndReissueReceipt` (separate
+ * slice) to introduce a corrected row.
+ */
+export const editReceipt = mutation({
+  args: {
+    receiptId: v.id("receipts"),
+    payerName: v.optional(v.string()),
+    payerRole: v.optional(
+      v.union(v.literal("father"), v.literal("mother"), v.literal("guardian")),
+    ),
+    remarks: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+
+    const receipt = await ctx.db.get(args.receiptId);
+    if (!receipt) throw new Error("Receipt not found");
+    if (receipt.status === "voided") {
+      throw new Error("Cannot edit a voided receipt");
+    }
+
+    const patch: {
+      payerName?: string;
+      payerRole?: "father" | "mother" | "guardian";
+      remarks?: string;
+    } = {};
+    const before: Record<string, string | undefined> = {};
+    const after: Record<string, string | undefined> = {};
+
+    if (args.payerName !== undefined && args.payerName !== receipt.payerName) {
+      patch.payerName = args.payerName;
+      before.payerName = receipt.payerName;
+      after.payerName = args.payerName;
+    }
+    if (args.payerRole !== undefined && args.payerRole !== receipt.payerRole) {
+      patch.payerRole = args.payerRole;
+      before.payerRole = receipt.payerRole;
+      after.payerRole = args.payerRole;
+    }
+    if (args.remarks !== undefined) {
+      const currentRemarks = receipt.remarks ?? "";
+      if (args.remarks !== currentRemarks) {
+        patch.remarks = args.remarks;
+        before.remarks = receipt.remarks;
+        after.remarks = args.remarks;
+      }
+    }
+
+    const changedFields = Object.keys(patch);
+    if (changedFields.length === 0) {
+      throw new Error("No changes to save");
+    }
+
+    await ctx.db.patch(args.receiptId, patch);
+
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "receipts",
+      entityId: args.receiptId,
+      description: `Cosmetic edit on receipt ${receipt.receiptNumber}: ${changedFields.join(", ")}`,
+      metadata: { before, after, changedFields },
+    });
+
+    return null;
   },
 });

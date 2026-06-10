@@ -1,8 +1,9 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ArrowLeft, FileWarning, Mail, Printer } from "lucide-react";
+import { ArrowLeft, FileWarning, Mail, Pencil, Printer } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { ReceiptDocument } from "@/components/receipts/ReceiptDocument";
 import { RoleGate } from "@/components/shared/RoleGate";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { emailLauncherDisabledReason } from "@/lib/launcherDisabled";
 import { receiptEmailBody, receiptEmailSubject } from "@/lib/receiptTemplates";
 import { resolveBillingContact } from "@/lib/resolveBillingContact";
 import { SCHOOL_NAME } from "@/lib/schoolBrand";
+import { CosmeticEditDialog } from "./_components/CosmeticEditDialog";
 
 export default function ReceiptDetailPage() {
   return (
@@ -41,6 +43,7 @@ function ReceiptDetailContent() {
     api.students.getStudentById,
     receipt ? { studentId: receipt.studentId } : "skip",
   );
+  const [editOpen, setEditOpen] = useState(false);
 
   return (
     <div className="space-y-6 pb-12">
@@ -55,6 +58,10 @@ function ReceiptDetailContent() {
           Back
         </Button>
         <div className="flex items-center gap-2">
+          <EditReceiptButton
+            receipt={receipt ?? null}
+            onOpen={() => setEditOpen(true)}
+          />
           <EmailReceiptButton receipt={receipt ?? null} student={student} />
           <Button
             variant="outline"
@@ -75,7 +82,51 @@ function ReceiptDetailContent() {
       ) : (
         <ReceiptDocument receipt={receipt} />
       )}
+
+      {receipt && receipt.status !== "voided" && (
+        <CosmeticEditDialog
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          receipt={receipt}
+        />
+      )}
     </div>
+  );
+}
+
+function EditReceiptButton({
+  receipt,
+  onOpen,
+}: {
+  receipt: Doc<"receipts"> | null;
+  onOpen: () => void;
+}) {
+  const isVoided = receipt?.status === "voided";
+  const isLoading = receipt === null;
+
+  const button = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onOpen}
+      disabled={isLoading || isVoided}
+    >
+      <Pencil className="mr-1 h-4 w-4" />
+      Edit
+    </Button>
+  );
+
+  if (!isVoided) return button;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>{button}</span>
+        </TooltipTrigger>
+        <TooltipContent>Cannot edit a voided receipt.</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
