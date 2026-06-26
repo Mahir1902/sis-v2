@@ -1,7 +1,23 @@
 import { v } from "convex/values";
+import {
+  applyReceiptsListFilter,
+  type ReceiptListRow,
+} from "../lib/receiptsListFilter";
+import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
+
+/**
+ * Maximum number of receipts fetched from the most-selective index before
+ * client-side filter + sort. Bounded so the query never degrades with table
+ * growth (per CLAUDE.md: no unbounded `.collect()`).
+ *
+ * The list page surfaces the most-recent receipts within a date window, so
+ * a cap above one campus-year of payments is enough for v1. If volume grows
+ * past this, the query should switch to cursor pagination.
+ */
+const LIST_RECEIPTS_FETCH_LIMIT = 500;
 
 /**
  * Returns the Receipt row by id, exactly as stored.
@@ -42,6 +58,93 @@ export const getBySession = query({
       .unique();
   },
 });
+
+/**
+ * Admin-only list query for `/receipts`. Returns receipt rows (without
+ * `lineItems`) including `supersedes` and `supersededBy` so the list page
+ * can badge correction chains without a per-row second query.
+ *
+ * Index strategy (most selective first):
+ *   - `studentId` present  → `by_student`            (single-student view)
+ *   - `status` present     → `by_status_and_payment_date` (status prefix)
+ *   - neither              → `by_status_and_payment_date` for each of the
+ *                            two known status values, merged
+ *
+ * The final date-range / studentId / status filter and sort happen in
+ * `applyReceiptsListFilter` — a pure, unit-tested helper — to keep this
+ * handler focused on Convex I/O.
+ */
+export const listReceipts = query({
+  args: {
+    dateRange: v.optional(v.object({ from: v.float64(), to: v.float64() })),
+    studentId: v.optional(v.id("students")),
+    status: v.optional(v.union(v.literal("issued"), v.literal("voided"))),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["admin"]);
+
+    let fetched: ReceiptListRow[];
+
+    if (args.studentId) {
+      const studentId = args.studentId;
+      const rows = await ctx.db
+        .query("receipts")
+        .withIndex("by_student", (q) => q.eq("studentId", studentId))
+        .take(LIST_RECEIPTS_FETCH_LIMIT);
+      fetched = rows.map(toListRow);
+    } else if (args.status) {
+      const status = args.status;
+      const rows = await ctx.db
+        .query("receipts")
+        .withIndex("by_status_and_payment_date", (q) => q.eq("status", status))
+        .order("desc")
+        .take(LIST_RECEIPTS_FETCH_LIMIT);
+      fetched = rows.map(toListRow);
+    } else {
+      const perStatus = Math.ceil(LIST_RECEIPTS_FETCH_LIMIT / 2);
+      const [issued, voided] = await Promise.all([
+        ctx.db
+          .query("receipts")
+          .withIndex("by_status_and_payment_date", (q) =>
+            q.eq("status", "issued"),
+          )
+          .order("desc")
+          .take(perStatus),
+        ctx.db
+          .query("receipts")
+          .withIndex("by_status_and_payment_date", (q) =>
+            q.eq("status", "voided"),
+          )
+          .order("desc")
+          .take(perStatus),
+      ]);
+      fetched = [...issued, ...voided].map(toListRow);
+    }
+
+    return applyReceiptsListFilter(fetched, {
+      dateRange: args.dateRange,
+      studentId: args.studentId,
+      status: args.status,
+    });
+  },
+});
+
+function toListRow(receipt: Doc<"receipts">): ReceiptListRow {
+  return {
+    _id: receipt._id,
+    receiptNumber: receipt.receiptNumber,
+    studentId: receipt.studentId,
+    studentNameSnapshot: receipt.studentNameSnapshot,
+    studentNumberSnapshot: receipt.studentNumberSnapshot,
+    payerName: receipt.payerName,
+    status: receipt.status,
+    paymentMethod: receipt.paymentMethod,
+    paymentDate: receipt.paymentDate,
+    totalAmount: receipt.totalAmount,
+    supersedes: receipt.supersedes,
+    supersededBy: receipt.supersededBy,
+  };
+}
 
 /**
  * Cosmetic-edit correction (ADR-0003, issue #38). Admin can fix a typo in

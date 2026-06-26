@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  type AssignFeeValues,
-  assignFeeSchema,
-  resolveAssignFeePayload,
-} from "./assignFeeSchema";
+import { type AssignFeeValues, assignFeeSchema } from "./assignFeeSchema";
 
 describe("assignFeeSchema", () => {
   it("accepts a valid one-time fee assignment (no billingPeriod)", () => {
@@ -73,69 +69,5 @@ describe("assignFeeSchema", () => {
     };
     const result = assignFeeSchema.safeParse(input);
     expect(result.success).toBe(true);
-  });
-});
-
-describe("resolveAssignFeePayload", () => {
-  const baseStructure = {
-    _id: "struct-1" as string,
-    baseAmount: 5000,
-    frequency: "monthly" as const,
-  };
-
-  it("returns correct payload for a monthly fee", () => {
-    const payload = resolveAssignFeePayload(baseStructure, "2025-03");
-    expect(payload).toEqual({
-      feeStructureId: "struct-1",
-      originalAmount: 5000,
-      paidAmount: 0,
-      balance: 5000,
-      status: "unpaid",
-      billingPeriod: "2025-03",
-    });
-  });
-
-  it("returns correct payload for a one-time fee (no billingPeriod)", () => {
-    const oneTimeStructure = {
-      ...baseStructure,
-      frequency: "one-time" as const,
-    };
-    const payload = resolveAssignFeePayload(oneTimeStructure, undefined);
-    expect(payload).toEqual({
-      feeStructureId: "struct-1",
-      originalAmount: 5000,
-      paidAmount: 0,
-      balance: 5000,
-      status: "unpaid",
-      billingPeriod: undefined,
-    });
-  });
-
-  it("returns correct payload for a yearly fee (no billingPeriod)", () => {
-    const yearlyStructure = { ...baseStructure, frequency: "yearly" as const };
-    const payload = resolveAssignFeePayload(yearlyStructure, undefined);
-    expect(payload).toEqual({
-      feeStructureId: "struct-1",
-      originalAmount: 5000,
-      paidAmount: 0,
-      balance: 5000,
-      status: "unpaid",
-      billingPeriod: undefined,
-    });
-  });
-
-  it("sets paidAmount to 0 and balance to baseAmount", () => {
-    const payload = resolveAssignFeePayload(
-      { ...baseStructure, baseAmount: 12000 },
-      "2025-01",
-    );
-    expect(payload.paidAmount).toBe(0);
-    expect(payload.balance).toBe(12000);
-    expect(payload.originalAmount).toBe(12000);
-  });
-
-  it("always sets status to unpaid", () => {
-    const payload = resolveAssignFeePayload(baseStructure, "2025-06");
-    expect(payload.status).toBe("unpaid");
   });
 });

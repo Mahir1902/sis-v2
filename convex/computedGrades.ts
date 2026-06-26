@@ -206,54 +206,6 @@ export const getGradesByEnrollmentSemester = query({
   },
 });
 
-/** Get enrollment-level performance summary (avg, top/bottom subjects). */
-export const getEnrollmentPerformance = query({
-  args: {
-    enrollmentId: v.id("enrollments"),
-    semester: v.union(v.literal(1), v.literal(2)),
-  },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
-    const grades = await ctx.db
-      .query("computedGrades")
-      .withIndex("by_enrollment_semester", (q) =>
-        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester),
-      )
-      .collect();
-
-    if (grades.length === 0) return null;
-
-    const withSubjects = await Promise.all(
-      grades.map(async (g) => ({
-        ...g,
-        subjectDoc: await ctx.db.get(g.subjectId),
-      })),
-    );
-
-    const avg =
-      grades.reduce((s, g) => s + g.weightedAverage, 0) / grades.length;
-    const sorted = [...withSubjects].sort(
-      (a, b) => b.weightedAverage - a.weightedAverage,
-    );
-    const top3 = sorted.slice(0, 3);
-    const bottom3 = sorted.slice(-3).reverse();
-
-    // Grade distribution
-    const distribution: Record<string, number> = {};
-    for (const g of grades) {
-      distribution[g.letterGrade] = (distribution[g.letterGrade] ?? 0) + 1;
-    }
-
-    return {
-      averagePercentage: avg,
-      top3,
-      bottom3,
-      distribution,
-      subjectCount: grades.length,
-    };
-  },
-});
-
 /** Get longitudinal subject performance across all enrollments for a student. */
 export const getLongitudinalSubjectPerformance = query({
   args: {

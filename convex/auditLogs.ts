@@ -77,25 +77,3 @@ export const getRecentLogs = query({
       .take(limit);
   },
 });
-
-/**
- * Returns audit log entries for a specific entity.
- * Admin-only. Uses the by_entity composite index (entityType, entityId).
- * Results are bounded to 100 rows to prevent unbounded reads.
- */
-export const getLogsByEntity = query({
-  args: {
-    entityType: v.string(),
-    entityId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
-
-    return await ctx.db
-      .query("auditLogs")
-      .withIndex("by_entity", (q) =>
-        q.eq("entityType", args.entityType).eq("entityId", args.entityId),
-      )
-      .take(100);
-  },
-});

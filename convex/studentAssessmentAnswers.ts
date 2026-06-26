@@ -164,26 +164,6 @@ export const markStudentAbsent = mutation({
   },
 });
 
-/** Get all answers for a student on one assessment, summed per-CA. */
-export const getStudentAnswersByAssessment = query({
-  args: {
-    studentId: v.id("students"),
-    assessmentId: v.id("assessments"),
-  },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
-    const answers = await ctx.db
-      .query("studentAssessmentAnswers")
-      .withIndex("by_student_assessment", (q) =>
-        q.eq("studentId", args.studentId).eq("assessmentId", args.assessmentId),
-      )
-      .collect();
-    const totalObtained = answers.reduce((s, a) => s + a.marksObtained, 0);
-    const isAbsent = answers.some((a) => a.isAbsent);
-    return { answers, totalObtained, isAbsent };
-  },
-});
-
 /** Get all answers for an assessment (all students). Used for mark entry grid. */
 export const getAnswersByAssessment = query({
   args: { assessmentId: v.id("assessments") },

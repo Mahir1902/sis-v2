@@ -22,10 +22,6 @@ export function computeNewFeeStatus(
   );
 }
 
-export function computeGrandTotal(balances: number[]): number {
-  return balances.reduce((sum, b) => sum + b, 0);
-}
-
 export function generateTransactionReference(
   timestamp: number,
   index: number,
@@ -63,25 +59,6 @@ export function getSequentialRemovalIds(
 }
 
 /**
- * Validates that billing periods maintain sequential ordering.
- * Returns true if adding the periods would be valid (no gaps).
- */
-export function validateSequentialMonths(
-  existingPeriods: string[],
-  newPeriods: string[],
-): boolean {
-  const all = [...existingPeriods, ...newPeriods].sort();
-  for (let i = 1; i < all.length; i++) {
-    const [prevYear, prevMonth] = all[i - 1].split("-").map(Number);
-    const [currYear, currMonth] = all[i].split("-").map(Number);
-    const prevTotal = prevYear * 12 + prevMonth;
-    const currTotal = currYear * 12 + currMonth;
-    if (currTotal - prevTotal > 1) return false;
-  }
-  return true;
-}
-
-/**
  * Resolves available future months from a list of all months in the academic year,
  * filtering out months already assigned and months before the current period.
  */
@@ -108,38 +85,6 @@ export function getAvailableMonths(
   );
   const existing = new Set(existingBillingPeriods);
   return allMonths.filter((m) => !existing.has(m));
-}
-
-type FeeStructureMinimal = {
-  _id: string;
-  frequency: "one-time" | "monthly" | "yearly";
-};
-type ExistingFeeMinimal = { feeStructureId: string };
-
-/**
- * Filters active fee structures to those still assignable to a student.
- * Monthly structures are always included.
- * One-time and yearly structures are excluded when already assigned
- * (i.e., when an existing studentFee references the same feeStructureId).
- */
-export function filterAssignableStructures(
-  structures: FeeStructureMinimal[],
-  existingFees: ExistingFeeMinimal[],
-): FeeStructureMinimal[] {
-  const structureMap = new Map(structures.map((s) => [s._id, s]));
-  const assignedNonMonthly = new Set<string>();
-
-  for (const fee of existingFees) {
-    const structure = structureMap.get(fee.feeStructureId);
-    if (structure && structure.frequency !== "monthly") {
-      assignedNonMonthly.add(fee.feeStructureId);
-    }
-  }
-
-  return structures.filter((s) => {
-    if (s.frequency === "monthly") return true;
-    return !assignedNonMonthly.has(s._id);
-  });
 }
 
 /**

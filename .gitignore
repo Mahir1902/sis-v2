@@ -48,6 +48,17 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 /playwright/.cache/
+.playwright-cli/
 
 # Superpowers brainstorming
 .superpowers/
+
+# scratch / tooling working dirs (generated, not source)
+.sandcastle/
+.tmp/
+
+# scratch screenshots dropped at repo root (public/ logos are kept)
+/*.png
+
+# machine-specific Claude permissions — not shared
+.claude/settings.local.json

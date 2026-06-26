@@ -2,40 +2,6 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
-const EQUAL_THIRDS = { ca1Weight: 1 / 3, ca2Weight: 1 / 3, ca3Weight: 1 / 3 };
-
-/** Get the weighting rule for a subject/level/semester, falling back to equal thirds. */
-export const getWeightingRuleOrDefault = query({
-  args: {
-    subjectId: v.id("subjects"),
-    standardLevelId: v.id("standardLevels"),
-    semester: v.union(v.literal(1), v.literal(2)),
-  },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
-    const rule = await ctx.db
-      .query("assessmentWeightingRules")
-      .withIndex("by_standard_subject_semester", (q) =>
-        q
-          .eq("standardLevelId", args.standardLevelId)
-          .eq("subjectId", args.subjectId)
-          .eq("semester", args.semester),
-      )
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .first();
-    if (rule) return rule;
-    return {
-      _id: null,
-      subjectId: args.subjectId,
-      standardLevelId: args.standardLevelId,
-      semester: args.semester,
-      ...EQUAL_THIRDS,
-      isActive: true,
-      isDefault: true,
-    };
-  },
-});
-
 /** List all weighting rules for a standard level. */
 export const listByLevel = query({
   args: { standardLevelId: v.id("standardLevels") },

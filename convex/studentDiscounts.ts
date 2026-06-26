@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
@@ -73,25 +73,5 @@ export const applyDiscount = mutation({
     });
 
     return { discountId, discountAmount };
-  },
-});
-
-/** Get all discounts applied to a student for a given year. */
-export const getByStudentYear = query({
-  args: { studentId: v.id("students"), academicYear: v.id("academicYears") },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
-    const discounts = await ctx.db
-      .query("studentDiscounts")
-      .withIndex("by_student_year", (q) =>
-        q.eq("studentId", args.studentId).eq("academicYear", args.academicYear),
-      )
-      .collect();
-    return await Promise.all(
-      discounts.map(async (d) => ({
-        ...d,
-        ruleDoc: await ctx.db.get(d.discountRuleId),
-      })),
-    );
   },
 });

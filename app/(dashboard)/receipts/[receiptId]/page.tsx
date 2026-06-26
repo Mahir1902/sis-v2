@@ -150,29 +150,14 @@ function EmailReceiptButton({
 }) {
   const loading = receipt === null || student === undefined || student === null;
 
-  const disabledReason = loading
-    ? null
-    : emailLauncherDisabledReason({
-        primaryBillingContact: student.primaryBillingContact,
-        fatherName: student.fatherName,
-        fatherEmail: student.fatherEmail,
-        motherName: student.motherName,
-        motherEmail: student.motherEmail,
-        guardianName: student.guardianName,
-        guardianEmail: student.guardianEmail,
-      });
+  const contactArgs: LauncherStudentProps | null = loading ? null : student;
+
+  const disabledReason =
+    contactArgs === null ? null : emailLauncherDisabledReason(contactArgs);
 
   const handleClick = () => {
-    if (loading || disabledReason !== null) return;
-    const billingContact = resolveBillingContact({
-      primaryBillingContact: student.primaryBillingContact,
-      fatherName: student.fatherName,
-      fatherEmail: student.fatherEmail,
-      motherName: student.motherName,
-      motherEmail: student.motherEmail,
-      guardianName: student.guardianName,
-      guardianEmail: student.guardianEmail,
-    });
+    if (loading || contactArgs === null || disabledReason !== null) return;
+    const billingContact = resolveBillingContact(contactArgs);
     if (!billingContact.email) return;
     const url = buildGmailComposeUrl({
       to: billingContact.email,

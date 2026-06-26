@@ -71,6 +71,7 @@ const navGroups: NavGroup[] = [
     roles: ["admin"],
     items: [
       { href: "/fees", label: "Fee Structures", icon: BookOpen },
+      { href: "/receipts", label: "Receipts", icon: Receipt },
       { href: "/admin/transactions", label: "Transaction Log", icon: Receipt },
       { href: "/admin/assessments", label: "Assessments", icon: GraduationCap },
       { href: "/admin/promotions", label: "Promotions", icon: ArrowUpCircle },

@@ -22,31 +22,6 @@ export const getById = query({
 });
 
 /**
- * Get fee structures for a standard level, returning amounts by type.
- * Used in the admission form to auto-fill fee fields.
- */
-export const getFormFees = query({
-  args: { standardLevel: v.id("standardLevels") },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
-    const structures = await ctx.db
-      .query("feeStructure")
-      .withIndex("by_standard", (q) =>
-        q.eq("standardLevel", args.standardLevel),
-      )
-      .take(50);
-
-    const result = { admission: 0, tuition: 0, registration: 0 };
-    for (const s of structures) {
-      if (s.feeType === "admission") result.admission = s.baseAmount;
-      if (s.feeType === "tuition") result.tuition = s.baseAmount;
-      if (s.feeType === "registration") result.registration = s.baseAmount;
-    }
-    return result;
-  },
-});
-
-/**
  * Get full fee structure docs for a standard level.
  * Used in the admission form to get the _id for creating studentFee records.
  */

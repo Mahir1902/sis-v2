@@ -1368,3 +1368,79 @@ Minor non-blocking observations: `computeNewFeeStatus`'s `_currentPaidAmount` is
 - The three correction mutations (`editReceipt`, `voidReceipt`, `voidAndReissueReceipt`) per ADR-0003 are Phase 2 scope. `voidAndReissueReceipt` sets both `supersedes` and `supersededBy` atomically in one mutation.
 - Phase 3 wires the UI: `/receipts` list page, `ReceiptDocument.tsx`, the three action buttons on the Receipt sheet, the WhatsApp + Email compose launchers (carryover from `lib/composeEmailUrl.ts` already in place).
 
+
+---
+
+## Issue #39 — [Slice 6] Receipts list page (/receipts) with filter toolbar (2026-06-10)
+**Status**: Complete — APPROVED via TDD verification
+**Active Agent**: CODING AGENT → BACKEND AGENT → FRONTEND AGENT (TDD workflow)
+**GitHub**: https://github.com/Mahir1902/sis-v2/issues/39
+**Parent**: #34 (Money Receipts PRD)
+**Branch**: feature/money-receipts
+
+### Summary
+Top-level `/receipts` admin list page with date-range / student / status filter
+toolbar. Adds `listReceipts` query returning `supersedes` / `supersededBy` so
+the list can badge correction chains without a second per-row query. List page
+is admin-gated, links each row to `/receipts/[receiptId]`, and ships with
+loading skeleton, empty state, and error boundary (inherits dashboard
+`error.tsx`).
+
+### 😈 Devil's Advocate Findings (mitigated before implementation)
+| # | Concern | Mitigation |
+|---|---------|------------|
+| 1 | `by_status_and_payment_date` is composite — needs a status prefix. Querying "all statuses" forces N status reads. | When `status` not given, run two parallel reads (`issued` + `voided`) under `Promise.all`, each `.take()`-bounded. |
+| 2 | Unbounded growth would slow the list page over years of payments. | Cap each underlying index read at `LIST_RECEIPTS_FETCH_LIMIT = 500`. Date-range pre-filtering before fetch is acceptable because the date is the dominant filter. Flag for cursor-pagination when volume crosses ~5k/year. |
+| 3 | `studentId` filter could collide with date-range index plan. | When `studentId` is given, use `by_student` only (most selective). Apply date / status filters client-side in the helper. |
+| 4 | Re-issue badging requires `supersedes` / `supersededBy` — must not be a per-row second query. | Both fields included directly in `ReceiptListRow` returned from the query. List page reads them inline. |
+| 5 | Filter logic in the Convex handler would be untestable without `convex-test`. | Extracted filter + sort to pure `lib/receiptsListFilter.ts` — unit-tested with 7 vitest cases. Handler becomes a thin index router. |
+
+### Sub-tasks (TDD red→green per cycle)
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 39-1 | RED: vitest tests for `applyReceiptsListFilter` (date range, inclusive endpoints, studentId, status, no-filters, sort desc, no mutation of input) | [x] DONE | 7/7 passing |
+| 39-2 | GREEN: `lib/receiptsListFilter.ts` — pure helper, `ReceiptListRow` type | [x] DONE | No business logic in component bodies (CLAUDE.md rule) |
+| 39-3 | `convex/receipts.ts` → add `listReceipts({ dateRange?, studentId?, status? })` | [x] DONE | `requireRole(["admin"])` first; `Promise.all` for parallel status reads; `.take()`-bounded |
+| 39-4 | `app/(dashboard)/receipts/page.tsx` + `columns.tsx` + `_components/ReceiptsFilters.tsx` + `hooks/use-receipts-filters.ts` | [x] DONE | Skeleton, empty state, RoleGate, row → detail navigation, badges for Superseded / Re-issued |
+| 39-5 | Sidebar entry — added `/receipts` under Administration group | [x] DONE | Reuses `Receipt` lucide icon (Transaction Log already shared) |
+| 39-6 | Playwright: `e2e/receipts.spec.ts` — route protection for `/receipts` and `/receipts/[id]` | [x] DONE | 2/2 passing |
+| 39-7 | Build + lint + vitest + Playwright regression | [x] DONE | See verification block |
+
+### Files Changed
+- `lib/receiptsListFilter.ts` (new) + `lib/receiptsListFilter.test.ts` (new, 7 cases)
+- `convex/receipts.ts` — added `listReceipts`, `toListRow`, `LIST_RECEIPTS_FETCH_LIMIT`
+- `app/(dashboard)/receipts/page.tsx` (new)
+- `app/(dashboard)/receipts/columns.tsx` (new)
+- `app/(dashboard)/receipts/_components/ReceiptsFilters.tsx` (new)
+- `hooks/use-receipts-filters.ts` (new)
+- `components/layout/Sidebar.tsx` — added `/receipts` nav entry
+- `e2e/receipts.spec.ts` (new, 2 cases)
+
+### Verification (all green, 2026-06-10)
+- `npx tsc --noEmit` — clean
+- `npm run lint` (Biome) — 201 files, no fixes applied
+- `npx vitest run` — 20 files, **197/197 passing** (was 190 before; 7 new from `receiptsListFilter.test.ts`)
+- `npm run build` — clean, **18 routes** (was 17; `/receipts` added; `/receipts/[receiptId]` already existed)
+- `npx playwright test e2e/receipts.spec.ts` — **2/2 passing**
+- `npx playwright test e2e/smoke.spec.ts` — **6/6 passing** (no regression)
+
+### Acceptance Criteria (from Issue #39)
+- [x] `listReceipts({ dateRange, studentId?, status? })` query: `requireRole(["admin"])` first; returns `supersedes` and `supersededBy` per row
+- [x] Query uses indexes — no unbounded `.collect()`; paginated or `.take()`-bounded (500 cap)
+- [x] `/receipts` page with TanStack Table; filter toolbar wires date range, student, status
+- [x] Loading skeleton + empty state with CTA + error state per CLAUDE.md (error state inherits dashboard `error.tsx`)
+- [x] Page gated to `requireRole(["admin"])` (via `RoleGate` shell + page-level `useQuery` enforces server-side)
+- [x] Manual verification (deferred to authed E2E in Phase 5 follow-up): visit `/receipts`, filter by date range and student, click a row → navigates to `/receipts/[receiptId]`
+
+### Decisions Made
+- 2026-06-10: Pure helper `applyReceiptsListFilter` extracted instead of inlining filter logic in the handler. Rationale: the project has no `convex-test` setup; pure-helper extraction is the only way to land actual unit coverage on filter behavior, and it matches the existing `lib/*` test pattern (20 test files, all helpers).
+- 2026-06-10: `LIST_RECEIPTS_FETCH_LIMIT = 500` chosen over cursor pagination for v1. One school-year of campus-wide receipts will fit comfortably under this cap. Cursor pagination is a clean upgrade when needed.
+- 2026-06-10: When `status` filter is "all", the handler runs two parallel `by_status_and_payment_date` reads (one per status) via `Promise.all` rather than a `.collect()`. Per CLAUDE.md: no unbounded collects, batched lookups via `Promise.all`.
+- 2026-06-10: Date range stored as ISO date strings (`yyyy-MM-dd`) in the hook to round-trip cleanly through `<input type="date">`. Conversion to epoch ms (start-of-day / end-of-day in browser local TZ) happens inside `useMemo` to derive `queryArgs`.
+- 2026-06-10: Re-issue badging implemented inline in `columns.tsx`. The query exposes `supersedes` / `supersededBy` so no second query is needed — issue #39 acceptance criterion satisfied even though slice 9 (Void & Re-issue) hasn't populated those fields yet.
+
+### Hand-off to Next Slice
+- Slice 7 (Receipt detail correction actions) builds on `/receipts/[receiptId]` — already exists and ships with cosmetic edit (#38) and email launcher (#37). Slice 7 should add Void and Void & Re-issue.
+- Slice 9 (Void & Re-issue) will populate `supersedes` / `supersededBy` — the badging UI in `columns.tsx` will light up automatically once that lands; no list-page changes needed.
+- If volume grows beyond ~5k receipts/year, swap `listReceipts` to cursor pagination (TanStack Table supports `manualPagination`). The pure helper continues to apply.

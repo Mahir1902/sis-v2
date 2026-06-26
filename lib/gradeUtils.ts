@@ -18,22 +18,6 @@ export function getLetterGradeBadgeColor(grade: string): string {
 }
 
 /**
- * Returns icon, color class, and label for a performance trend.
- */
-export function getTrendIndicator(trend: string) {
-  switch (trend) {
-    case "improving":
-      return { icon: "↗", color: "text-green-600", label: "Improving" };
-    case "declining":
-      return { icon: "↘", color: "text-orange-600", label: "Declining" };
-    case "stable":
-      return { icon: "→", color: "text-blue-600", label: "Stable" };
-    default:
-      return { icon: "—", color: "text-gray-400", label: "Insufficient Data" };
-  }
-}
-
-/**
  * Format a percentage number to 1 decimal place with % sign.
  */
 export function formatPercentage(num: number | null | undefined): string {
