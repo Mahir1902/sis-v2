@@ -1,6 +1,6 @@
 # Domain Glossary — SIS v2 (Fee Billing & Collection)
 
-This context covers how the school bills parents and tracks fee payments. Student records, academic data, and report cards are governed elsewhere.
+This context covers how the school bills parents and tracks fee payments. Student records are governed elsewhere; the grading and report-card language lives in the **Grading & Academic Records** glossary at the bottom of this file.
 
 ## Language
 
@@ -68,3 +68,68 @@ _Avoid_: "Payer", "Bill recipient", "Primary parent" — these have collided in 
 - **"Receipt" used to mean "a paid Invoice that re-renders with paid status" (v2 model, 2026-06-08 → 2026-06-15).** Resolved: Receipt is now a first-class entity with its own number sequence, its own table, and its own `issued → voided` lifecycle. The "paid Invoice = informal receipt" framing is gone with invoicing.
 - **`partial` status on Student Fees** — removed 2026-06-09. Schema is `("unpaid", "paid")` only. Old code that branched on `partial` should be deleted, not coalesced.
 - **Delivery Status / Delivery Channel / Mark as Issued (Invoice-era concepts).** Removed with invoicing. Delivery is no longer attested on any document. Compose Email and WhatsApp Reminder are pure launchers that write nothing; the SIS does not claim to know whether a parent received anything.
+
+---
+
+# Grading & Academic Records
+
+This glossary covers how the school measures and reports academic performance. It is a separate domain from Fee Billing above. Grade-computation decisions are recorded in [ADR-0004](docs/adr/0004-grade-computation-model.md).
+
+## Language
+
+**Continuous Assessment (CA-1, CA-2, CA-3)**:
+One of the (up to) three graded assessments a subject runs in a semester. A subject's term grade is built from its CAs and nothing else. CAs are numbered 1/2/3; the number is positional, not a weight.
+
+**Assessment**:
+The `assessments` row for one CA of one subject, at one standard level, in one academic year and semester. Uniquely identified by that combination — there is at most one CA-1 Math for Grade 4 in Sem 1 of a given year. Carries a display-only `totalMarks` target; the real total a student is graded against is the sum of its Questions (see _Present CA_).
+
+**Question**:
+An `assessmentQuestions` row — one item on a CA paper, worth `marksAllocated`. Marks are entered and stored **per question per student**, never as a single CA total. This granularity is deliberate: it powers per-question diagnostics ("which questions did the class miss?") and is the intended basis for future concept-level analytics (`conceptTag`, `learningObjective` — captured but not yet surfaced).
+_Avoid_: treating a CA score as a single atomic number — it is always the sum of its question marks.
+
+**Present CA** (for a given student):
+A CA whose assessment exists **and** for which the student has at least one entered mark. Only present CAs contribute to the weighted average, and the average is renormalized to their combined weight. A CA with no questions, or for which the student has no answer rows, is **not present** and is excluded — not scored 0.
+_Avoid_: "missing CA" as a synonym for 0 — a not-yet-conducted or not-yet-marked CA is absent from the calculation, not a zero in it.
+
+**Absent** vs **Unmarked** (the distinction that matters most here):
+- **Absent** — the student was recorded absent for a CA (`isAbsent: true`, marks forced to 0). Counts as a **present 0**: it pulls the average down, because you cannot drop a CA by missing the test.
+- **Unmarked** — the student has no answer rows for a CA yet (not graded). **Excluded** from the average entirely.
+These look identical on screen (both "no positive marks") but mean opposite things to the calculation.
+
+**Weighted Average / Computed Grade**:
+A `computedGrades` row: the renormalized weighted average of a student's present CAs for one subject/semester, plus the server-computed letter grade. CAs are weighted **equally** (the only weighting the school uses). The per-subject percentage and letter grade are authoritative and computed server-side; **averages across subjects** (the tab banner, the per-enrollment overall, the sidebar) are display aggregations computed client-side from those authoritative per-subject numbers. A Computed Grade exists **only when the subject has at least one present CA** — a subject with zero present CAs has no row at all. "Not yet graded" is therefore represented by the *absence* of a Computed Grade, never by a stored 0 or "F". A roster of which subjects are still un-entered is a separate view over `assessments` vs `computedGrades`, not a property of the grade row.
+_Avoid_: "GPA" — the school works in percentages and letter grades, not grade points. Also avoid reading a missing Computed Grade as failure — missing means unmeasured.
+
+**Class** (the comparison group; also loosely "cohort"):
+All **active enrollments sharing one standard level + academic year**. This is the unit assessments are defined for, marks are entered for, and grades are compared within. `section` is a cosmetic sub-label and does **not** subdivide a Class for grading or analytics — the whole level+year is one Class.
+_Avoid_: "class" meaning a section, a room, or one teacher's group. For grading, Class = level + year.
+
+**Class Average**:
+For one subject + semester, the mean of the **renormalized weighted averages** of every student in the Class who has a Computed Grade for it. It is the **difficulty-adjusted baseline** a student is measured against — comparing a student to the classmates who sat the same papers cancels difficulty out, which raw cross-level scores cannot. Shown only when **at least 5 students** in the Class have a grade for that subject+semester; below that the sample is too small to be a meaningful average and the comparison is suppressed ("not enough class data yet"). The per-CA baseline used in the within-term view is the mean of *present* students' percentages for that specific CA.
+_Avoid_: presenting a 1–4 student "average" as a class baseline — it identifies a specific peer rather than a cohort.
+
+**Class Position**:
+A student's **rank within the Class**, by descending renormalized weighted average (1st = highest). Two scopes: **per-subject** (rank within one subject+semester, shown as detail in each subject row) and **overall** (rank by the across-subjects term average — the traditional report-card "stood 4th in class," the headline figure). Ties share a position (standard competition ranking: two tied for 5th are both 5th, the next is 7th). A position is shown **only when the grade is final** (not Provisional) **and at least 5 classmates** also have a final grade in scope to rank against — so it does not thrash as marks are keyed in mid-term.
+_Avoid_: ranking on provisional/partial grades, or presenting a position computed against fewer than 5 ranked peers.
+
+**Provisional Grade**:
+A Computed Grade that rests on **fewer present CAs than the subject runs this term** (present count < expected count, where expected = the number of CAs/assessments defined for that subject/level/semester). It is shown with an "early" indicator (e.g. *"based on 1 of 3 CAs"*) so an early-term grade is not mistaken for a final one. The letter grade itself is still the authoritative renormalized value — "provisional" labels *confidence/completeness*, not a different number. A grade resting on all the term's CAs is **final** (not provisional). `expectedCaCount` is stored on the grade row; present count is derived from which `caXPercentage` fields are set.
+_Avoid_: treating provisional as a separate or lower grade — it is the same renormalized grade, just flagged as resting on partial data.
+
+**Report Card**:
+A `reportCards` row: a PDF uploaded for one enrollment + semester (max one per pair). It is an **uploaded document, not generated** — the SIS does not render report cards from computed grades; an admin/teacher uploads the school's own PDF. No number, no lifecycle beyond exists/deleted.
+_Avoid_: conflating Report Card with Computed Grade — the report card is an opaque file; the computed grade is structured data. They are not derived from each other.
+
+## Relationships
+
+- A **Computed Grade** belongs to one student, one enrollment, one subject, one semester, and is derived only from that subject's **Present CAs** for that semester.
+- An **Assessment** has zero or more **Questions**; a student has zero or more per-question answers per assessment. The CA total a student is graded against is the sum of the assessment's question marks, not the assessment's `totalMarks` field.
+- A **Report Card** references an enrollment + semester and is independent of Computed Grades — deleting or recomputing grades does not touch it, and vice versa.
+- **Cross-level comparison is not difficulty-adjusted.** A subject's score plotted across grade levels (e.g. Grade 2 Math → Grade 4 Math) is a raw-score history, not a like-for-like improvement signal, because difficulty changes between levels. Genuine improvement is measured against a same-difficulty baseline (peers in the same class, or CA-1→2→3 within one term).
+
+## Flagged ambiguities
+
+- **"Trend"** had meant two different things in code (semester-over-semester within one enrollment, and first-vs-last across the whole history) under one label. **Resolved (2026-06-26):** the cross-level first-vs-last "Improving/Declining" verdict is removed — it compared different-difficulty levels and judged the student on an apples-to-oranges basis. The cross-year line may survive only as **raw history**, explicitly labeled "different years, different difficulty" and carrying *no* improvement judgment. The word "improvement"/"trend" is reserved for **same-difficulty** comparisons only: progression across the three CAs within one term, and movement relative to the class average on the same papers.
+- **`assessment.totalMarks`** — historically used as the grading denominator; per ADR-0004 it is display-only and the question-mark sum is authoritative. Old code dividing by `totalMarks` is the deprecated path.
+- **`conceptTag` / `learningObjective`** — captured on Questions but not yet readable or writable through any UI. Reserved for planned concept-level analytics, not dead fields.
+

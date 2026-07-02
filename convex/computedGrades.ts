@@ -1,12 +1,150 @@
 import { v } from "convex/values";
+import {
+  type CaInput,
+  computeRenormalizedGrade,
+} from "../lib/gradeComputation";
 import type { Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { type MutationCtx, mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /**
- * Compute and upsert grades for one student/enrollment/subject/semester.
- * Formula: weightedAvg = (ca1% × w1) + (ca2% × w2) + (ca3% × w3)
+ * Recompute one student's grade for a (subject, semester) under the ADR-0004
+ * renormalized model, and write the result.
+ *
+ * Present CA = the student has ≥1 answer row for the assessment AND the
+ * assessment has a positive question-mark total. The grade is the renormalized
+ * (equal-weight ⇒ mean) average of the present CAs' percentages; the pure math
+ * lives in `lib/gradeComputation.ts`. When NO CA is present the subject is
+ * ungraded: no row is written, and any stale row is deleted so an old "0 / F"
+ * from the previous math cannot linger.
+ *
+ * NOT auto-triggered by mark entry — the manual "Compute Grades" action is the
+ * only trigger (unchanged from the previous design). Callers that need fresh
+ * grades after entering marks must run compute.
+ *
+ * Shared by the public `computeGradesForStudent` mutation and the A.4 backfill
+ * migration, so it takes a bare `MutationCtx` and does no permission check —
+ * the public entry point is responsible for `requireRole`.
+ */
+export async function recomputeGrade(
+  ctx: MutationCtx,
+  args: {
+    studentId: Id<"students">;
+    enrollmentId: Id<"enrollments">;
+    subjectId: Id<"subjects">;
+    semester: 1 | 2;
+  },
+): Promise<Id<"computedGrades"> | null> {
+  const enrollment = await ctx.db.get(args.enrollmentId);
+  if (!enrollment) throw new Error("Enrollment not found");
+
+  // Active assessments for this subject at this level + year + semester (≤ 3).
+  const assessments = await ctx.db
+    .query("assessments")
+    .withIndex("by_subject_semester", (q) =>
+      q.eq("subjectId", args.subjectId).eq("semester", args.semester),
+    )
+    .filter((q) =>
+      q.and(
+        q.eq(q.field("standardLevelId"), enrollment.standardLevelId),
+        q.eq(q.field("academicYearId"), enrollment.academicYear),
+        q.eq(q.field("isActive"), true),
+      ),
+    )
+    .collect();
+
+  // Any existing row for this (enrollment, subject, semester). We replace it
+  // (never patch — Convex drops `undefined` keys, so patching would leave a
+  // stale caN percentage when a CA goes present → unmarked), or delete it when
+  // the subject is now ungraded.
+  const existing = await ctx.db
+    .query("computedGrades")
+    .withIndex("by_enrollment_semester", (q) =>
+      q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester),
+    )
+    .filter((q) => q.eq(q.field("subjectId"), args.subjectId))
+    .first();
+
+  // One CaInput per assessment: denominator = Σ question `marksAllocated`,
+  // presence + marks from the student's answer rows. Batched to avoid N+1.
+  const cas: CaInput[] = await Promise.all(
+    assessments.map(async (assessment) => {
+      const [questions, answers] = await Promise.all([
+        ctx.db
+          .query("assessmentQuestions")
+          .withIndex("by_assessment", (q) =>
+            q.eq("assessmentId", assessment._id),
+          )
+          .collect(),
+        ctx.db
+          .query("studentAssessmentAnswers")
+          .withIndex("by_student_assessment", (q) =>
+            q
+              .eq("studentId", args.studentId)
+              .eq("assessmentId", assessment._id),
+          )
+          .collect(),
+      ]);
+      return {
+        assessmentNumber: assessment.assessmentNumber,
+        hasAnswers: answers.length > 0,
+        marksObtained: answers.reduce((sum, a) => sum + a.marksObtained, 0),
+        marksAllocated: questions.reduce((sum, q) => sum + q.marksAllocated, 0),
+      };
+    }),
+  );
+
+  const result = computeRenormalizedGrade(cas);
+
+  // Zero present CAs → ungraded. Delete a stale row, write nothing new.
+  if (!result) {
+    if (existing) await ctx.db.delete(existing._id);
+    return null;
+  }
+
+  const gradeData = {
+    studentId: args.studentId,
+    enrollmentId: args.enrollmentId,
+    // Denormalised from the enrollment so class-level analytics can index by
+    // level + year + subject + semester (see schema). Immutable for this grade.
+    standardLevelId: enrollment.standardLevelId,
+    academicYear: enrollment.academicYear,
+    subjectId: args.subjectId,
+    semester: args.semester,
+    ca1Marks: result.ca1?.marks,
+    ca1Percentage: result.ca1?.percentage,
+    ca1TotalMarks: result.ca1?.totalMarks,
+    ca2Marks: result.ca2?.marks,
+    ca2Percentage: result.ca2?.percentage,
+    ca2TotalMarks: result.ca2?.totalMarks,
+    ca3Marks: result.ca3?.marks,
+    ca3Percentage: result.ca3?.percentage,
+    ca3TotalMarks: result.ca3?.totalMarks,
+    weightedAverage: result.weightedAverage,
+    letterGrade: result.letterGrade,
+    totalMarksObtained: result.totalMarksObtained,
+    totalPossibleMarks: result.totalPossibleMarks,
+    // Provisional-grade signal (A.2): how many CAs the subject runs this term,
+    // snapshotted at compute time. present count (derived from which caX
+    // percentage fields are set) < expectedCaCount ⇒ provisional. NOTE: this is
+    // a snapshot — if assessments are added later it can go stale until the
+    // next recompute, so the authoritative final/provisional *gate* (Phase C)
+    // must reconcile against a live `assessments.length`, not this stored value.
+    expectedCaCount: assessments.length,
+    computedAt: Date.now(),
+  };
+
+  if (existing) {
+    await ctx.db.replace(existing._id, gradeData);
+    return existing._id;
+  }
+  return await ctx.db.insert("computedGrades", gradeData);
+}
+
+/**
+ * Compute (or clear) one student's grade for a subject/semester. Thin wrapper
+ * over `recomputeGrade` that enforces the role gate and writes the audit trail.
  */
 export const computeGradesForStudent = mutation({
   args: {
@@ -17,146 +155,16 @@ export const computeGradesForStudent = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin", "teacher"]);
-
-    const enrollment = await ctx.db.get(args.enrollmentId);
-    if (!enrollment) throw new Error("Enrollment not found");
-
-    // Load assessments for this subject/semester/level/year
-    const assessments = await ctx.db
-      .query("assessments")
-      .withIndex("by_subject_semester", (q) =>
-        q.eq("subjectId", args.subjectId).eq("semester", args.semester),
-      )
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("standardLevelId"), enrollment.standardLevelId),
-          q.eq(q.field("academicYearId"), enrollment.academicYear),
-          q.eq(q.field("isActive"), true),
-        ),
-      )
-      .collect();
-
-    // No assessments for this subject at this level — skip
-    if (assessments.length === 0) {
-      return null;
-    }
-
-    // Get weighting rule (fall back to equal thirds)
-    const rule = await ctx.db
-      .query("assessmentWeightingRules")
-      .withIndex("by_standard_subject_semester", (q) =>
-        q
-          .eq("standardLevelId", enrollment.standardLevelId)
-          .eq("subjectId", args.subjectId)
-          .eq("semester", args.semester),
-      )
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .first();
-    const w1 = rule?.ca1Weight ?? 1 / 3;
-    const w2 = rule?.ca2Weight ?? 1 / 3;
-    const w3 = rule?.ca3Weight ?? 1 / 3;
-
-    // Calculate per-CA totals
-    let ca1Marks: number | undefined;
-    let ca2Marks: number | undefined;
-    let ca3Marks: number | undefined;
-    let ca1Total: number | undefined;
-    let ca2Total: number | undefined;
-    let ca3Total: number | undefined;
-
-    // Batch-fetch all answers in parallel (avoid N+1)
-    const allAnswersByAssessment = await Promise.all(
-      assessments.map(async (assessment) => {
-        const answers = await ctx.db
-          .query("studentAssessmentAnswers")
-          .withIndex("by_student_assessment", (q) =>
-            q
-              .eq("studentId", args.studentId)
-              .eq("assessmentId", assessment._id),
-          )
-          .collect();
-        return {
-          assessmentNumber: assessment.assessmentNumber,
-          marksObtained: answers.reduce((s, a) => s + a.marksObtained, 0),
-          totalMarks: assessment.totalMarks,
-        };
-      }),
-    );
-
-    for (const {
-      assessmentNumber,
-      marksObtained,
-      totalMarks,
-    } of allAnswersByAssessment) {
-      if (assessmentNumber === 1) {
-        ca1Marks = marksObtained;
-        ca1Total = totalMarks;
-      } else if (assessmentNumber === 2) {
-        ca2Marks = marksObtained;
-        ca2Total = totalMarks;
-      } else if (assessmentNumber === 3) {
-        ca3Marks = marksObtained;
-        ca3Total = totalMarks;
-      }
-    }
-
-    // Calculate percentages
-    const ca1Pct =
-      ca1Total && ca1Total > 0 ? ((ca1Marks ?? 0) / ca1Total) * 100 : 0;
-    const ca2Pct =
-      ca2Total && ca2Total > 0 ? ((ca2Marks ?? 0) / ca2Total) * 100 : 0;
-    const ca3Pct =
-      ca3Total && ca3Total > 0 ? ((ca3Marks ?? 0) / ca3Total) * 100 : 0;
-
-    const weightedAverage = ca1Pct * w1 + ca2Pct * w2 + ca3Pct * w3;
-    const letterGrade = getLetterGrade(weightedAverage);
-    const totalObtained = (ca1Marks ?? 0) + (ca2Marks ?? 0) + (ca3Marks ?? 0);
-    const totalPossible = (ca1Total ?? 0) + (ca2Total ?? 0) + (ca3Total ?? 0);
-
-    // Upsert computed grade
-    const existing = await ctx.db
-      .query("computedGrades")
-      .withIndex("by_enrollment_semester", (q) =>
-        q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester),
-      )
-      .filter((q) => q.eq(q.field("subjectId"), args.subjectId))
-      .first();
-
-    const gradeData = {
-      studentId: args.studentId,
-      enrollmentId: args.enrollmentId,
-      subjectId: args.subjectId,
-      semester: args.semester,
-      ca1Marks,
-      ca1Percentage: ca1Total ? ca1Pct : undefined,
-      ca1TotalMarks: ca1Total,
-      ca2Marks,
-      ca2Percentage: ca2Total ? ca2Pct : undefined,
-      ca2TotalMarks: ca2Total,
-      ca3Marks,
-      ca3Percentage: ca3Total ? ca3Pct : undefined,
-      ca3TotalMarks: ca3Total,
-      weightedAverage,
-      letterGrade,
-      totalMarksObtained: totalObtained,
-      totalPossibleMarks: totalPossible,
-      computedAt: Date.now(),
-    };
-
-    let gradeId: Id<"computedGrades">;
-    if (existing) {
-      await ctx.db.patch(existing._id, gradeData);
-      gradeId = existing._id;
-    } else {
-      gradeId = await ctx.db.insert("computedGrades", gradeData);
-    }
+    const gradeId = await recomputeGrade(ctx, args);
 
     await logAudit(ctx, {
       user,
-      action: "create",
+      action: gradeId ? "create" : "delete",
       entityType: "computedGrades",
-      entityId: gradeId,
-      description: "Computed grades for student",
+      entityId: gradeId ?? args.enrollmentId,
+      description: gradeId
+        ? "Computed grades for student"
+        : "Cleared grade — subject has no present CAs",
     });
 
     return gradeId;
@@ -258,14 +266,3 @@ export const getLongitudinalSubjectPerformance = query({
     });
   },
 });
-
-// ── Helper ────────────────────────────────────────────────────────────────────
-
-function getLetterGrade(percentage: number): string {
-  if (percentage >= 90) return "A+";
-  if (percentage >= 80) return "A";
-  if (percentage >= 70) return "B";
-  if (percentage >= 60) return "C";
-  if (percentage >= 50) return "D";
-  return "F";
-}

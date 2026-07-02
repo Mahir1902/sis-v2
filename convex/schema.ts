@@ -459,24 +459,11 @@ export default defineSchema({
     .index("by_enrollment_semester", ["enrollmentId", "semester"]),
 
   // ─── Assessment System (CA-1 / CA-2 / CA-3) ──────────────────────────────
-
-  assessmentWeightingRules: defineTable({
-    subjectId: v.id("subjects"),
-    standardLevelId: v.id("standardLevels"),
-    semester: v.union(v.literal(1), v.literal(2)),
-    ca1Weight: v.float64(),
-    ca2Weight: v.float64(),
-    ca3Weight: v.float64(),
-    classPerformanceWeight: v.optional(v.float64()),
-    continualAssessmentWeight: v.optional(v.float64()),
-    isActive: v.boolean(),
-  })
-    .index("by_standard_subject_semester", [
-      "standardLevelId",
-      "subjectId",
-      "semester",
-    ])
-    .index("by_active", ["isActive"]),
+  //
+  // `assessmentWeightingRules` was removed (ADR-0004 / A.3): CAs are always
+  // weighted equally, so the table, its mutation, and its query carried no
+  // reachable behaviour. Grade math renormalizes over present CAs in
+  // `lib/gradeComputation.ts`.
 
   assessments: defineTable({
     name: v.string(),
@@ -527,6 +514,12 @@ export default defineSchema({
   computedGrades: defineTable({
     studentId: v.id("students"),
     enrollmentId: v.id("enrollments"),
+    // Denormalised from the enrollment (immutable once the grade exists) so class-level
+    // analytics can index "all grades for a level + year + subject + semester" in ONE read
+    // instead of fanning out over every enrollment. Optional until the ADR-0004 recompute
+    // backfills every row; narrow to required afterward (widen-migrate-narrow).
+    standardLevelId: v.optional(v.id("standardLevels")),
+    academicYear: v.optional(v.id("academicYears")),
     subjectId: v.id("subjects"),
     semester: v.union(v.literal(1), v.literal(2)),
     ca1Marks: v.optional(v.float64()),
@@ -542,12 +535,25 @@ export default defineSchema({
     letterGrade: v.string(),
     totalMarksObtained: v.optional(v.float64()),
     totalPossibleMarks: v.optional(v.float64()),
+    // Number of CAs the subject runs this term, snapshotted at compute time
+    // (ADR-0004 / A.2). Powers the Provisional Grade tag: present CA count
+    // (derived from which caXPercentage fields are set) < expectedCaCount ⇒
+    // provisional. Optional until the A.4 backfill populates every row; narrow
+    // to required afterward (widen-migrate-narrow).
+    expectedCaCount: v.optional(v.float64()),
     remarks: v.optional(v.string()),
     computedAt: v.optional(v.float64()),
   })
     .index("by_enrollment_semester", ["enrollmentId", "semester"])
     .index("by_student", ["studentId"])
-    .index("by_subject", ["subjectId"]),
+    .index("by_subject", ["subjectId"])
+    // Class-level analytics: one indexed read returns an entire class for a subject + term.
+    .index("by_level_year_subject_semester", [
+      "standardLevelId",
+      "academicYear",
+      "subjectId",
+      "semester",
+    ]),
 
   // ─── Audit Logs ───────────────────────────────────────────────────────────
 

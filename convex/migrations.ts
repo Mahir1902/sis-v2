@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { applyBillingContactBackfill } from "../lib/applyBillingContactBackfill";
 import { components, internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
+import { recomputeGrade } from "./computedGrades";
 import schema from "./schema";
 
 // ─── Migrations component init ─────────────────────────────────────────────
@@ -49,6 +50,60 @@ export const backfillPrimaryBillingContact = migrations.define({
 
 export const runBackfillPrimaryBillingContact = migrations.runner(
   internal.migrations.backfillPrimaryBillingContact,
+);
+
+// ─── ADR-0004 / A.4: recompute all grades under the renormalized model ──────
+
+/**
+ * Recomputes every existing `computedGrades` row under the ADR-0004
+ * renormalized math (stored `weightedAverage`/`letterGrade` reflect the old,
+ * deflated math). Also backfills the B.1 denormalised fields
+ * (`standardLevelId`, `academicYear`) and `expectedCaCount` — which unblocks
+ * narrowing those three from optional → required in a follow-up.
+ *
+ * Rows whose subject now has zero present CAs are DELETED: ungraded = no row.
+ *
+ * `batchSize` is deliberately small. Each row fans out to the enrollment, its
+ * assessments, and (questions + the student's answers) per assessment, so a
+ * large batch could approach Convex's per-transaction read ceiling. 25 keeps
+ * the worst case well under it; raise only if the grades table is large and
+ * papers are short.
+ *
+ * This only re-runs the math on rows that ALREADY exist — it does not compute
+ * grades for subjects never computed before (those are created on demand by the
+ * manual "Compute Grades" action). Safe to re-run; idempotent.
+ *
+ * Orphaned rows whose `enrollmentId` no longer resolves (a Computed Grade
+ * cannot exist without its enrollment — CONTEXT.md) are deleted as a repair;
+ * `recomputeGrade` itself keeps its strict "Enrollment not found" contract for
+ * the UI path.
+ *
+ * Run via:
+ *   npx convex run migrations:runRecomputeAllGrades
+ *   npx convex run migrations:runRecomputeAllGrades '{"dryRun":true}'
+ */
+export const recomputeAllGrades = migrations.define({
+  table: "computedGrades",
+  batchSize: 25,
+  migrateOne: async (ctx, grade) => {
+    // Orphaned grade (enrollment deleted without cascading) — invalid, drop it.
+    const enrollment = await ctx.db.get(grade.enrollmentId);
+    if (!enrollment) {
+      await ctx.db.delete(grade._id);
+      return;
+    }
+    // recomputeGrade does its own replace/delete, so migrateOne returns void.
+    await recomputeGrade(ctx, {
+      studentId: grade.studentId,
+      enrollmentId: grade.enrollmentId,
+      subjectId: grade.subjectId,
+      semester: grade.semester,
+    });
+  },
+});
+
+export const runRecomputeAllGrades = migrations.runner(
+  internal.migrations.recomputeAllGrades,
 );
 
 // ─── Removed migrations (issue #33 invoice-status rename; issue #36

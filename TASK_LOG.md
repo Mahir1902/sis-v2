@@ -1444,3 +1444,91 @@ loading skeleton, empty state, and error boundary (inherits dashboard
 - Slice 7 (Receipt detail correction actions) builds on `/receipts/[receiptId]` — already exists and ships with cosmetic edit (#38) and email launcher (#37). Slice 7 should add Void and Void & Re-issue.
 - Slice 9 (Void & Re-issue) will populate `supersedes` / `supersededBy` — the badging UI in `columns.tsx` will light up automatically once that lands; no list-page changes needed.
 - If volume grows beyond ~5k receipts/year, swap `listReceipts` to cursor pagination (TanStack Table supports `manualPagination`). The pure helper continues to apply.
+
+---
+
+## Current Feature: Grading & Academic Analytics Overhaul
+
+**Status**: Phase A — In Progress (2026-07-01)
+**Active Agent**: Backend Agent (orchestrated) — Phase A only; stop before Phase B per handoff
+**Branch**: `review/grading-cards`
+**References**: [ADR-0004](docs/adr/0004-grade-computation-model.md) (grade math) ·
+[ADR-0005](docs/adr/0005-difficulty-adjusted-academic-analytics.md) (analytics approach) ·
+`CONTEXT.md` → Grading & Academic Records (Class, Class Average, Class Position, Provisional
+Grade) · `docs/handoffs/2026-06-26-grading-analytics-features.md`
+
+### Summary
+Fix the grade computation (ADR-0004 is **not yet implemented** — `convex/computedGrades.ts` is
+still the old, buggy version) and replace the misleading cross-level "trend" chart with
+**difficulty-adjusted analytics**: a student is measured against their own Class, never against
+raw cross-level scores (ADR-0005). Ships in two halves — individual view first, a deliberately
+simple cohort view second.
+
+### 😈 Devil's Advocate Findings (surfaced during design — mitigate before/while building)
+| # | Concern | Mitigation |
+|---|---------|------------|
+| 1 | Changing the math invalidates every stored `computedGrades` row (old math is deflated). | Backfill/recompute is a sub-task, not forward-only. Block analytics work until recompute runs. |
+| 2 | `computedGrades` rows carry `enrollmentId` + `subjectId` + `semester` but **not** `standardLevelId` / `academicYear` — so "all grades for a level+year+subject+sem" (the Class Average query) had no direct index. | ✅ **RESOLVED 2026-06-30:** denormalised `standardLevelId` + `academicYear` onto `computedGrades` (optional until backfill; they're immutable per grade → no staleness risk) + added `by_level_year_subject_semester` index; `computeGradesForStudent` populates them from the already-loaded enrollment. One indexed read = one whole class (was a ~30-read fan-out). Schema pushed via `convex codegen` ✓, `tsc --noEmit` ✓. Still run `convex-performance-audit` on the aggregate query once built. |
+| 3 | Class Average / Position read every classmate's grade → read amplification. | Bound reads (`.take`), audit with `convex-performance-audit`, cache nothing premature. |
+| 4 | Provisional grades + positions thrash as marks are keyed mid-term. | Position gated to **final** grades (present CAs == `expectedCaCount`); provisional grades badged, never ranked. |
+| 5 | A 1–4 student "class average" identifies a specific peer, not a cohort. | **≥5 graded-peer floor** before any class average / position renders; else "not enough class data yet." |
+| 6 | Deleting `assessmentWeightingRules` is a schema change with a live reader. | `computeGradesForStudent` reads it today (lines ~45–57) — remove the lookup in the same change; grep for other readers before dropping the table. |
+| 7 | `expectedCaCount` set at compute time, but assessments can be added later → "expected" goes stale. | Recompute the subject's grades when its assessment set changes; document the trigger. |
+
+### Sub-tasks (sequenced — do NOT start analytics before the math + recompute land)
+
+| # | Task | Status | Agent gate |
+|---|------|--------|-----------|
+| **Phase A — Grade math (ADR-0004 + provisional)** | | | |
+| A.1 | Rewrite `computeGradesForStudent`: renormalize to present CAs · denominator = Σ question `marksAllocated` · absent = present-0 · unmarked excluded · **no row when zero present CAs** | [x] **APPROVED** by Backend Review Agent (2026-07-01) | Devil's Advocate ✓ + Backend Review ✓ |
+| A.2 | Schema: add `expectedCaCount` to `computedGrades`; set it in the mutation (count of active assessments for the group). Present count derived from set `caXPercentage` fields | [x] **APPROVED** by Backend Review Agent (2026-07-01) | Backend Review ✓ |
+| A.3 | Delete `assessmentWeightingRules` — table + mutation + query + the lookup in `computeGradesForStudent` | [x] **APPROVED** by Backend Review Agent (2026-07-01) | Backend Review ✓ |
+| A.4 | Recompute/backfill all existing `computedGrades` rows under the new math | [x] **APPROVED** by Backend Review Agent (2026-07-01) — migration ran on dev, `state: success`, processed 1300 | Backend Review ✓ |
+| **Phase B — Backend analytics queries** | | | |
+| B.1 | Index/denormalisation for "Class grades" (see DA #2): denormalise level+year onto `computedGrades` + `by_level_year_subject_semester` index + mutation populate | [x] **DONE 2026-06-30** | Decision locked + landed; populate survives A.1's rewrite, existing rows backfill in A.4; formal Backend Review folds into A.1 |
+| B.2 | `getClassAverages(level, year, subject, semester)` → per-subject class avg + student delta; enforce ≥5 floor | [ ] PENDING | Backend Review + perf audit |
+| B.3 | `getClassPositions` → per-subject + overall rank; final-gated; ties shared | [ ] PENDING | Backend Review + perf audit |
+| B.4 | Per-CA class baseline (mean of present students' CA% per CA) for Shape B | [ ] PENDING | Backend Review |
+| B.5 | Cohort: `getGradeSpread` (A–F distribution) + `getStudentsNeedingHelp` (below 50%) | [ ] PENDING | Backend Review |
+| **Phase C — Individual view (Academic History tab)** | | | |
+| C.1 | "Early/provisional" tags on grade cells | [ ] PENDING | Frontend Review |
+| C.2 | **Shape A** snapshot card: per-subject you-vs-class-average, ▲/▼ delta, per-subject position | [ ] PENDING | Frontend Review |
+| C.3 | **Shape B**: rework subject chart → you-vs-class line across CA-1/2/3 | [ ] PENDING | Frontend Review |
+| C.4 | Overall Class Position headline at top of tab | [ ] PENDING | Frontend Review |
+| C.5 | Remove "Improving/Declining" verdict; keep cross-year line only as labeled raw history (no judgment) | [ ] PENDING | Frontend Review |
+| **Phase D — Cohort view (simple)** | | | |
+| D.1 | One class view: level+year+subject+term selector → grade spread + who-needs-help list | [ ] PENDING | Frontend Review |
+| **Phase E — Verify** | | | |
+| E.1 | `npm run build` + `npm run lint` + Playwright E2E + `graphify update .` | [ ] PENDING | — |
+
+### Phase A Implementation Notes (2026-07-01)
+
+**What shipped (A.1–A.4):**
+- `lib/gradeComputation.ts` — NEW pure helper `computeRenormalizedGrade()` (deep module; the whole math). Unit-tested via TDD in `lib/gradeComputation.test.ts` (8 tests: mean, the lone-CA deflation bug, unmarked-excluded, absent-as-present-0, `marksAllocated` denominator, null on zero present, zero-question guard, letter boundaries).
+- `convex/computedGrades.ts` — `computeGradesForStudent` is now a thin `requireRole` + audit wrapper over an exported `recomputeGrade(ctx, args)` (shared with the A.4 migration). Uses `ctx.db.replace` (not `patch`) on update — see Devil's Advocate finding #1.
+- `convex/schema.ts` — added `expectedCaCount` (optional) to `computedGrades`; removed the `assessmentWeightingRules` table.
+- `convex/assessmentWeightingRules.ts` — deleted (zero readers confirmed).
+- `convex/migrations.ts` — `recomputeAllGrades` (`migrations.define`, batchSize 25); deletes orphaned rows, else recomputes.
+
+**Devil's Advocate pass (2026-07-01) — verdicts folded in:**
+- #1 **BLOCKER, fixed:** Convex `patch` drops `undefined` keys, so patching would leave a stale `caN` field when a CA goes present→unmarked. Switched update path to `ctx.db.replace` (writes a complete fresh document). Safe: nothing reads `computedGrades.remarks`.
+- #4 `expectedCaCount` is a compute-time snapshot; the authoritative Phase-C provisional/final **gate** must reconcile against a live `assessments.length`, not this stored value. Documented in code + schema comment.
+- #6 migration read-amplification → `batchSize: 25`, documented.
+- #2/#3/#5/#7 safe (migrate-delete-during-iterate ok; orphaned dropped table tolerated; manual-recompute is not a regression; zero-question guard is explicit before division).
+
+**⚠️ Data finding (dev deployment `hushed-bass-123`):** the entire `computedGrades` table was **1300 orphaned rows** — every one referenced a deleted enrollment (plus old 0/F artifacts). `studentAssessmentAnswers` are likewise largely stale (reference deleted assessments / year-mismatched enrollments). The A.4 migration ran clean (`state: success`, processed 1300) and **emptied the table** — there was no valid old grade data to recompute; the backfill was pure orphan cleanup. **Implication for verification:** the new math was proven by unit tests + a fixture-based integration check on a *real* enrollment (17/20 → 85% "A"; a colliding real CA gave 85%+99% → 92% "A+"), NOT by the migration (which only deleted garbage). A live UI "Compute Grades" pass on a current-year student with entered marks is still worth doing once dev has coherent data.
+
+**Recompute trigger:** unchanged — the manual "Compute Grades" dialog in `GradesTab` is the only trigger (mark entry does not auto-recompute). It calls the same rewritten mutation, so ongoing entry recomputes on demand. Auto-recompute-on-mark-entry deliberately NOT added (not in ADR; per-mark perf cost) — flag for a future decision if the school expects live grades.
+
+**Verification:** `tsc --noEmit` ✓ · `biome check` (197 files) ✓ · `next build` (18 routes) ✓ · 8 unit tests ✓ · fixture integration ✓ · migration `success` ✓ · `graphify update` ✓. **Stopped before Phase B per handoff — user will write the next handoff.**
+
+**Backend Review — APPROVED (2026-07-01):** Full checklist passed. Independently re-verified: (1) `replace` dropping `computedGrades.remarks` breaks nothing (zero `.remarks` readers; `students.ts` cascade reads `._id` only), (2) no dangling `assessmentWeightingRules` reference (only a doc comment in schema; no `withIndex` on a dropped index), (3) `logAudit` accepts the passed arg shape. Two non-blocking carry-forwards: (a) `getLongitudinalSubjectPerformance` post-index subject filter — fine at current scale; (b) `expectedCaCount` snapshot-staleness becomes a **hard requirement** for the Phase C provisional/final gate to reconcile against live `assessments.length`.
+
+### Decisions Made (this session, 2026-06-30)
+- ADR-0004's math is **unbuilt**; this feature implements it before any analytics. Verified `computedGrades.ts`, `studentAssessmentAnswers.ts`, `MarkEntryGrid.tsx` — answer rows are created lazily, so "Present CA = ≥1 answer row" holds at the data layer.
+- **Zero present CAs → no `computedGrade` row** (not 0/F). "Not yet graded" = absence of a row.
+- **Provisional grades** flagged via `expectedCaCount`; letter grade stays renormalized/authoritative.
+- Old **cross-level "Improving/Declining" verdict removed** (apples-to-oranges); see ADR-0005.
+- **Individual analytics = Shape A (you-vs-class snapshot) + Shape B (you-vs-class within-term line)**; Shape C (gap-over-time) deferred.
+- **Class = level + year** (section cosmetic); **Class Average & Position need ≥5 graded peers**; **Position final-gated**, ties shared; **overall position** is the headline, per-subject is detail.
+- **Cohort first cut = grade spread + below-50% list only**. Per-question (②) and concept-tag (③) analytics deferred — `conceptTag` / `learningObjective` stay parked per CONTEXT.md.
