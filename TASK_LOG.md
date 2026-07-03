@@ -1449,8 +1449,8 @@ loading skeleton, empty state, and error boundary (inherits dashboard
 
 ## Current Feature: Grading & Academic Analytics Overhaul
 
-**Status**: Phase A — In Progress (2026-07-01)
-**Active Agent**: Backend Agent (orchestrated) — Phase A only; stop before Phase B per handoff
+**Status**: Phase B — In Progress (2026-07-03) · Phase A committed `efe9799`
+**Active Agent**: Backend Agent (orchestrated) — Phase B (analytics queries); stop before Phase C per handoff
 **Branch**: `review/grading-cards`
 **References**: [ADR-0004](docs/adr/0004-grade-computation-model.md) (grade math) ·
 [ADR-0005](docs/adr/0005-difficulty-adjusted-academic-analytics.md) (analytics approach) ·
@@ -1475,6 +1475,17 @@ simple cohort view second.
 | 6 | Deleting `assessmentWeightingRules` is a schema change with a live reader. | `computeGradesForStudent` reads it today (lines ~45–57) — remove the lookup in the same change; grep for other readers before dropping the table. |
 | 7 | `expectedCaCount` set at compute time, but assessments can be added later → "expected" goes stale. | Recompute the subject's grades when its assessment set changes; document the trigger. |
 
+### 😈 Devil's Advocate Findings — Phase B (2026-07-03, before building B.2–B.5)
+| # | Concern | Mitigation (adopted) |
+|---|---------|----------------------|
+| B-1 | The `by_level_year_subject_semester` read returns rows for **withdrawn** students too — a stale grade could push a 4-active class over the ≥5 floor and skew averages/positions. | Join each collected row to its enrollment, keep only `exitDate === undefined` (Class = *active* enrollments per glossary). Batched via `Promise.all` on unique enrollmentIds; shared `activeGradeRows` helper. |
+| B-2 | Renormalized means from different sum paths (1 CA vs 3) differ at ~1e-15 → two display-equal grades get different ranks. | Competition ranking rounds values to **2dp** before the strict-greater compare. Rounding lives in `lib/gradeAnalytics.ts`. |
+| B-3 | Empty/all-filtered input → `sum/0 = NaN` escapes into the return and reaches Recharts. | `mean([]) → null` guard in the pure helper; every query returns an explicit `sufficient/suppressed` signal below the ≥5 floor, never NaN or a misleading 0. |
+| B-4 | B.3 overall rank is undefined for a student with **mixed** final/provisional subjects. | Overall rank suppressed unless the student's whole graded term is final **and** ≥5 term-complete peers exist; explicit `overall: null` + reason returned. Encoded as a constant. |
+| B-5 | B.3 final-gate needs a live active-assessment count per subject — doing it inside the rank loop is an N+1. | level/year/semester are fixed per call, only subject varies → batch one count per **unique subject** (reuse existing `by_subject_semester` index + level/year/isActive filter, as `recomputeGrade` already does). No new index. |
+| B-6 | B.4's ≥5 floor applied class-wide hides that CA-2 may have only 3 present students. | Floor applied **per-CA independently**: `{ ca1, ca2, ca3 }`, each `{ mean, n } | null`. |
+| B-7 | Phase B is silently partial if the A.4 backfill left pre-migration rows without `standardLevelId`/`academicYear`. | A.4 ran clean and emptied the table (only orphans existed); new rows always populate both. JSDoc warning on each query; narrow-to-required deferred to widen-migrate-narrow. |
+
 ### Sub-tasks (sequenced — do NOT start analytics before the math + recompute land)
 
 | # | Task | Status | Agent gate |
@@ -1486,10 +1497,10 @@ simple cohort view second.
 | A.4 | Recompute/backfill all existing `computedGrades` rows under the new math | [x] **APPROVED** by Backend Review Agent (2026-07-01) — migration ran on dev, `state: success`, processed 1300 | Backend Review ✓ |
 | **Phase B — Backend analytics queries** | | | |
 | B.1 | Index/denormalisation for "Class grades" (see DA #2): denormalise level+year onto `computedGrades` + `by_level_year_subject_semester` index + mutation populate | [x] **DONE 2026-06-30** | Decision locked + landed; populate survives A.1's rewrite, existing rows backfill in A.4; formal Backend Review folds into A.1 |
-| B.2 | `getClassAverages(level, year, subject, semester)` → per-subject class avg + student delta; enforce ≥5 floor | [ ] PENDING | Backend Review + perf audit |
-| B.3 | `getClassPositions` → per-subject + overall rank; final-gated; ties shared | [ ] PENDING | Backend Review + perf audit |
-| B.4 | Per-CA class baseline (mean of present students' CA% per CA) for Shape B | [ ] PENDING | Backend Review |
-| B.5 | Cohort: `getGradeSpread` (A–F distribution) + `getStudentsNeedingHelp` (below 50%) | [ ] PENDING | Backend Review |
+| B.2 | `getClassAverages(level, year, subject, semester)` → per-subject class avg + student delta; enforce ≥5 floor | [x] **APPROVED** by Backend Review Agent (2026-07-03) | Backend Review ✓ + perf audit ✓ |
+| B.3 | `getClassPositions` → per-subject + overall rank; final-gated; ties shared | [x] **APPROVED** by Backend Review Agent (2026-07-03) | Backend Review ✓ + perf audit ✓ |
+| B.4 | Per-CA class baseline (mean of present students' CA% per CA) for Shape B | [x] **APPROVED** by Backend Review Agent (2026-07-03) | Backend Review ✓ |
+| B.5 | Cohort: `getGradeSpread` (A–F distribution) + `getStudentsNeedingHelp` (below 50%) | [x] **APPROVED** by Backend Review Agent (2026-07-03) | Backend Review ✓ |
 | **Phase C — Individual view (Academic History tab)** | | | |
 | C.1 | "Early/provisional" tags on grade cells | [ ] PENDING | Frontend Review |
 | C.2 | **Shape A** snapshot card: per-subject you-vs-class-average, ▲/▼ delta, per-subject position | [ ] PENDING | Frontend Review |
@@ -1523,6 +1534,23 @@ simple cohort view second.
 **Verification:** `tsc --noEmit` ✓ · `biome check` (197 files) ✓ · `next build` (18 routes) ✓ · 8 unit tests ✓ · fixture integration ✓ · migration `success` ✓ · `graphify update` ✓. **Stopped before Phase B per handoff — user will write the next handoff.**
 
 **Backend Review — APPROVED (2026-07-01):** Full checklist passed. Independently re-verified: (1) `replace` dropping `computedGrades.remarks` breaks nothing (zero `.remarks` readers; `students.ts` cascade reads `._id` only), (2) no dangling `assessmentWeightingRules` reference (only a doc comment in schema; no `withIndex` on a dropped index), (3) `logAudit` accepts the passed arg shape. Two non-blocking carry-forwards: (a) `getLongitudinalSubjectPerformance` post-index subject filter — fine at current scale; (b) `expectedCaCount` snapshot-staleness becomes a **hard requirement** for the Phase C provisional/final gate to reconcile against live `assessments.length`.
+
+### Phase B Implementation Notes (2026-07-03)
+
+**What shipped (B.2–B.5):**
+- `lib/gradeAnalytics.ts` — NEW pure math (deep module, TDD'd in `lib/gradeAnalytics.test.ts`, 8 tests): `rankStandardCompetition` (standard competition ranking `1 + |{y : v(y) > v(x)}|`, rounds to 2dp before compare so display-equal grades tie), `mean` (null on empty — never NaN), `gradeSpread` (six letter buckets, zero-filled).
+- `convex/computedGrades.ts` — five read-only queries under the `// ─── Phase B` banner, all `requireRole(["admin","teacher"])`, each ONE indexed `by_level_year_subject_semester` read then active-enrollment filter then pure math:
+  - **B.2 `getClassAverages`** — class avg + optional student value/delta; `sufficient:false`+`classAverage:null` below the ≥5 floor.
+  - **B.4 `getPerCaClassBaseline`** — `{ca1,ca2,ca3}`, each `{mean,n}|null`, ≥5 floor applied **per-CA independently**.
+  - **B.3 `getClassPositions`** — one student's per-subject + overall ranks; **final-gated on a LIVE assessment count** (`liveAssessmentCount`, batched per unique subject via `by_subject_semester`), provisional excluded, ties shared; overall suppressed unless the student's whole graded term is final AND ≥5 term-complete peers (`overallSuppressedReason`: `not_graded`/`provisional`/`insufficient_peers`).
+  - **B.5 `getGradeSpread`** (A–F distribution, includes provisional = "current standing") + **`getStudentsNeedingHelp`** (<50%, lowest-first).
+- Private helpers: `presentCaCount`, `activeRows` (batched `exitDate === undefined` filter — DA B-1), `classSubjectRows`, `classTermRows`, `liveAssessmentCount`.
+
+**Devil's Advocate pass (2026-07-03) — all seven mitigations implemented** (see the DA table above): B-1 withdrawn-exclusion, B-2 2dp tie-rounding, B-3 null-not-NaN, B-4 overall-final-gate, B-5 batched live count / no new index, B-6 per-CA floor, B-7 backfill-completeness JSDoc.
+
+**Backend Review — APPROVED (2026-07-03):** Full CLAUDE.md checklist + `convex-performance-audit` passed. Verified: role gate first in all 5 handlers; declared indexes only; no N+1 (`liveAssessmentCount` once per **unique** subject, enrollment/name reads batched); reads one-class-bounded — a `.take()` would silently corrupt an aggregate so **not** warranted; no NaN path; no schema leak; `studentFullName` to teachers is within scope. Three non-blocking carry-forwards for Phase C: (a) label the cohort spread "current standing" (includes provisional) not "final results"; (b) narrow `standardLevelId`/`academicYear` to required (widen-migrate-narrow) so future orphans can't drop out of analytics; (c) `getClassPositions` "term-complete" does not yet require full subject coverage — revisit if the overall headline needs it.
+
+**Verification:** `tsc --noEmit` ✓ · `biome check` ✓ · `next build` (18 routes) ✓ · 177 unit tests ✓ (incl. 8 new). **NOT yet exercised against live data** — dev `computedGrades` is empty (A.4 cleared 1300 orphans), so B.2–B.5 return empty/"not enough data" until a coherent ≥5-student Class fixture is seeded. Pure math is unit-proven; the thin query wrappers are Backend-Review-proven; live integration is a Phase C prerequisite (seed fixture). **Stopped before Phase C per handoff.**
 
 ### Decisions Made (this session, 2026-06-30)
 - ADR-0004's math is **unbuilt**; this feature implements it before any analytics. Verified `computedGrades.ts`, `studentAssessmentAnswers.ts`, `MarkEntryGrid.tsx` — answer rows are created lazily, so "Present CA = ≥1 answer row" holds at the data layer.
