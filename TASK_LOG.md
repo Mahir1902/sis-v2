@@ -16,6 +16,101 @@ new feature work begins.
 
 ---
 
+## Current Feature: Phase C — Integrate C.1–C.5 into AcademicHistoryTab container (2026-07-03)
+**Status**: ✅ APPROVED by FRONTEND REVIEW AGENT (2026-07-03)
+**Active Agent**: FRONTEND REVIEW AGENT
+
+### Sub-tasks (this session) — all DONE, awaiting FRONTEND REVIEW
+- [x] C-INT-0 TDD `buildSubjectRowSeeds` in `lib/academicHistoryView.ts` (+ 4 tests) — join getClassPositions.bySubject with semester grade rows — DONE — awaiting FRONTEND REVIEW (red→green confirmed; 27/27 in that file)
+- [x] C.1 `ClassComparisonCard` wired into container (rows from `buildSubjectRowSeeds`, `queryArgs` from analyzeEnrollment) — DONE — awaiting FRONTEND REVIEW
+- [x] C.2 `buildSubjectRowSeeds` join used to seed comparison rows — DONE — awaiting FRONTEND REVIEW
+- [x] C.3 `PerCaClassChart` wired (`buildPerCaChartData` from `getPerCaClassBaseline` + selected semester grade row; all-null fallback) — DONE — awaiting FRONTEND REVIEW
+- [x] C.4 `OverallPositionHeadline` wired (`positions.overall` / `positions.overallSuppressedReason`, loading via `=== undefined`) — DONE — awaiting FRONTEND REVIEW
+- [x] C.5 Deletions: `getTrend`, `TrendIcon`, "Overall Trend" cell (+ old `SubjectStats`), `EnrollmentPerformanceCard` trend chip — DONE — awaiting FRONTEND REVIEW
+- [x] Semester toggle (Sem 1 / Sem 2, `aria-pressed`, brand colors), `analyzeEnrollment` resolution, longitudinal card demoted to "Raw score history" with not-comparable caption — DONE — awaiting FRONTEND REVIEW
+
+### Review Notes (C.1–C.5 integration — pending FRONTEND REVIEW)
+**Files touched:**
+- `lib/academicHistoryView.ts` — added `buildSubjectRowSeeds` (+ `PositionBySubject`/`SubjectGradeRow` types)
+- `lib/academicHistoryView.test.ts` — added 4 `buildSubjectRowSeeds` tests (all-present / partial / no-matching-row / order)
+- `app/(dashboard)/students/[studentId]/_components/AcademicHistoryTab.tsx` — full rework (container wiring)
+
+**C.5 deletions (verified: grep for getTrend/TrendIcon/"Overall Trend"/Improving/Declining/Stable/Trending*/SubjectStats/trend → CLEAN):**
+- Deleted file-local `getTrend()` and `TrendIcon` (no external importers — grep-confirmed).
+- Deleted the old `SubjectStats` component entirely (it only existed to render the longitudinal stats incl. the "Overall Trend" cell; its role is superseded by `PerCaClassChart`). No "Average/Highest/Lowest" summary was retained — the Shape B per-CA chart replaces it.
+- Removed the trend chip + `trend` prop from `EnrollmentPerformanceCard`; it now shows only Sem 1 / Sem 2 averages, grade distribution, and top/bottom subjects.
+
+**Composition order (top → bottom):**
+1. Header row + semester toggle (`<fieldset>` + sr-only `<legend>`; two `Button`s with `aria-pressed`, active = `bg-school-green text-white`).
+2. `OverallPositionHeadline` (C.4) — `loading={positions === undefined}`.
+3. `ClassComparisonCard` (C.1 + C.2) — only rendered when `analyzeEnrollment` exists; `rows = buildSubjectRowSeeds(positions.bySubject, semesterGrades)` (empty until both resolve); `loading = positions===undefined || semesterGrades===undefined`.
+4. Subject selector (`Select`, `aria-label`) — defaults to first subject graded this semester; drives both charts.
+5. `PerCaClassChart` (C.3) — `chartData = buildPerCaChartData(baseline, selectedGradeRow)` or all-null fallback; `loading = semesterGrades===undefined || baseline===undefined`.
+6. Demoted `Raw score history` card (cross-year `getLongitudinalSubjectPerformance` LineChart) — caption "Different years, different difficulty — not directly comparable"; no trend verdict.
+7. Enrollment accordion (raw history) — trend chip stripped.
+
+**analyzeEnrollment + query-skip logic (C-4 mitigation):**
+- `analyzeEnrollment = currentEnrollment ?? enrollmentHistory?.[0] ?? null` (history newest-first).
+- Empty state ("No Academic History") only when `!analyzeEnrollment && no history`.
+- `academicYear` passed verbatim as `Id<"academicYears">` (never a name string).
+- `getClassPositions`/`getGradesByEnrollmentSemester` use `"skip"` until `analyzeEnrollment` + its ids resolve; `getPerCaClassBaseline` additionally skips until a subject is selected.
+
+**Verification:** `npm test` 220/220 (216 baseline + 4 new). `npm run build` PASS (17 app routes + Proxy Middleware). `npm run lint` (Biome) 0 errors / 210 files. `npx tsc --noEmit` clean.
+
+**Deviations:** (1) Semester toggle uses `<fieldset>`+`<legend class="sr-only">` instead of a `role="group"` div — Biome `a11y/useSemanticElements` rejects a redundant role on a generic div; fieldset/legend is the true semantic grouping and keeps the accessible label. (2) Extracted the post-guard render into an inner `AcademicHistoryContent` component so the `useMemo` join hooks live above a non-null `analyzeEnrollment` narrowing without Rules-of-Hooks issues.
+
+### 🔍 FRONTEND REVIEW — Phase C (C.1–C.5) — ✅ APPROVED (2026-07-03)
+
+**Reviewer:** FRONTEND REVIEW AGENT
+**Verdict:** APPROVED — no blocking (🔴) issues. 3 non-blocking (🟡) suggestions recorded for future work.
+
+**Files reviewed:**
+- `lib/academicHistoryView.ts` + `lib/academicHistoryView.test.ts`
+- `app/(dashboard)/students/[studentId]/_components/OverallPositionHeadline.tsx` + `.test.tsx` (C.4)
+- `app/(dashboard)/students/[studentId]/_components/ClassComparisonCard.tsx` + `.test.tsx` (C.1 + C.2)
+- `app/(dashboard)/students/[studentId]/_components/PerCaClassChart.tsx` + `.test.tsx` (C.3)
+- `app/(dashboard)/students/[studentId]/_components/AcademicHistoryTab.tsx` (container)
+- `vitest.config.ts` + `vitest.setup.ts` (RTL harness)
+
+**Verification (independently re-run, not trusted from prior report):**
+- `npm test` → **25 files, 220/220 passed** (0 fail). ✓
+- `npm run lint` (`biome check`) → **0 errors, 210 files checked**. ✓
+- `npm run build` → **PASS** (all app routes + Proxy Middleware compiled, exit 0). ✓
+- C.5 grep (`getTrend`/`TrendIcon`/`Improving`/`Declining`/`Stable`) across all C components + view lib → **CLEAN (none found)**. ✓ Cross-year line survives only as relabeled `Raw score history` with "Different years, different difficulty — not directly comparable." caption (AcademicHistoryTab.tsx:350-355) — no verdict text.
+
+**Checklist result:**
+
+| # | Item | Result | Evidence |
+|---|------|--------|----------|
+| 1 | Loading skeletons (container + each component, `=== undefined`) | ✅ PASS | Tab initialLoading skeletons (AcademicHistoryTab.tsx:111-126); OverallPositionHeadline `loading` (`.tsx:29-45`); ClassComparisonCard `loading` (`.tsx:210-219`) + per-row skeleton (`.tsx:163-174`); PerCaClassChart `loading` (`.tsx:32-43`); Raw-history `Skeleton` (tab:362-363) |
+| 2 | Empty state with sensible copy | ✅ PASS | "No Academic History" (tab:128-140); "No graded subjects this term yet." (ClassComparisonCard.tsx:220-223); "No CA data for this subject yet." (PerCaClassChart.tsx:87-90); "No grade data for this subject yet" (tab:364-366) |
+| 3 | Suppressed/insufficient states (classAvg null → "not enough class data yet"; overall null → reason copy; per-CA null → gap not fake 0) | ✅ PASS | `NO_CLASS_DATA_COPY` (ClassComparisonCard.tsx:34,120-124); `overallPositionCopy` reason branches (academicHistoryView.ts:82-108); `connectNulls={false}` + null preserved in `buildPerCaChartData` (PerCaClassChart.tsx:74,83; academicHistoryView.ts:202-223) |
+| 4 | Error state — no bare `if(!data) return null` hiding errors; tab wrapped by page ErrorBoundary | ✅ PASS | Tab rendered inside `<ErrorBoundary key={activeTab}>` (page.tsx:149-158). Only `return null` is in `DeltaIndicator` when there is no delta (ClassComparisonCard.tsx:46) — correct empty-cell render, not a data-hiding guard |
+| 5 | No TypeScript `any`; types from `@/convex/_generated/dataModel` | ✅ PASS | grep for `\bany\b` → none. `Id<...>` imported from dataModel; query result types via `NonNullable<ReturnType<typeof useQuery<...>>>` (tab:162-191) |
+| 6 | No hardcoded hex/rgba; brand tokens / `var(--color-*)` only | ✅ PASS | grep for hex/rgba → none. Recharts uses `var(--color-school-green)`, `var(--color-muted-foreground)`, `var(--color-border)` (acceptable brand tokens) |
+| 7 | Interactive elements have aria labels / aria-pressed | ✅ PASS | Semester `Button`s: `aria-pressed`, `aria-label="Semester {s}"` in `<fieldset>`+sr-only `<legend>` (tab:282-302); subject `Select` `aria-label="Select subject for charts"` (tab:326); Δ column has sr-only "Difference from class" (ClassComparisonCard.tsx:234-236) |
+| 8 | Mobile (375px): tables/cards overflow-x-auto or stack; no fixed-width overflow | ✅ PASS | Comparison grid `overflow-x-auto` + `min-w-[32rem]` (ClassComparisonCard.tsx:225-226); charts `ResponsiveContainer width="100%"` (no fixed px width); header row `flex-wrap` (tab:278); top/bottom grid `grid-cols-1 sm:grid-cols-2` (tab:564) |
+| 9 | No business logic in component bodies — join + chart assembly in tested lib | ✅ PASS (with 🟡 note) | `buildSubjectRowSeeds` + `buildPerCaChartData` live in `lib/academicHistoryView.ts` and are unit-tested. Remaining inline `useMemo`/derivations are thin presentational view-glue consistent with sibling tabs. See 🟡-1 |
+| 10 | Tests assert observable behavior (text/roles), survive refactor | ✅ PASS (with 🟡 note) | Component tests assert visible text + `role="status"` + label text. Minor reliance on `data-testid` for icons — acceptable (see 🟡-2) |
+| 11 | Chart empty/loading a11y (`role="status"` / `<output>`) | ✅ PASS | All loading skeletons wrapped in `<output>` (implicit `role="status"`) with `aria-label`/`aria-busy` — OverallPositionHeadline.tsx:34, ClassComparisonCard.tsx:166/212, PerCaClassChart.tsx:37 |
+| — | Sonner toast on mutation success/error | N/A | Read-only analytics — no mutations |
+| — | RHF + Zod form validation | N/A | No forms in this feature |
+| — | Student-role access to staff-only Phase B queries | CARRY-FORWARD | Pre-existing gap (tab already called staff-only `getLongitudinalSubjectPerformance`); NOT introduced here. Tracked as Devil's Advocate C-3 / Backend carry-forward. Not blocking |
+
+**SSR-fan-out pattern (verified correct):** `SubjectComparisonRow` calls `useQuery(getClassAverages)` once per row at component top level (ClassComparisonCard.tsx:148-184). Row count derives from `rows` (built from `positions.bySubject`), which is stable per render, so no Rules-of-Hooks violation. This is the correct resolution of Devil's Advocate C-2 (single-subject query cannot fan out over N subjects inside a `.map`). `academicYear` passed verbatim as `Id<"academicYears">` throughout (tab:76,254 — never a name string). ✓
+
+**Non-blocking suggestions (🟡 — future improvement, do NOT block this merge):**
+- 🟡-1 (Component Structure): The cross-year `longitudinalChartData` sort+map transform (AcademicHistoryTab.tsx:262-273) is the one inline display transform substantial enough to warrant extraction — moving it (and the `activeSubjects`/`effectiveSubjectId`/`chartData` derivations) into a `hooks/use-academic-history-view.ts` would improve testability and consistency with the extracted lib helpers. Judged non-blocking because the genuine domain logic (the join + chart assembly) is already extracted and unit-tested, and the residual glue matches the established pattern in sibling tabs (`FeesTab`, `CollectFeesDialog`). Not the AL-5 pattern (where the feature's core filter logic was inlined).
+- 🟡-2 (Testing): Icon presence assertions use `data-testid` (`award-icon`, `delta-up-icon`, etc.). These survive refactors of copy but couple to the icon element. Prefer asserting the `aria-label` text ("X above class" / "same as class") where an accessible name already exists, so the test tracks the a11y contract rather than a testid. Existing tests already do this for the down-delta case (`getByLabelText("5.0 below class")`) — extend the pattern.
+- 🟡-3 (a11y, minor): The `DeltaIndicator` up/down/flat spans use `role="img"` with an `aria-label`; that reads correctly, but the numeric delta is `aria-hidden`. Consider folding the value into a single accessible name (e.g. "+12.0, above class") so screen-reader users hear the magnitude and direction together. Non-blocking — current output is already comprehensible.
+
+**Approval notes:** Clean, well-typed, well-tested submission. Container/presentational split is correct; the per-row fan-out is the right call and is documented in-code. Null-vs-zero discipline in the per-CA chart is exactly right (line gaps, never coerced 0). C.5 trend-verdict removal is complete and grep-verified. All three build/lint/test gates green.
+
+### Prior sub-task (superseded by integration; component now consumed by container)
+- [x] C.3 `PerCaClassChart` — pure presentational Recharts line chart — DONE (3/3 tests green, Biome 0 errors); wired into container this session.
+
+---
+
 ## 😈 Devil's Advocate Findings (Phase 1 — already resolved)
 - Concern: v1 Convex deployment schema conflicts → Mitigation: patched schema to add v1 legacy fields as optional
 - Concern: Next.js 16 uses proxy.ts not middleware.ts → Mitigation: renamed, fixed export
@@ -1449,8 +1544,14 @@ loading skeleton, empty state, and error boundary (inherits dashboard
 
 ## Current Feature: Grading & Academic Analytics Overhaul
 
-**Status**: Phase B — In Progress (2026-07-03) · Phase A committed `efe9799`
-**Active Agent**: Backend Agent (orchestrated) — Phase B (analytics queries); stop before Phase C per handoff
+**Status**: Phase C — ✅ COMPLETE (2026-07-03) · Phase A `efe9799` · Phase B `ddd4b25` · Phase D (cohort) deferred to its own handoff
+**Active Agent**: Coding Agent (orchestrating) — Phase C (Academic History tab rework, C.1–C.5)
+
+**Phase C session decisions (2026-07-03, locked by user):**
+- **Full TDD** — stand up Vitest + React Testing Library; each Shape component is a pure presentational component (data via props) so component tests need no Convex mocking; the container (`AcademicHistoryTab`) owns the `useQuery` calls. Pure view helpers TDD'd first in `lib/academicHistoryView.ts`.
+- **Scope: C.1–C.5 this session** (individual Academic History tab). **D.1 cohort view deferred to its own next handoff** (independent — new page, different queries).
+- **Seed fixture = throwaway dev-only script** (`convex/_seedGradingFixture.ts` internalMutation, run once via `npx convex run`, not committed to `seed.ts`, deletable). Must seed ≥5 students in one level+year, one fully-graded subject (positions fire) + one partially-graded subject (provisional state) so every UI state is reachable.
+  - **[DONE 2026-07-03 · Backend Agent]** `convex/_seedGradingFixture.ts` built + seeded + verified. 7 `FIX-` students @ **KG-2** / 2025-2026 / Campus 01 / sem 1 (NOT Grade 5 — the dev DB's Grade 5 / 2025-2026 class was already occupied by earlier test-seed assessments carrying other students' answers on all 3 subjects in both semesters; those inflate the live expected-CA count so every fixture grade would read as provisional and all positions/overall rank would be suppressed. KG-2 / 2025-2026 was verified empty, so the fixture owns the whole (subject, level, year, semester) space and mutates NO shared data). Math + English fully graded (distinct averages), Science CA-1-only for S7 → provisional. Idempotent (`npx convex run _seedGradingFixture:seedGradingFixture '{"reset": true}'` to rebuild). Uses exported `recomputeGrade` per (student, subject). Verified via a temp internal query mirroring `getClassPositions`: **Chandni Das = overall rank 1 of 6 (avg 86.0)**; 6 term-complete peers ≥5 so overall Class Position fires; **Gulnaz Akter (S7) = 1 provisional student** → overall suppressed "provisional". Temp diagnostics removed after verification. biome + Convex tsc: 0 errors. Concrete IDs in the hand-off report.
 **Branch**: `review/grading-cards`
 **References**: [ADR-0004](docs/adr/0004-grade-computation-model.md) (grade math) ·
 [ADR-0005](docs/adr/0005-difficulty-adjusted-academic-analytics.md) (analytics approach) ·
@@ -1502,15 +1603,52 @@ simple cohort view second.
 | B.4 | Per-CA class baseline (mean of present students' CA% per CA) for Shape B | [x] **APPROVED** by Backend Review Agent (2026-07-03) | Backend Review ✓ |
 | B.5 | Cohort: `getGradeSpread` (A–F distribution) + `getStudentsNeedingHelp` (below 50%) | [x] **APPROVED** by Backend Review Agent (2026-07-03) | Backend Review ✓ |
 | **Phase C — Individual view (Academic History tab)** | | | |
-| C.1 | "Early/provisional" tags on grade cells | [ ] PENDING | Frontend Review |
-| C.2 | **Shape A** snapshot card: per-subject you-vs-class-average, ▲/▼ delta, per-subject position | [ ] PENDING | Frontend Review |
-| C.3 | **Shape B**: rework subject chart → you-vs-class line across CA-1/2/3 | [ ] PENDING | Frontend Review |
-| C.4 | Overall Class Position headline at top of tab | [ ] PENDING | Frontend Review |
-| C.5 | Remove "Improving/Declining" verdict; keep cross-year line only as labeled raw history (no judgment) | [ ] PENDING | Frontend Review |
+| C.1 | "Early/provisional" tags on grade cells | [x] APPROVED by FRONTEND REVIEW AGENT (2026-07-03) | Frontend Review |
+| C.2 | **Shape A** snapshot card: per-subject you-vs-class-average, ▲/▼ delta, per-subject position | [x] APPROVED by FRONTEND REVIEW AGENT (2026-07-03) | Frontend Review |
+| C.3 | **Shape B**: rework subject chart → you-vs-class line across CA-1/2/3 | [x] APPROVED by FRONTEND REVIEW AGENT (2026-07-03) | Frontend Review |
+| C.4 | Overall Class Position headline at top of tab | [x] APPROVED by FRONTEND REVIEW AGENT (2026-07-03) — `OverallPositionHeadline` built via TDD + wired into container; loading `<output>` role=status, Award/`text-school-green` ranked, muted `Info` suppressed | Frontend Review |
+| C.5 | Remove "Improving/Declining" verdict; keep cross-year line only as labeled raw history (no judgment) | [x] APPROVED by FRONTEND REVIEW AGENT (2026-07-03) — grep-verified CLEAN (no `getTrend`/`TrendIcon`/`Improving`/`Declining`/`Stable`); cross-year line survives as relabeled "Raw score history" | Frontend Review |
 | **Phase D — Cohort view (simple)** | | | |
 | D.1 | One class view: level+year+subject+term selector → grade spread + who-needs-help list | [ ] PENDING | Frontend Review |
 | **Phase E — Verify** | | | |
-| E.1 | `npm run build` + `npm run lint` + Playwright E2E + `graphify update .` | [ ] PENDING | — |
+| E.1 | `npm run build` + `npm run lint` + tests + live visual verify + `graphify update .` | [x] **DONE (2026-07-03)** — `next build` 18 routes ✓ · `biome check` 0 errors ✓ · `vitest` 220/220 ✓ · `tsc --noEmit` ✓ · live Playwright visual verify PASS (both demo students) ✓ · `graphify update` ✓ | — |
+
+### Phase C Implementation Notes (2026-07-03)
+
+**What shipped (C.1–C.5), all Frontend-Review APPROVED:**
+- `lib/academicHistoryView.ts` — NEW pure view-model (deep module, TDD'd, 27 tests): `ordinal`, `overallPositionCopy`, `formatDelta`, `provisionalLabel`, `buildPerCaChartData`, `buildSubjectRowSeeds` + shared prop types. No React/Convex/DOM.
+- `_components/OverallPositionHeadline.tsx` (C.4) — Award/`text-school-green` when ranked ("Stood 1st of 6 in class"); muted suppressed copy from `overallSuppressedReason`. 5 component tests.
+- `_components/ClassComparisonCard.tsx` (C.2 + C.1) — Shape A. `ClassComparisonCard` (shell, loading/empty) → `SubjectComparisonRow` (the ONLY per-subject `useQuery(getClassAverages)` — child-per-row avoids the Rules-of-Hooks fan-out bug) → `SubjectComparisonRowView` (pure, tested). Provisional badge + "Based on N of M CAs". 6 component tests.
+- `_components/PerCaClassChart.tsx` (C.3) — Shape B: you-vs-class Recharts line across CA-1/2/3, `connectNulls={false}` (nulls = gaps). 3 component tests.
+- `_components/AcademicHistoryTab.tsx` (container) — semester toggle (default 1), analyze-enrollment = `current ?? latest historical`, wires `getClassPositions` + `getGradesByEnrollmentSemester` + `getPerCaClassBaseline`, composes the three components. C.5: deleted `getTrend`/`TrendIcon`/old `SubjectStats` + `EnrollmentPerformanceCard` trend chip; cross-year line demoted to "Raw score history — different years, different difficulty (not directly comparable)".
+- **RTL harness:** added `@testing-library/react`+`jest-dom`+`user-event`+`jsdom`, `vitest.config.ts` (jsdom, `@` alias), `vitest.setup.ts` (global `afterEach(cleanup)` — required under `globals:false`).
+
+**Post-review bug fix (2026-07-03):** live visual verify caught that Shape B chart + raw-history stayed blank on first paint — the `baseline`/`longitudinal` queries gated on raw `selectedSubjectId` state (`""`) while the dropdown used an `effectiveSubjectId` fallback only for display. Fixed by computing `effectiveSubjectId = selectedSubjectId || semesterGrades?.[0]?.subjectId` in the container and gating both queries + the raw-history guard on it. Re-verified live: both charts render on load (subject auto-defaults to first graded subject), zero console errors. tsc/biome/tests all green after.
+
+**⚠️ Turbopack gotcha:** running `next build` while `next dev` is live corrupts `.next/dev` (missing manifests → every route 500s). Sequence them — stop dev before build. During Phase C dev verification, only run tsc/biome/vitest (they don't touch `.next`); let dev HMR the change.
+
+**Carry-forwards (NOT done — for later):**
+- **Student-role access** (pre-existing, not a Phase C regression): the 5 Phase B queries are `requireRole(["admin","teacher"])`, and the tab already called staff-only `getLongitudinalSubjectPerformance` before this change. A student viewing their own Academic History hits thrown queries (caught by the page ErrorBoundary). Design decision needed: should students see class rank at all, and if so relax specific queries for own-row reads.
+- **Phase D (cohort view, D.1)** — deferred to its own next handoff. Independent: new standalone page, `getGradeSpread` + `getStudentsNeedingHelp`. Label the spread "current standing" (includes provisional), not "final results".
+- Non-blocking review polish: fold delta magnitude into the `DeltaIndicator` accessible name; prefer aria-label over `data-testid` in icon assertions.
+- Dev-only fixture `convex/_seedGradingFixture.ts` is disposable — delete when no longer needed for demo/verification.
+
+### 😈 Devil's Advocate Findings — Phase C (2026-07-03, before building)
+
+| # | Concern | Resolution (locked) |
+|---|---------|---------------------|
+| C-1 | Tab has **no semester UI**; all Phase B queries need `semester:1\|2`. | Add a Sem 1/2 toggle (copy `GradesTab` pattern), default **1**. Drives all Phase B queries. |
+| C-2 | **Shape A per-subject fan-out** (top risk): `getClassAverages` is single-subject; calling `useQuery` in a `.map()` violates Rules of Hooks → white-screen. | Drive the row LIST off `getClassPositions.bySubject[]` (one query: name/avg/position/provisional). Each row is a `<SubjectComparisonRow>` **child component** that fetches its own `getClassAverages` for the delta. **No new backend query** — Phase C stays pure-frontend. |
+| C-3 | Student role throws all 5 Phase B queries (`requireRole(["admin","teacher"])`). | **Pre-existing**: the current tab already calls staff-only `getLongitudinalSubjectPerformance`, so it's already effectively admin/teacher. Phase C does not regress this. Flag student-role access as a **carry-forward** (design decision: should students see class rank?). |
+| C-4 | No current enrollment (graduated/withdrawn) → `getCurrentEnrollment` null → no level/year to query. | Analyze-enrollment = `current ?? latest historical` (from `getEnrollmentHistory`). If none at all → existing "No Academic History" empty state. |
+| C-5 | C.5 deletion: `getTrend`/`TrendIcon` are local & safe, but `SubjectStats` "Overall Trend" cell + `EnrollmentPerformanceCard` trend chip also use `getTrend` — must remove together. `lib/gradeUtils.ts` exports no `getTrendIndicator` (safe). | Remove all three `getTrend` usages in one pass; keep cross-year line relabeled "different years, different difficulty" (no judgment). |
+| C-6 | Shape B null handling: per-CA baseline `{ca1,ca2,ca3}` each `{mean,n}\|null`, student `caNPercentage` also nullable. | `buildPerCaChartData` (pure, TDD'd) emits `{ca, you:number\|null, classMean:number\|null}` — nulls become line gaps, never `0`. |
+
+**Architecture (locked):** `AcademicHistoryTab` = CONTAINER (owns `useQuery`, semester/subject state, analyze-enrollment resolution) → passes plain props to PURE presentational components so component tests need no Convex mocking. Pure view helpers + shared prop types TDD'd first in `lib/academicHistoryView.ts`.
+
+**Seed fixture (dev, `convex/_seedGradingFixture.ts`, run once):** demo Class at **KG-2 / 2025-2026 / semester 1** (Grade 5 was polluted). Primary demo = Chandni Das (overall rank 1 of 6, all states fire); provisional demo = Gulnaz Akter (overall suppressed "provisional"). Re-seed: `npx convex run _seedGradingFixture:seedGradingFixture '{"reset": true}'` (IDs change on reset).
+
+**RTL harness (2026-07-03):** Vitest was already installed; added `@testing-library/react` + `jest-dom` + `user-event` + `jsdom`, `vitest.config.ts` (jsdom env, `@` alias, deep node_modules exclude), `vitest.setup.ts`, smoke test. `npm test` → 179 pass · build + lint green. **Pending FRONTEND REVIEW** (folds into the Phase C review).
 
 ### Phase A Implementation Notes (2026-07-01)
 
@@ -1560,3 +1698,113 @@ simple cohort view second.
 - **Individual analytics = Shape A (you-vs-class snapshot) + Shape B (you-vs-class within-term line)**; Shape C (gap-over-time) deferred.
 - **Class = level + year** (section cosmetic); **Class Average & Position need ≥5 graded peers**; **Position final-gated**, ties shared; **overall position** is the headline, per-subject is detail.
 - **Cohort first cut = grade spread + below-50% list only**. Per-question (②) and concept-tag (③) analytics deferred — `conceptTag` / `learningObjective` stay parked per CONTEXT.md.
+
+---
+
+## Current Feature: React Testing Library harness (test infra only)
+**Status**: In Progress
+**Active Agent**: FRONTEND AGENT
+
+### Goal
+Add the React Testing Library layer on top of the existing Vitest setup so component
+tests can be written, WITHOUT breaking the existing 18 pure-logic `lib/*.test.ts` files.
+Harness setup only — NO Phase C feature code.
+
+### Sub-tasks
+- [ ] 1. Install RTL devDeps (@testing-library/react, /jest-dom, /user-event, jsdom) via npm
+- [ ] 2. Rewrite vitest.config.ts — react() plugin, jsdom env, setupFiles, @ alias, include/exclude
+- [ ] 3. Create vitest.setup.ts (import "@testing-library/jest-dom/vitest")
+- [ ] 4. Add tracer-bullet component test at components/__rtl_smoke__.test.tsx
+- [ ] 5. Verify: npm test (all pass), npm run lint (0 errors), npm run build (green)
+
+### Implementation Notes (2026-07-03) — RTL harness
+**What shipped:**
+- devDeps: `@testing-library/react@^16.3.2`, `@testing-library/jest-dom@^6.9.1`,
+  `@testing-library/user-event@^14.6.1`, `jsdom@^29.1.1` (React 19 / Vitest 4 compatible).
+- `vitest.config.ts` — rewritten: `react()` plugin, `environment: "jsdom"`, `globals: false`
+  (existing lib tests use explicit `import { ... } from "vitest"`, so unaffected),
+  `setupFiles: ["./vitest.setup.ts"]`, `@` alias → project root (mirrors tsconfig `"@/*": ["./*"]`),
+  `include: ["**/*.test.{ts,tsx}"]`, deep-glob `exclude` (`**/node_modules/**`, `**/.next/**`,
+  `**/.sandcastle/**`, `e2e/**`).
+- `vitest.setup.ts` — single line: `import "@testing-library/jest-dom/vitest";`.
+- `components/__rtl_smoke__.test.tsx` — tracer-bullet: renders `<button aria-label="ping">`,
+  asserts `getByRole` + `toBeInTheDocument` + `toHaveTextContent`, and `cn("a","b") === "a b"`
+  via the `@` alias to prove alias resolution inside a `.test.tsx` file.
+
+**Gotcha found + fixed:** first jsdom run leaked 7 third-party test files from
+`.sandcastle/worktrees/.../node_modules/` (2 zod codec tests failed) because a bare
+`"node_modules"` exclude only matches top-level. Fixed by switching to deep globs (`**/node_modules/**`)
+and adding `**/.sandcastle/**`. No existing test needed a `// @vitest-environment node` fallback —
+all 20 pure-logic tests pass under jsdom unchanged.
+
+**Verification:** `npm test` → 21 files / 179 tests passed (exit 0) ·
+`npm run lint` (biome, 202 files) → 0 errors · `npm run build` → 18 routes, green,
+no test/config files bundled.
+
+### Sub-tasks (RTL harness)
+- [x] 1. Install RTL devDeps — DONE (awaiting FRONTEND REVIEW)
+- [x] 2. Rewrite vitest.config.ts — DONE (awaiting FRONTEND REVIEW)
+- [x] 3. Create vitest.setup.ts — DONE (awaiting FRONTEND REVIEW)
+- [x] 4. Smoke test components/__rtl_smoke__.test.tsx — DONE (awaiting FRONTEND REVIEW)
+- [x] 5. Verify test/lint/build all green — DONE (awaiting FRONTEND REVIEW)
+
+**Status**: Review (ready for FRONTEND REVIEW AGENT)
+
+---
+
+## Current Feature: Academic History view-model (Phase C)
+**Status**: Review (ready for FRONTEND REVIEW AGENT)
+**Active Agent**: FRONTEND AGENT
+
+### Goal
+Create `lib/academicHistoryView.ts` (pure functions + shared types) and its
+Vitest test `lib/academicHistoryView.test.ts` via strict TDD (red→green, one
+behavior at a time). No React, no Convex calls, no DOM.
+
+### Exports to build (pure)
+- Types: Direction, Rank, OverallSuppressedReason, SubjectRowSeed, SubjectRowView, PerCaChartPoint
+- ordinal(n)
+- overallPositionCopy(overall, reason)
+- formatDelta(delta)
+- provisionalLabel(presentCaCount, expectedCaCount)
+- buildPerCaChartData(baseline, student)
+
+### Sub-tasks (strict TDD, red→green per behavior)
+- [x] 1. ordinal — DONE (5 tests) — awaiting FRONTEND REVIEW
+- [x] 2. overallPositionCopy — DONE (6 tests) — awaiting FRONTEND REVIEW
+- [x] 3. formatDelta — DONE (6 tests) — awaiting FRONTEND REVIEW
+- [x] 4. provisionalLabel — DONE (3 tests) — awaiting FRONTEND REVIEW
+- [x] 5. buildPerCaChartData — DONE (3 tests) — awaiting FRONTEND REVIEW
+
+### Verification (2026-07-03)
+- `npm test` → 22 files / 202 tests passed (179 baseline + 23 new). Nothing broken.
+- `npx biome check lib/academicHistoryView.ts lib/academicHistoryView.test.ts` → 0 errors
+  (initial run flagged tab vs 2-space format; fixed with `--write`).
+- `npx tsc --noEmit` → no type errors on the new file.
+
+### Notes / additions beyond spec
+- Exported extra named types for the container to reuse (not renamed, spec unchanged):
+  `OverallPositionCopy`, `CaBaselinePoint`, `PerCaBaseline`, `StudentCaPercentages`.
+  All spec-named types + function signatures match the contract exactly.
+- No React / Convex / DOM — pure functions only. Copy strings verbatim from spec.
+
+---
+
+## Current Feature: Phase C.2 — "You vs Class" per-subject comparison card (+ C.1 provisional tags)
+**Status**: In Progress
+**Active Agent**: FRONTEND AGENT
+
+### Sub-tasks (TDD: red → green → refactor, one behavior at a time)
+- [x] C.2.1 SubjectComparisonRowView (pure) — full-data render (name, You, Class, +Δ up-icon, position, no badge) — GREEN
+- [x] C.2.2 SubjectComparisonRowView — classAverage null → "not enough class data yet", no delta icon — GREEN
+- [x] C.2.3 SubjectComparisonRowView — negative delta → down icon + "below class" aria-label — GREEN
+- [x] C.2.4 SubjectComparisonRowView — provisional true → "Provisional" badge + provisionalLabel, no position — GREEN
+- [x] C.2.5 ClassComparisonCard — rows=[], loading=false → empty state — GREEN
+- [x] C.2.6 ClassComparisonCard — loading=true → skeleton, not empty state — GREEN
+- [x] C.2.7 SubjectComparisonRow (fetch wrapper) — thin useQuery wrapper; verified live, not unit-tested (avoids Convex provider)
+- [x] C.2.8 npm test (216/216 pass, 25 files) + npx biome check (0 errors, 3 files) + tsc clean → READY FOR FRONTEND REVIEW AGENT
+
+### Notes
+- Fixed a shared-harness bug: `vitest.setup.ts` had no `afterEach(cleanup)`, so with `globals: false` RTL DOM leaked between tests in the same file (false failures from prior renders). Added explicit cleanup — benefits all component tests. Full suite re-verified green.
+- A11y: delta indicator uses `role="img"` + `aria-label` (e.g. "5.0 below class"); loading uses `<output>` (implicit status role) per the OverallPositionHeadline convention; direction conveyed by icon+label, never color alone.
+- **Status**: awaiting FRONTEND REVIEW AGENT approval before marked complete.

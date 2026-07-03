@@ -1,8 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { Minus, TrendingDown, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -19,6 +18,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -31,17 +31,35 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
+  buildPerCaChartData,
+  buildSubjectRowSeeds,
+} from "@/lib/academicHistoryView";
+import {
   calculateLetterGrade,
   getLetterGradeBadgeColor,
 } from "@/lib/gradeUtils";
+import { ClassComparisonCard } from "./ClassComparisonCard";
+import { OverallPositionHeadline } from "./OverallPositionHeadline";
+import { PerCaClassChart } from "./PerCaClassChart";
 
 interface AcademicHistoryTabProps {
   studentId: Id<"students">;
 }
 
+/** All-null fallback used when a subject's per-CA baseline/grade is not ready. */
+const EMPTY_PER_CA_CHART = buildPerCaChartData(
+  { ca1: null, ca2: null, ca3: null },
+  {},
+);
+
 export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
+  const [semester, setSemester] = useState<1 | 2>(1);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
-  const enrollments = useQuery(api.enrollments.getEnrollmentHistory, {
+
+  const enrollmentHistory = useQuery(api.enrollments.getEnrollmentHistory, {
+    studentId,
+  });
+  const currentEnrollment = useQuery(api.enrollments.getCurrentEnrollment, {
     studentId,
   });
   const allGrades = useQuery(api.computedGrades.getComputedGradesByStudent, {
@@ -49,28 +67,74 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
   });
   const subjects = useQuery(api.subjects.list);
 
-  const longitudinalData = useQuery(
-    api.computedGrades.getLongitudinalSubjectPerformance,
-    selectedSubjectId
-      ? { studentId, subjectId: selectedSubjectId as Id<"subjects"> }
+  // C-4 mitigation: analyse the current enrollment, falling back to the most
+  // recent past one (history is newest-first) so a graduated/withdrawn student
+  // still gets their last term's comparison view.
+  const analyzeEnrollment = currentEnrollment ?? enrollmentHistory?.[0] ?? null;
+  const standardLevelId = analyzeEnrollment?.standardLevelId;
+  // NOTE: an Id<"academicYears">, passed verbatim — never a name string.
+  const academicYear = analyzeEnrollment?.academicYear;
+  const enrollmentId = analyzeEnrollment?._id;
+
+  const positions = useQuery(
+    api.computedGrades.getClassPositions,
+    analyzeEnrollment && standardLevelId && academicYear
+      ? { standardLevelId, academicYear, semester, studentId }
       : "skip",
   );
 
-  if (
-    enrollments === undefined ||
+  const semesterGrades = useQuery(
+    api.computedGrades.getGradesByEnrollmentSemester,
+    analyzeEnrollment && enrollmentId ? { enrollmentId, semester } : "skip",
+  );
+
+  // Default the subject-scoped queries to the first subject graded this semester
+  // so the Shape B chart + raw-history render on first paint — not only after the
+  // user actively picks a (different) subject. Mirrors the child's derivation.
+  const effectiveSubjectId =
+    selectedSubjectId || (semesterGrades?.[0]?.subjectId ?? "");
+
+  const baseline = useQuery(
+    api.computedGrades.getPerCaClassBaseline,
+    analyzeEnrollment && standardLevelId && academicYear && effectiveSubjectId
+      ? {
+          standardLevelId,
+          academicYear,
+          subjectId: effectiveSubjectId as Id<"subjects">,
+          semester,
+        }
+      : "skip",
+  );
+
+  // Cross-year raw history for the demoted line chart (not term-comparable).
+  const longitudinalData = useQuery(
+    api.computedGrades.getLongitudinalSubjectPerformance,
+    effectiveSubjectId
+      ? { studentId, subjectId: effectiveSubjectId as Id<"subjects"> }
+      : "skip",
+  );
+
+  const initialLoading =
+    enrollmentHistory === undefined ||
+    currentEnrollment === undefined ||
     allGrades === undefined ||
-    subjects === undefined
-  ) {
+    subjects === undefined;
+
+  if (initialLoading) {
     return (
       <div className="space-y-4">
+        <Skeleton className="h-9 w-48" />
+        <Skeleton className="h-20 w-full" />
         <Skeleton className="h-48 w-full" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
 
-  if (!enrollments || enrollments.length === 0) {
+  if (
+    !analyzeEnrollment &&
+    (!enrollmentHistory || enrollmentHistory.length === 0)
+  ) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <p className="text-lg font-medium text-gray-700">No Academic History</p>
@@ -81,9 +145,128 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
     );
   }
 
-  // Build chart data for selected subject
-  const chartData = longitudinalData
-    ? longitudinalData
+  return (
+    <AcademicHistoryContent
+      semester={semester}
+      onSemesterChange={setSemester}
+      selectedSubjectId={selectedSubjectId}
+      onSubjectChange={setSelectedSubjectId}
+      analyzeEnrollment={analyzeEnrollment}
+      positions={positions}
+      semesterGrades={semesterGrades}
+      baseline={baseline}
+      longitudinalData={longitudinalData}
+      subjects={subjects ?? []}
+      allGrades={allGrades ?? []}
+      enrollmentHistory={enrollmentHistory ?? []}
+    />
+  );
+}
+
+// ── Content (post-guard, analyzeEnrollment may still be null) ──────────────────
+
+type EnrollmentDoc = NonNullable<
+  ReturnType<typeof useQuery<typeof api.enrollments.getCurrentEnrollment>>
+>;
+type EnrollmentHistoryDoc = NonNullable<
+  ReturnType<typeof useQuery<typeof api.enrollments.getEnrollmentHistory>>
+>[number];
+type PositionsResult = NonNullable<
+  ReturnType<typeof useQuery<typeof api.computedGrades.getClassPositions>>
+>;
+type SemesterGradesResult = NonNullable<
+  ReturnType<
+    typeof useQuery<typeof api.computedGrades.getGradesByEnrollmentSemester>
+  >
+>;
+type BaselineResult = NonNullable<
+  ReturnType<typeof useQuery<typeof api.computedGrades.getPerCaClassBaseline>>
+>;
+type LongitudinalResult = NonNullable<
+  ReturnType<
+    typeof useQuery<typeof api.computedGrades.getLongitudinalSubjectPerformance>
+  >
+>;
+type SubjectDoc = NonNullable<
+  ReturnType<typeof useQuery<typeof api.subjects.list>>
+>[number];
+type GradeDoc = NonNullable<
+  ReturnType<
+    typeof useQuery<typeof api.computedGrades.getComputedGradesByStudent>
+  >
+>[number];
+
+interface AcademicHistoryContentProps {
+  semester: 1 | 2;
+  onSemesterChange: (s: 1 | 2) => void;
+  selectedSubjectId: string;
+  onSubjectChange: (id: string) => void;
+  analyzeEnrollment: EnrollmentDoc | null;
+  positions: PositionsResult | undefined;
+  semesterGrades: SemesterGradesResult | undefined;
+  baseline: BaselineResult | undefined;
+  longitudinalData: LongitudinalResult | undefined;
+  subjects: SubjectDoc[];
+  allGrades: GradeDoc[];
+  enrollmentHistory: EnrollmentHistoryDoc[];
+}
+
+function AcademicHistoryContent({
+  semester,
+  onSemesterChange,
+  selectedSubjectId,
+  onSubjectChange,
+  analyzeEnrollment,
+  positions,
+  semesterGrades,
+  baseline,
+  longitudinalData,
+  subjects,
+  allGrades,
+  enrollmentHistory,
+}: AcademicHistoryContentProps) {
+  const activeSubjects = useMemo(
+    () => subjects.filter((s) => s.isActive),
+    [subjects],
+  );
+
+  // Rows for the you-vs-class comparison card (C.1 + C.2 join).
+  const rows = useMemo(
+    () =>
+      positions && semesterGrades
+        ? buildSubjectRowSeeds(positions.bySubject, semesterGrades)
+        : [],
+    [positions, semesterGrades],
+  );
+
+  // Default the subject selector to the first subject graded this semester.
+  const effectiveSubjectId =
+    selectedSubjectId || (semesterGrades?.[0]?.subjectId ?? "");
+  const selectedGradeRow = semesterGrades?.find(
+    (g) => g.subjectId === effectiveSubjectId,
+  );
+  const selectedSubjectName = activeSubjects.find(
+    (s) => s._id === effectiveSubjectId,
+  )?.name;
+
+  const chartData =
+    baseline && selectedGradeRow
+      ? buildPerCaChartData(baseline, selectedGradeRow)
+      : EMPTY_PER_CA_CHART;
+
+  const comparisonQueryArgs =
+    analyzeEnrollment != null
+      ? {
+          standardLevelId: analyzeEnrollment.standardLevelId,
+          academicYear: analyzeEnrollment.academicYear,
+          semester,
+          studentId: analyzeEnrollment.studentId,
+        }
+      : null;
+
+  // Cross-year raw line chart (demoted — different years, not comparable).
+  const longitudinalChartData = longitudinalData
+    ? [...longitudinalData]
         .sort((a, b) => {
           const yearA = a.yearName ?? "";
           const yearB = b.yearName ?? "";
@@ -95,83 +278,137 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
         }))
     : [];
 
-  const activeSubjects = subjects?.filter((s) => s.isActive) ?? [];
-
   return (
     <div className="space-y-6">
-      {/* Subject Performance Trends chart */}
+      {/* Semester toggle */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+          This term
+        </h2>
+        <fieldset className="inline-flex rounded-lg border p-0.5">
+          <legend className="sr-only">Select semester</legend>
+          {([1, 2] as const).map((s) => (
+            <Button
+              key={s}
+              type="button"
+              size="sm"
+              variant="ghost"
+              aria-pressed={semester === s}
+              aria-label={`Semester ${s}`}
+              onClick={() => onSemesterChange(s)}
+              className={
+                semester === s
+                  ? "bg-school-green text-white hover:bg-school-green/90 hover:text-white"
+                  : "text-gray-600"
+              }
+            >
+              Sem {s}
+            </Button>
+          ))}
+        </fieldset>
+      </div>
+
+      {/* C.4 — overall class position headline */}
+      <OverallPositionHeadline
+        overall={positions?.overall ?? null}
+        reason={positions?.overallSuppressedReason ?? null}
+        loading={positions === undefined}
+      />
+
+      {/* C.1 + C.2 — you vs class per subject */}
+      {comparisonQueryArgs && (
+        <ClassComparisonCard
+          rows={rows}
+          queryArgs={comparisonQueryArgs}
+          loading={positions === undefined || semesterGrades === undefined}
+        />
+      )}
+
+      {/* Subject selector — drives both charts below */}
+      <div className="flex items-center justify-end">
+        <Select value={effectiveSubjectId} onValueChange={onSubjectChange}>
+          <SelectTrigger
+            className="w-48 h-8 text-sm"
+            aria-label="Select subject for charts"
+          >
+            <SelectValue placeholder="Select subject" />
+          </SelectTrigger>
+          <SelectContent>
+            {activeSubjects.map((s) => (
+              <SelectItem key={s._id} value={s._id}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* C.3 — per-CA you-vs-class chart for the selected subject */}
+      <PerCaClassChart
+        data={chartData}
+        subjectName={selectedSubjectName}
+        loading={semesterGrades === undefined || baseline === undefined}
+      />
+
+      {/* Demoted raw cross-year history */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <CardTitle className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Subject Performance Trends
-            </CardTitle>
-            <Select
-              value={selectedSubjectId}
-              onValueChange={setSelectedSubjectId}
-            >
-              <SelectTrigger className="w-48 h-8 text-sm">
-                <SelectValue placeholder="Select subject" />
-              </SelectTrigger>
-              <SelectContent>
-                {activeSubjects.map((s) => (
-                  <SelectItem key={s._id} value={s._id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <CardTitle className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            Raw score history
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Different years, different difficulty — not directly comparable.
+          </p>
         </CardHeader>
         <CardContent>
-          {!selectedSubjectId ? (
+          {!effectiveSubjectId ? (
             <div className="h-40 flex items-center justify-center text-sm text-gray-400">
-              Select a subject to view performance trends
+              Select a subject to view its raw score history
             </div>
           ) : longitudinalData === undefined ? (
             <Skeleton className="h-40 w-full" />
-          ) : chartData.length === 0 ? (
+          ) : longitudinalChartData.length === 0 ? (
             <div className="h-40 flex items-center justify-center text-sm text-gray-400">
               No grade data for this subject yet
             </div>
           ) : (
-            <>
-              <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    domain={[0, 100]}
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => `${v}%`}
-                  />
-                  <Tooltip formatter={(v) => [`${v}%`, "Score"]} />
-                  <Line
-                    type="monotone"
-                    dataKey="percentage"
-                    stroke="var(--color-school-green)"
-                    strokeWidth={2}
-                    dot={{ fill: "var(--color-school-green)", r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-              <SubjectStats data={chartData} />
-            </>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={longitudinalChartData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border)"
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => `${v}%`}
+                />
+                <Tooltip formatter={(v) => [`${v}%`, "Score"]} />
+                <Line
+                  type="monotone"
+                  dataKey="percentage"
+                  stroke="var(--color-school-green)"
+                  strokeWidth={2}
+                  dot={{ fill: "var(--color-school-green)", r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
 
-      {/* Enrollment accordion */}
+      {/* Enrollment accordion (raw history) */}
       <Accordion type="multiple" className="space-y-2">
-        {enrollments.map((enrollment) => {
+        {enrollmentHistory.map((enrollment) => {
           const isCurrent = !enrollment.exitDate;
           const sem1Grades = allGrades.filter(
             (g) => g.enrollmentId === enrollment._id && g.semester === 1,
@@ -193,7 +430,6 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
             sem1Avg !== null && sem2Avg !== null
               ? (sem1Avg + sem2Avg) / 2
               : (sem1Avg ?? sem2Avg);
-          const trend = getTrend(sem1Avg, sem2Avg);
 
           return (
             <AccordionItem
@@ -243,7 +479,6 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
                   sem2Grades={sem2Grades}
                   sem1Avg={sem1Avg}
                   sem2Avg={sem2Avg}
-                  trend={trend}
                 />
               </AccordionContent>
             </AccordionItem>
@@ -268,13 +503,11 @@ function EnrollmentPerformanceCard({
   sem2Grades,
   sem1Avg,
   sem2Avg,
-  trend,
 }: {
   sem1Grades: GradeRow[];
   sem2Grades: GradeRow[];
   sem1Avg: number | null;
   sem2Avg: number | null;
-  trend: { label: string; icon: "up" | "down" | "stable" };
 }) {
   const allGrades = [...sem1Grades, ...sem2Grades];
 
@@ -299,7 +532,7 @@ function EnrollmentPerformanceCard({
 
   return (
     <div className="space-y-3 pt-1">
-      {/* Semester averages + trend */}
+      {/* Semester averages */}
       <div className="flex flex-wrap gap-4 text-sm">
         {sem1Avg !== null && (
           <div className="bg-gray-50 rounded px-3 py-2">
@@ -313,12 +546,6 @@ function EnrollmentPerformanceCard({
             <p className="font-semibold text-gray-900">{sem2Avg.toFixed(1)}%</p>
           </div>
         )}
-        <div className="bg-gray-50 rounded px-3 py-2 flex items-center gap-1.5">
-          <TrendIcon type={trend.icon} />
-          <span className="text-xs font-medium text-gray-600">
-            {trend.label}
-          </span>
-        </div>
       </div>
 
       {/* Grade distribution */}
@@ -382,54 +609,4 @@ function EnrollmentPerformanceCard({
       </div>
     </div>
   );
-}
-
-// ── SubjectStats ──────────────────────────────────────────────────────────────
-
-function SubjectStats({ data }: { data: { percentage: number }[] }) {
-  if (data.length === 0) return null;
-  const avg = data.reduce((s, d) => s + d.percentage, 0) / data.length;
-  const max = Math.max(...data.map((d) => d.percentage));
-  const min = Math.min(...data.map((d) => d.percentage));
-  const trend = getTrend(
-    data[0]?.percentage ?? null,
-    data[data.length - 1]?.percentage ?? null,
-  );
-
-  return (
-    <div className="grid grid-cols-4 gap-3 mt-3">
-      {[
-        { label: "Average", value: `${avg.toFixed(1)}%` },
-        { label: "Highest", value: `${max.toFixed(1)}%` },
-        { label: "Lowest", value: `${min.toFixed(1)}%` },
-        { label: "Overall Trend", value: trend.label },
-      ].map(({ label, value }) => (
-        <div key={label} className="bg-gray-50 rounded p-2 text-center">
-          <p className="text-xs text-gray-500">{label}</p>
-          <p className="text-sm font-semibold text-gray-900 mt-0.5">{value}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function getTrend(
-  sem1: number | null,
-  sem2: number | null,
-): { label: string; icon: "up" | "down" | "stable" } {
-  if (sem1 === null || sem2 === null) return { label: "N/A", icon: "stable" };
-  const diff = sem2 - sem1;
-  if (diff >= 5) return { label: "Improving ↗", icon: "up" };
-  if (diff <= -5) return { label: "Declining ↘", icon: "down" };
-  return { label: "Stable →", icon: "stable" };
-}
-
-function TrendIcon({ type }: { type: "up" | "down" | "stable" }) {
-  if (type === "up")
-    return <TrendingUp className="h-3.5 w-3.5 text-green-600" />;
-  if (type === "down")
-    return <TrendingDown className="h-3.5 w-3.5 text-red-500" />;
-  return <Minus className="h-3.5 w-3.5 text-gray-400" />;
 }

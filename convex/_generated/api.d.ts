@@ -9,6 +9,7 @@
  */
 
 import type * as _e2eTemp from "../_e2eTemp.js";
+import type * as _seedGradingFixture from "../_seedGradingFixture.js";
 import type * as academicYears from "../academicYears.js";
 import type * as assessmentQuestions from "../assessmentQuestions.js";
 import type * as assessments from "../assessments.js";
@@ -49,6 +50,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   _e2eTemp: typeof _e2eTemp;
+  _seedGradingFixture: typeof _seedGradingFixture;
   academicYears: typeof academicYears;
   assessmentQuestions: typeof assessmentQuestions;
   assessments: typeof assessments;
