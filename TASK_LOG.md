@@ -16,8 +16,41 @@ new feature work begins.
 
 ---
 
+## Current Feature: Phase D — Cohort "one class view" (D.1) (2026-07-03)
+**Status**: ✅ COMPLETE (2026-07-03) — Frontend-Review APPROVED · build/tsc/biome/242 tests green · one manual authenticated visual pass pending for user
+**Active Agent**: CODING AGENT (orchestrating)
+
+Phase C committed as `a16ec99`. Phase D is a **new admin-only page** (mandatory DA trigger).
+No new backend — both queries (`getGradeSpread` B.5a, `getStudentsNeedingHelp` B.5b) are
+built + Backend-Review-approved. Route (default, DA may challenge):
+`app/(dashboard)/admin/class-analytics/page.tsx`; sidebar label "Class Analytics".
+
+### D.1 sub-task breakdown
+- [x] D.1a — Extend `convex/_seedGradingFixture.ts` with one student scoring <50% in a subject so `getStudentsNeedingHelp` returns rows; re-seed, capture IDs — BACKEND AGENT (DONE 2026-07-03). Added student 8 "Hasan Mahmud": Math 35.00% (F, class low), English 65.00% (C). Verified: getStudentsNeedingHelp returns Hasan Math 35 first, then Gulnaz Math 48; getGradeSpread total=17 (A+2 A3 B3 C4 D3 F2). IDs change per reset — see fixture return payload.
+- [x] D.1b — Devil's Advocate DONE — route/label locked `/admin/class-analytics` "Class Analytics"; 9 findings, 6 locked mitigations folded into D.1c/D.1d specs below — DEVIL'S ADVOCATE ✓
+- [x] D.1c — `lib/cohortView.ts` pure view-model (TDD, 16 tests): `buildGradeSpreadSeries`, `gradeCountLabel`, `cohortState` (5-way tag), `groupNeedsHelpByStudent`, `CURRENT_STANDING_TITLE/SUBTITLE` + copy constants — FRONTEND AGENT ✓
+- [x] D.1d — Built page `app/(dashboard)/admin/class-analytics/page.tsx` + `_components/{GradeSpreadChart,NeedsHelpList}` (RoleGate admin · 4 selectors · BarChart "Current Standing" · grouped/flat needs-help list) — FRONTEND AGENT ✓
+- [x] D.1e — Sidebar "Class Analytics" (BarChart3 icon, Administration group, admin-only) — FRONTEND AGENT ✓
+- [x] D.1f — Frontend Review — APPROVED by FRONTEND REVIEW AGENT (2026-07-03): all 7 DA mitigations confirmed, 242/242 tests green, tsc clean, biome 0 errors
+- [x] D.1g — Verify DONE (2026-07-03): `next build` ✓ (18 routes incl. `/admin/class-analytics`; stopped dev → built → restarted per gotcha) · `tsc --noEmit` clean · `biome` 0 errors · `vitest` 242/242 · `graphify update .` ✓ · live: unauth GET `/admin/class-analytics` → **307 → /login** (route compiles + protected). Authenticated visual pass = one manual step for user (agent has no admin password) — CODING AGENT ✓
+
+### DA mitigations (locked — MUST implement in D.1c/D.1d)
+1. Route `/admin/class-analytics`, sidebar "Class Analytics", RoleGate admin.
+2. **Semester ALWAYS passed (default 1) to BOTH queries** — never `undefined` to `getGradeSpread` (silent full-year vs Sem-1 divergence). Comment the constraint.
+3. Four empty states in `cohortView.ts`: (a) no grades at all, (b) grades exist but none <50% → good-news copy, (c) no grades for selected subject, (d) all passing for subject. (b)/(d) must NOT say "no data yet".
+4. "All subjects" (no subjectId) needs-help list **groups by studentId** — each student once, failing subjects listed under them. Flat list only when a specific subject is selected.
+5. Chart title **"Current Standing"**; visible subtitle "Includes grades in progress — not final results." — export the subtitle as a constant from `cohortView.ts`. "Results" banned as a label.
+6. **Exactly two `useQuery` calls** on the page — no per-subject query in a `.map` (the Phase C fan-out/Rules-of-Hooks trap). Comment the constraint.
+7. Mobile (375px): fixed chart height, list collapses to name+grade% with subject as subtitle.
+
+### D.1 fresh fixture IDs (KG-2 / 2025-2026 / Sem 1 — dev; change on every reset)
+- standardLevelId `jd7drfwb9xkk26acergv7qvsp5755hhg` · academicYearId `kn70z6jped8s0b5gzhfqjk1n95826ayt` · campusId `ks70wesz8dx5myvane36cy306d82719g`
+- Mathematics `m97cna5vjpn8037nvk9jdmppzx827k0x` · English `m97bh81b00pyw11z2v8dspxwmh826gff` · Science `m9744qeehqbp9j44erqybt9b4982790z` · needs-help student (Hasan Mahmud) `j573qtk3gvb6b8egm67pyh53q189vh67`
+
+---
+
 ## Current Feature: Phase C — Integrate C.1–C.5 into AcademicHistoryTab container (2026-07-03)
-**Status**: ✅ APPROVED by FRONTEND REVIEW AGENT (2026-07-03)
+**Status**: ✅ APPROVED by FRONTEND REVIEW AGENT (2026-07-03) — committed `a16ec99`
 **Active Agent**: FRONTEND REVIEW AGENT
 
 ### Sub-tasks (this session) — all DONE, awaiting FRONTEND REVIEW
@@ -1609,7 +1642,7 @@ simple cohort view second.
 | C.4 | Overall Class Position headline at top of tab | [x] APPROVED by FRONTEND REVIEW AGENT (2026-07-03) — `OverallPositionHeadline` built via TDD + wired into container; loading `<output>` role=status, Award/`text-school-green` ranked, muted `Info` suppressed | Frontend Review |
 | C.5 | Remove "Improving/Declining" verdict; keep cross-year line only as labeled raw history (no judgment) | [x] APPROVED by FRONTEND REVIEW AGENT (2026-07-03) — grep-verified CLEAN (no `getTrend`/`TrendIcon`/`Improving`/`Declining`/`Stable`); cross-year line survives as relabeled "Raw score history" | Frontend Review |
 | **Phase D — Cohort view (simple)** | | | |
-| D.1 | One class view: level+year+subject+term selector → grade spread + who-needs-help list | [ ] PENDING | Frontend Review |
+| D.1 | One class view: level+year+subject+term selector → grade spread + who-needs-help list | [x] **APPROVED** by Frontend Review Agent (2026-07-03) — `/admin/class-analytics`, TDD'd, build/tests green | Frontend Review ✓ |
 | **Phase E — Verify** | | | |
 | E.1 | `npm run build` + `npm run lint` + tests + live visual verify + `graphify update .` | [x] **DONE (2026-07-03)** — `next build` 18 routes ✓ · `biome check` 0 errors ✓ · `vitest` 220/220 ✓ · `tsc --noEmit` ✓ · live Playwright visual verify PASS (both demo students) ✓ · `graphify update` ✓ | — |
 
@@ -1808,3 +1841,56 @@ behavior at a time). No React, no Convex calls, no DOM.
 - Fixed a shared-harness bug: `vitest.setup.ts` had no `afterEach(cleanup)`, so with `globals: false` RTL DOM leaked between tests in the same file (false failures from prior renders). Added explicit cleanup — benefits all component tests. Full suite re-verified green.
 - A11y: delta indicator uses `role="img"` + `aria-label` (e.g. "5.0 below class"); loading uses `<output>` (implicit status role) per the OverallPositionHeadline convention; direction conveyed by icon+label, never color alone.
 - **Status**: awaiting FRONTEND REVIEW AGENT approval before marked complete.
+
+---
+
+## Current Feature: Phase D / D.1 — Admin "Class Analytics" page (cohort one-class view)
+**Status**: In Progress
+**Active Agent**: FRONTEND AGENT
+**Baseline**: 25 files / 220 tests passing.
+
+No new backend — consumes the Backend-Review-approved `getGradeSpread` (B.5a) and
+`getStudentsNeedingHelp` (B.5b). Mirrors the Phase C precedent: pure view-model
+(`lib/cohortView.ts`) + presentational components + container page. TDD, vertical slices.
+
+### DA mitigations (LOCKED — implement all)
+1. Route `admin/class-analytics/page.tsx`; sidebar "Class Analytics"; wrap in RoleGate(admin).
+2. Semester ALWAYS passed (default 1) to BOTH queries — never undefined to getGradeSpread.
+3. Selector: level (req) + year (req) + term (default 1) + subject (optional/"All subjects"). Queries "skip" until level+year resolve.
+4. FOUR empty states in cohortView.ts (unit-tested): (a) no grades total=0; (b) grades but none <50% (good-news); (c) subject selected, no grades; (d) all passing for subject.
+5. "All subjects" → who-needs-help groups by studentId (one row per student, failing subjects nested). Specific subject → flat list. Grouping in cohortView.ts + unit-tested.
+6. Chart title "Current Standing"; visible subtitle "Includes grades in progress — not final results." exported as CONSTANT. No "Results" as a heading/label anywhere.
+7. Exactly TWO useQuery calls (one per Phase B query). No per-subject query in a .map. Subject list = one selector query.
+8. Mobile 375px: fixed chart height + ResponsiveContainer width 100%; needs-help list collapses to name + grade% + subject subtitle; overflow-x-auto if table.
+
+### Sub-tasks (strict TDD, red→green per behavior)
+- [x] D.1.1 cohortView: spread → ordered A+…F chart series `{ grade, count }[]` — GREEN (1 test)
+- [x] D.1.2 cohortView: total/count labels (`gradeCountLabel`) — GREEN (3 tests)
+- [x] D.1.3 cohortView: 4-way empty-state discriminator (`cohortState` + copy constants) — GREEN (6 tests)
+- [x] D.1.4 cohortView: needs-help grouping (`groupNeedsHelpByStudent`) — GREEN (4 tests)
+- [x] D.1.5 cohortView: `CURRENT_STANDING_TITLE` + `CURRENT_STANDING_SUBTITLE` constants — GREEN (2 tests)
+      → lib/cohortView.ts: 16 tests green, tsc clean, biome 0 errors.
+- [x] D.1.6 GradeSpreadChart presentational component (jsdom-safe) — GREEN (4 tests). Title "Current Standing", visible subtitle constant, count label, loading `<output>`.
+- [x] D.1.7 NeedsHelpList presentational component (jsdom-safe) — GREEN (2 tests). Grouped (student-once, subjects nested) + flat (subject subtitle) modes.
+- [x] D.1.8 Container page `app/(dashboard)/admin/class-analytics/page.tsx` — RoleGate(admin), 4 selectors, exactly TWO cohort useQuery, semester always passed, skip until level+year, 4 empty states + loading + good-news. Verified via tsc/biome + live (not unit-tested — needs Convex provider, per Phase C SubjectComparisonRow precedent).
+- [x] D.1.9 Sidebar entry "Class Analytics" (BarChart3 icon, Administration group, admin-only).
+- [x] D.1.10 Full verify: npm test 28 files/242 tests (was 220) + tsc clean + biome 0 errors on all 8 files.
+
+### Verification (2026-07-03)
+- `npx vitest run` → 28 files / 242 passed (baseline 220 + 22 new). Nothing broken.
+- `npx tsc --noEmit` → clean (no output).
+- `npx biome check` on all created/changed files → 0 errors (initial line-wrap format auto-fixed with `--write`).
+- `npx vitest list` confirms new test files are project-scoped (no `.sandcastle`/`node_modules` leak).
+- DID NOT run `next build` (next dev is live — build corrupts .next per project rule).
+
+### DA mitigations — how each is satisfied
+1. Route `admin/class-analytics/page.tsx`; sidebar "Class Analytics"; content wrapped in `RoleGate allowedRoles={["admin"]}`.
+2. `selectedSemester` state defaults "1"; `semester` (parsed 1|2) passed to BOTH getGradeSpread + getStudentsNeedingHelp; comment states the constraint on each call.
+3. Selectors: level (req) + year (req) + term (default 1) + subject (optional, "All subjects" sentinel → subjectId undefined). Both cohort queries `"skip"` until level+year resolve; semester always defaulted so never blocks.
+4. Four empty states discriminated in `cohortState` (unit-tested): empty / empty_subject / all_passing / all_passing_subject. Good-news copy uses "every student is passing" (never "no data yet").
+5. `groupNeedsHelpByStudent` (unit-tested) groups by studentId when NO subject; page renders `NeedsHelpList mode="grouped"`. Subject selected → `mode="flat"` one-row-per-student.
+6. Chart title `CURRENT_STANDING_TITLE` = "Current Standing"; visible `CardDescription` = `CURRENT_STANDING_SUBTITLE` constant. No "Results" heading/label anywhere (grep-verified).
+7. Exactly TWO cohort `useQuery` (getGradeSpread + getStudentsNeedingHelp). No per-subject query in a `.map`. Subject list is one selector query. Comment states the constraint.
+8. Mobile: chart `ResponsiveContainer width="100%" height={240}`; NeedsHelpList rows are flex name+grade% with subject on its own subtitle line; grid is `grid-cols-1 lg:grid-cols-2`.
+
+**Status**: awaiting FRONTEND REVIEW AGENT approval before marked complete.

@@ -17,19 +17,22 @@ import { recomputeGrade } from "./computedGrades";
  * `recomputeGrade` helper is called per (student, subject) to write the real
  * `computedGrades` rows using the same math the app uses.
  *
- * Shape it produces (7 students, prefixed `FIX-` so they are identifiable/removable):
- *  - Mathematics: CA-1/2/3 for all 7, distinct per-student totals (A+ → F spread).
- *  - English:     CA-1/2/3 for all 7, a DIFFERENT ordering so ranks differ from Math.
+ * Shape it produces (8 students, prefixed `FIX-` so they are identifiable/removable):
+ *  - Mathematics: CA-1/2/3 for all 8, distinct per-student totals (A+ → F spread).
+ *  - English:     CA-1/2/3 for all 8, a DIFFERENT ordering so ranks differ from Math.
  *  - Science:     CA-1 only, student 7 only → student 7's Science grade is PROVISIONAL
  *                 and no other student has a Science grade.
  *
  * Reachable analytics states:
  *  - Students 1–6 are term-complete (Math + English both final, no Science) → overall
- *    Class Position fires (6 term-complete peers ≥ MIN_CLASS_PEERS=5), per-subject
+ *    Class Position fires (7 term-complete peers ≥ MIN_CLASS_PEERS=5), per-subject
  *    Math/English positions fire, deltas + per-CA baselines populate. S3 is rank-1 overall.
  *  - Student 7 has Math + English final PLUS a provisional Science → overall suppressed
  *    with reason "provisional"; the Science row shows the provisional/suppressed state
  *    while Math/English rows still show ranks.
+ *  - Student 8 (Hasan Mahmud) is the Phase D "needs help" demo: Math ~35% (well below the
+ *    50% pass line → letter F) while English stays mid (~65%, C), so the grade SPREAD keeps
+ *    its variety AND `getStudentsNeedingHelp` returns his Math row lowest-first.
  *
  * Idempotent: pass `{ reset: true }` to wipe all `FIX-` students and everything they
  * own (enrollments, assessments, questions, answers, computedGrades) before re-seeding.
@@ -43,7 +46,7 @@ import { recomputeGrade } from "./computedGrades";
 const FIX_PREFIX = "FIX-";
 const SEMESTER = 1 as const;
 
-/** Human names for the 7 fixture students, index 0 = student 1. */
+/** Human names for the 8 fixture students, index 0 = student 1. */
 const STUDENT_NAMES = [
   "Aisha Rahman",
   "Bilal Karim",
@@ -52,6 +55,7 @@ const STUDENT_NAMES = [
   "Elham Chowdhury",
   "Farhan Islam",
   "Gulnaz Akter",
+  "Hasan Mahmud", // student 8 — Phase D "needs help" demo (Math ~35% → F).
 ] as const;
 
 /**
@@ -60,10 +64,12 @@ const STUDENT_NAMES = [
  * Science is CA-1 only for student 7.
  *
  * Resulting subject averages (mean of present CAs):
- *   Math:    S1 92.33(A+) S2 85.00(A) S3 78.00(B) S4 70.00(B) S5 63.00(C) S6 55.00(D) S7 48.00(F)
- *   English: S1 76.00(B)  S2 68.00(C) S3 94.00(A+) S4 82.00(A) S5 58.00(D) S6 88.00(A) S7 50.00(D)
- * Overall term average (Math+English) for term-complete S1–S6:
- *   S1 84.17 · S2 76.50 · S3 86.00(rank 1) · S4 76.00 · S5 60.50 · S6 71.50 — all distinct.
+ *   Math:    S1 92.33(A+) S2 85.00(A) S3 78.00(B) S4 70.00(B) S5 63.00(C) S6 55.00(D) S7 48.00(F) S8 35.00(F)
+ *   English: S1 76.00(B)  S2 68.00(C) S3 94.00(A+) S4 82.00(A) S5 58.00(D) S6 88.00(A) S7 50.00(D) S8 65.00(C)
+ * Overall term average (Math+English) for term-complete S1–S6,S8:
+ *   S1 84.17 · S2 76.50 · S3 86.00(rank 1) · S4 76.00 · S5 60.50 · S6 71.50 · S8 50.00 — all distinct.
+ * S8 (Hasan Mahmud) is the Phase D "needs help" row: Math 35.00 is the class low and clearly
+ * <50%, so `getStudentsNeedingHelp` surfaces it first, ahead of S7's Math 48.00.
  */
 const MATH_MARKS: ReadonlyArray<[number, number, number]> = [
   [95, 92, 90],
@@ -73,6 +79,7 @@ const MATH_MARKS: ReadonlyArray<[number, number, number]> = [
   [65, 63, 61],
   [58, 55, 52],
   [50, 48, 46],
+  [38, 35, 32], // S8 → mean 35.00, well below the 50% pass line (letter F).
 ];
 
 const ENGLISH_MARKS: ReadonlyArray<[number, number, number]> = [
@@ -83,6 +90,7 @@ const ENGLISH_MARKS: ReadonlyArray<[number, number, number]> = [
   [60, 58, 56],
   [90, 88, 86],
   [52, 50, 48],
+  [68, 65, 62], // S8 → mean 65.00 (C), keeps the spread varied so S8 isn't uniformly low.
 ];
 
 // Science: only student 7 (index 6), only CA-1. Everyone else ungraded in Science.
@@ -378,7 +386,7 @@ export const seedGradingFixture = internalMutation({
       );
     };
 
-    // Math + English: all 7 students, all 3 CAs.
+    // Math + English: all 8 students, all 3 CAs.
     for (let s = 0; s < STUDENT_NAMES.length; s++) {
       for (let ca = 0; ca < 3; ca++) {
         insertAnswer(s, mathCas[ca], MATH_MARKS[s][ca]);
@@ -391,7 +399,7 @@ export const seedGradingFixture = internalMutation({
     await Promise.all(answerInserts);
 
     // ── Compute grades: recomputeGrade per (student, subject) ─────────────────
-    // Math + English for all 7 students; Science only for student 7 (the only one
+    // Math + English for all 8 students; Science only for student 7 (the only one
     // with any Science mark — others produce no row, which is correct).
     const computeResults = await Promise.all([
       ...studentIds.flatMap((studentId, i) =>
@@ -416,14 +424,18 @@ export const seedGradingFixture = internalMutation({
     ).length;
 
     // ── Structured report for the frontend verifier ──────────────────────────
-    // S3 (index 2) is rank-1 overall (86.00); S7 (index 6) is the provisional demo.
+    // S3 (index 2) is rank-1 overall (86.00); S7 (index 6) is the provisional demo;
+    // S8 (index 7) is the Phase D "needs help" demo (Math 35.00 → F, class low).
     return {
       status: "seeded" as const,
       primaryDemoStudentId: studentIds[2],
       primaryDemoStudentName: STUDENT_NAMES[2],
-      primaryDemoExpectedOverallRank: `1 of 6`,
+      primaryDemoExpectedOverallRank: `1 of 7`,
       provisionalDemoStudentId: studentIds[6],
       provisionalDemoStudentName: STUDENT_NAMES[6],
+      needsHelpDemoStudentId: studentIds[7],
+      needsHelpDemoStudentName: STUDENT_NAMES[7],
+      needsHelpDemoExpectedMathPct: 35,
       standardLevelId,
       academicYearId,
       campusId,

@@ -7,3 +7,4 @@
 - [Patterns: Zod schemas must be in lib/validations/](feedback_zod_schema_location.md) — Zod schemas defined inside _components/ files are a blocking issue; must live in lib/validations/ one file per domain
 - [Patterns: Hook extraction for Convex + display derivation](project_hook_extraction_pattern.md) — Approved pattern: FunctionReturnType+NonNullable, discriminated union state, as-cast allowed when schema union is structurally identical
 - [Patterns: Row-selection state belongs in a hook](feedback_selection_state_in_hooks.md) — Multi-row selection with value aggregation useMemo over query rows is blocking; extract to use-<domain>-selection.ts
+- [Patterns: Cohort analytics page architecture](project_cohort_analytics_pattern.md) — Approved DA-mitigation patterns for admin analytics: sentinel ALL_SUBJECTS, semester default "1", exactly-two cohort useQuery calls, pure view-model in lib/, 4-way empty state, output[aria-busy] skeleton
