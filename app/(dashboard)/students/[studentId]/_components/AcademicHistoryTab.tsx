@@ -3,15 +3,6 @@
 import { useQuery } from "convex/react";
 import { useMemo, useState } from "react";
 import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -19,7 +10,6 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -106,14 +96,6 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
       : "skip",
   );
 
-  // Cross-year raw history for the demoted line chart (not term-comparable).
-  const longitudinalData = useQuery(
-    api.computedGrades.getLongitudinalSubjectPerformance,
-    effectiveSubjectId
-      ? { studentId, subjectId: effectiveSubjectId as Id<"subjects"> }
-      : "skip",
-  );
-
   const initialLoading =
     enrollmentHistory === undefined ||
     currentEnrollment === undefined ||
@@ -155,7 +137,6 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
       positions={positions}
       semesterGrades={semesterGrades}
       baseline={baseline}
-      longitudinalData={longitudinalData}
       subjects={subjects ?? []}
       allGrades={allGrades ?? []}
       enrollmentHistory={enrollmentHistory ?? []}
@@ -182,11 +163,6 @@ type SemesterGradesResult = NonNullable<
 type BaselineResult = NonNullable<
   ReturnType<typeof useQuery<typeof api.computedGrades.getPerCaClassBaseline>>
 >;
-type LongitudinalResult = NonNullable<
-  ReturnType<
-    typeof useQuery<typeof api.computedGrades.getLongitudinalSubjectPerformance>
-  >
->;
 type SubjectDoc = NonNullable<
   ReturnType<typeof useQuery<typeof api.subjects.list>>
 >[number];
@@ -205,7 +181,6 @@ interface AcademicHistoryContentProps {
   positions: PositionsResult | undefined;
   semesterGrades: SemesterGradesResult | undefined;
   baseline: BaselineResult | undefined;
-  longitudinalData: LongitudinalResult | undefined;
   subjects: SubjectDoc[];
   allGrades: GradeDoc[];
   enrollmentHistory: EnrollmentHistoryDoc[];
@@ -220,7 +195,6 @@ function AcademicHistoryContent({
   positions,
   semesterGrades,
   baseline,
-  longitudinalData,
   subjects,
   allGrades,
   enrollmentHistory,
@@ -263,20 +237,6 @@ function AcademicHistoryContent({
           studentId: analyzeEnrollment.studentId,
         }
       : null;
-
-  // Cross-year raw line chart (demoted — different years, not comparable).
-  const longitudinalChartData = longitudinalData
-    ? [...longitudinalData]
-        .sort((a, b) => {
-          const yearA = a.yearName ?? "";
-          const yearB = b.yearName ?? "";
-          return yearA.localeCompare(yearB) || a.semester - b.semester;
-        })
-        .map((d) => ({
-          name: `${d.yearName} - Sem ${d.semester}`,
-          percentage: parseFloat(d.weightedAverage.toFixed(1)),
-        }))
-    : [];
 
   return (
     <div className="space-y-6">
@@ -349,62 +309,6 @@ function AcademicHistoryContent({
         subjectName={selectedSubjectName}
         loading={semesterGrades === undefined || baseline === undefined}
       />
-
-      {/* Demoted raw cross-year history */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-            Raw score history
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Different years, different difficulty — not directly comparable.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {!effectiveSubjectId ? (
-            <div className="h-40 flex items-center justify-center text-sm text-gray-400">
-              Select a subject to view its raw score history
-            </div>
-          ) : longitudinalData === undefined ? (
-            <Skeleton className="h-40 w-full" />
-          ) : longitudinalChartData.length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-sm text-gray-400">
-              No grade data for this subject yet
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={longitudinalChartData}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  tick={{ fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <Tooltip formatter={(v) => [`${v}%`, "Score"]} />
-                <Line
-                  type="monotone"
-                  dataKey="percentage"
-                  stroke="var(--color-school-green)"
-                  strokeWidth={2}
-                  dot={{ fill: "var(--color-school-green)", r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Enrollment accordion (raw history) */}
       <Accordion type="multiple" className="space-y-2">

@@ -16,6 +16,51 @@ new feature work begins.
 
 ---
 
+## Current Feature: Longitudinal grade-history fixture (wayfinder grade-charts, ticket 0007) (2026-07-10)
+**Status**: ✅ COMPLETE (2026-07-10) — dev DB seeded + verified · convex tsc clean · one ticket per wayfinder session
+**Active Agent**: WAYFINDER (work-through-the-map) — resolved ticket 0007 of `docs/wayfinder/grade-charts/MAP.md`
+
+New disposable dev fixture `convex/_seedLongitudinalHistory.ts` (reset key `LONG-`,
+independent of the `FIX-` analytics fixture) giving the two planned trajectory charts
+real data. Grades written only via `recomputeGrade` (ADR-0004); each `(level, year)`
+probed-or-thrown before writing.
+Run: `npx convex run _seedLongitudinalHistory:seedLongitudinalHistory '{"reset": true}'`
+
+- **Cohort (ticket 0005):** Grade 12 across 2022-23/23-24/24-25, 20 students/year, both
+  semesters, 3 subjects → 360 grades; verified 20 graded students per (year, semester).
+- **Individual (ticket 0002):** Grade 9→10→11 promotion chain across 2019-20/20-21/21-22,
+  6 students, both semesters → 108 grades; exemplar `LONG-chain-001` = 18 grades / 6 career
+  points spanning 3 levels.
+- **Platform note:** `recomputeGrade` scans the whole `(subject,semester)` assessment slice
+  (~190 rows; DB has 2222 assessments), so ~470 calls in one mutation exceed the 32k-doc
+  read limit. Split into one mutation per class-term, orchestrated by an `internalAction`.
+- Closed ticket 0007 → unblocks trajectory-design tickets 0002 + 0005 (now on the frontier).
+
+---
+
+## Current Feature: Grading-analytics fixture — spec module + seed + convex-test (2026-07-07)
+**Status**: ✅ COMPLETE (2026-07-07) — 10/10 convex-test cases green · 252 total tests · tsc (root+convex) clean · biome clean · dev DB seeded
+**Active Agent**: CODING AGENT (built directly per `docs/handoffs/HANDOFF_grading_fixture.md` — scope pre-grilled, no Planning/DA flow)
+
+Replaces the toy 8-student `_seedGradingFixture.ts` with a dual-purpose fixture that
+(a) exercises every ADR-0005 analytics edge case and (b) is a believable demo. ONE shared
+case-spec module feeds BOTH a dev seed mutation and a `convex-test` assertion file.
+
+### Sub-tasks
+- [x] 1. `convex/_gradingFixtureSpec.ts` — shared plain-data specs for 6 classes + `buildClass(ctx, spec)` (reused verbatim by seed + test; writes grades via exported `recomputeGrade`). Demo marks are deterministic (latent ability + subject offset + hashed noise, no `Math.random`); edge marks hand-set.
+- [x] 2. `convex/_seedGradingAnalytics.ts` — supersedes `_seedGradingFixture.ts` (deleted). Owns the `FIXTURE — edge cases` year, **probes-or-throws** the 2 demo levels in `2025-2026`, `{reset:true}` wipes `FIX-` students + fixture year. Seeded OK: strong=63 grades (66−3 ungraded), weak=66, edges 4/5/5/6. Weak level probed → `NUR`.
+- [x] 3. `convex/computedGrades.analytics.test.ts` — all 10 states asserted against the real handlers. Added `convex-test` + `@edge-runtime/vm` dev deps; `vitest.config.ts` split into `unit` (jsdom) + `convex` (edge-runtime) projects.
+- [x] 4. Verify — `npm test` 252 green · convex project 10/10 · `tsc --noEmit` root+convex clean · biome clean · dev seed succeeded. (Authenticated browser eyeball of the two demo spreads = one manual step for user; `next build` skipped — `next dev` was live, .next-corruption gotcha.)
+
+### The 10 states → where
+Demo-strong (KG2/2025-2026): #2 ≥5 graded, #3 top tie (idx 0/1 rank 1,1; idx 2 rank 3), #5 provisional (idx 20 skips Math CA-3), #8 A+→F spread, #10 fully-ungraded (idx 21). Demo-weak (NUR/2025-2026): #9 needs-help lowest-first. Edge year: #1 exactly-4 peers, #4 5-with-1-withdrawn (exitDate → activeRows 5→4), #6 stale `expectedCaCount` (live count wins → provisional), #7 per-CA independent ≥5 floor.
+
+### Notes
+- Isolation gotcha handled: edge classes each own a distinct level in a fresh year (pristine by construction); demo levels probed-or-throw before seeding.
+- Old `_seedGradingFixture` removed from repo + deployment; `npx convex codegen` + `convex dev --once` refreshed `_generated` and the dev deployment.
+
+---
+
 ## Current Feature: Phase D — Cohort "one class view" (D.1) (2026-07-03)
 **Status**: ✅ COMPLETE (2026-07-03) — Frontend-Review APPROVED · build/tsc/biome/242 tests green · one manual authenticated visual pass pending for user
 **Active Agent**: CODING AGENT (orchestrating)
@@ -1577,8 +1622,8 @@ loading skeleton, empty state, and error boundary (inherits dashboard
 
 ## Current Feature: Grading & Academic Analytics Overhaul
 
-**Status**: Phase C — ✅ COMPLETE (2026-07-03) · Phase A `efe9799` · Phase B `ddd4b25` · Phase D (cohort) deferred to its own handoff
-**Active Agent**: Coding Agent (orchestrating) — Phase C (Academic History tab rework, C.1–C.5)
+**Status**: ✅ **COMPLETE (2026-07-06)** — all phases A–E done. Phase A `efe9799` · Phase B `ddd4b25` · Phase C `a16ec99` · Phase D `e3cfe9f` · Phase E = final verify gate (242 tests + authenticated visual pass, both surfaces render clean)
+**Active Agent**: Coding Agent (orchestrating) — Phase E verification complete
 
 **Phase C session decisions (2026-07-03, locked by user):**
 - **Full TDD** — stand up Vitest + React Testing Library; each Shape component is a pure presentational component (data via props) so component tests need no Convex mocking; the container (`AcademicHistoryTab`) owns the `useQuery` calls. Pure view helpers TDD'd first in `lib/academicHistoryView.ts`.
@@ -1644,7 +1689,42 @@ simple cohort view second.
 | **Phase D — Cohort view (simple)** | | | |
 | D.1 | One class view: level+year+subject+term selector → grade spread + who-needs-help list | [x] **APPROVED** by Frontend Review Agent (2026-07-03) — `/admin/class-analytics`, TDD'd, build/tests green | Frontend Review ✓ |
 | **Phase E — Verify** | | | |
-| E.1 | `npm run build` + `npm run lint` + tests + live visual verify + `graphify update .` | [x] **DONE (2026-07-03)** — `next build` 18 routes ✓ · `biome check` 0 errors ✓ · `vitest` 220/220 ✓ · `tsc --noEmit` ✓ · live Playwright visual verify PASS (both demo students) ✓ · `graphify update` ✓ | — |
+| E.1 | `npm run build` + `npm run lint` + tests + live visual verify + `graphify update .` | [x] **DONE — FULL A–D RE-VERIFY (2026-07-06)** — see Phase E Verification Notes below | — |
+
+### Phase E Verification Notes (2026-07-06) — final gate over the COMPLETE A–D overhaul
+
+The prior E.1 tick reflected only the Phase C snapshot (220 tests). Phase D (cohort "Class
+Analytics" page) landed afterward and was committed (`e3cfe9f`) — so Phase E was re-run as the
+final gate over the whole grading feature (Phases A–D). All gates green:
+
+| Gate | Result |
+|------|--------|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `biome check` (lint) | ✅ 0 errors, 217 files |
+| `vitest run` | ✅ **242/242** passed (28 files) |
+| `next build` | ✅ exit 0, **18 routes** incl. `/admin/class-analytics` |
+| `graphify update .` | ✅ exit 0 (no topology changes) |
+| Route protection (dev) | ✅ unauth GET `/admin/class-analytics` → **307 → /login** |
+| **Authenticated visual pass** | ✅ **DONE** (was the standing manual gap in C/D) |
+
+**Authenticated visual pass (headless Playwright, admin@school.edu):** logged in successfully,
+drove both grading surfaces against a freshly re-seeded fixture (`_seedGradingFixture` reset) —
+**0 console/page errors**:
+- **Class Analytics (Phase D)** — KG-2 / 2025-2026 / Sem 1 / Mathematics: "Current Standing" A+…F
+  bar chart with the DA-mandated subtitle "Includes grades in progress — not final results.";
+  "Needs Support" list showing Hasan Mahmud 35.0% (F) then Gulnaz Akter 48.0% (F), lowest-first.
+- **Academic History tab (Phase C)** — Chandni Das: "Stood 1st of 7 in class" headline, You-vs-Class
+  delta table (English/Mathematics), per-CA you-vs-class line chart, and "Raw Score History"
+  (relabeled, no verdict). Demo IDs change per fixture reset — re-seed to reproduce.
+
+**Notes:**
+- Deleted stray uncommitted cruft `convex/_e2eTemp.ts` (throwaway `setFatherEmail` debug mutation).
+- Seed admin credentials are documented in `convex/seedAdmin.ts` (`admin@school.edu` / `Admin1234!`).
+- Pre-existing (NOT a Phase D issue): under local `next start`, the auth proxy returns 200 for
+  protected routes instead of redirecting (affects ALL 18 routes identically; `requireRole` still
+  gates all data server-side). Dev-mode protection is correct (307→/login). Flag for an auth-infra
+  pass, out of grading scope.
+- `convex/_seedGradingFixture.ts` remains (dev-only, disposable) — delete when demo data no longer needed.
 
 ### Phase C Implementation Notes (2026-07-03)
 

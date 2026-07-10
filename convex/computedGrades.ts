@@ -230,59 +230,6 @@ export const getGradesByEnrollmentSemester = query({
   },
 });
 
-/** Get longitudinal subject performance across all enrollments for a student. */
-export const getLongitudinalSubjectPerformance = query({
-  args: {
-    studentId: v.id("students"),
-    subjectId: v.id("subjects"),
-  },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
-    const grades = await ctx.db
-      .query("computedGrades")
-      .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
-      .filter((q) => q.eq(q.field("subjectId"), args.subjectId))
-      .collect();
-
-    // Batch-load enrollments, then batch-load years/levels (avoid N+1)
-    const uniqueEnrollmentIds = [...new Set(grades.map((g) => g.enrollmentId))];
-    const enrollments = await Promise.all(
-      uniqueEnrollmentIds.map((id) => ctx.db.get(id)),
-    );
-    const enrollmentMap = new Map(
-      enrollments.map((e, i) => [uniqueEnrollmentIds[i], e] as const),
-    );
-
-    const validEnrollments = [...enrollmentMap.values()].filter(
-      (e): e is NonNullable<typeof e> => e != null,
-    );
-    const yearIds = [...new Set(validEnrollments.map((e) => e.academicYear))];
-    const levelIds = [
-      ...new Set(validEnrollments.map((e) => e.standardLevelId)),
-    ];
-
-    const [years, levels] = await Promise.all([
-      Promise.all(yearIds.map((id) => ctx.db.get(id))),
-      Promise.all(levelIds.map((id) => ctx.db.get(id))),
-    ]);
-    const yearMap = new Map(years.map((y, i) => [yearIds[i], y] as const));
-    const levelMap = new Map(levels.map((l, i) => [levelIds[i], l] as const));
-
-    return grades.map((g) => {
-      const enrollment = enrollmentMap.get(g.enrollmentId);
-      return {
-        ...g,
-        yearName: enrollment?.academicYear
-          ? yearMap.get(enrollment.academicYear)?.name
-          : undefined,
-        levelName: enrollment?.standardLevelId
-          ? levelMap.get(enrollment.standardLevelId)?.name
-          : undefined,
-      };
-    });
-  },
-});
-
 // ─── Phase B — Class analytics (ADR-0005) ──────────────────────────────────────
 //
 // All of these are difficulty-adjusted: a student is compared only to classmates
