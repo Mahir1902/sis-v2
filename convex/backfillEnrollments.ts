@@ -11,7 +11,6 @@ import { internalMutation } from "./_generated/server";
 export const run = internalMutation({
   args: {},
   handler: async (ctx) => {
-
     const students = await ctx.db.query("students").take(2000);
     let created = 0;
     let skipped = 0;

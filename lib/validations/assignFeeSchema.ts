@@ -28,26 +28,3 @@ export const assignFeeSchema = z
   );
 
 export type AssignFeeValues = z.infer<typeof assignFeeSchema>;
-
-/**
- * Builds the mutation payload from a selected fee structure and optional billing period.
- *
- * Always creates an unpaid fee with balance equal to baseAmount.
- */
-export function resolveAssignFeePayload(
-  structure: {
-    _id: string;
-    baseAmount: number;
-    frequency: "one-time" | "monthly" | "yearly";
-  },
-  billingPeriod: string | undefined,
-) {
-  return {
-    feeStructureId: structure._id,
-    originalAmount: structure.baseAmount,
-    paidAmount: 0,
-    balance: structure.baseAmount,
-    status: "unpaid" as const,
-    billingPeriod,
-  };
-}

@@ -38,7 +38,6 @@ function getInitials(name: string) {
 
 const statusStyles: Record<string, string> = {
   paid: "bg-green-100 text-green-700 border-green-200",
-  partial: "bg-yellow-100 text-yellow-700 border-yellow-200",
   unpaid: "bg-red-100 text-red-700 border-red-200",
 };
 
@@ -196,13 +195,7 @@ function StudentFeeRow({
   const totalBalance = fees?.reduce((s, f) => s + f.balance, 0) ?? 0;
 
   const overallStatus =
-    fees === undefined
-      ? "loading"
-      : totalBalance <= 0
-        ? "paid"
-        : totalPaid > 0
-          ? "partial"
-          : "unpaid";
+    fees === undefined ? "loading" : totalBalance <= 0 ? "paid" : "unpaid";
 
   return (
     <TableRow

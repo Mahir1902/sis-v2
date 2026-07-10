@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
@@ -33,10 +33,11 @@ export const applyDiscount = mutation({
     }
     discountAmount = Math.min(discountAmount, fee.balance);
 
-    // Update fee balance
+    // Update fee balance. Partial payments are not allowed (ADR-0002), so
+    // `paidAmount > 0` with `newBalance > 0` is an impossible state — the
+    // status collapses to a two-way split.
     const newBalance = fee.balance - discountAmount;
-    const newStatus =
-      newBalance <= 0 ? "paid" : fee.paidAmount > 0 ? "partial" : "unpaid";
+    const newStatus = newBalance <= 0 ? ("paid" as const) : ("unpaid" as const);
 
     const updatedDiscounts = [
       ...(fee.appliedDiscounts ?? []),
@@ -72,25 +73,5 @@ export const applyDiscount = mutation({
     });
 
     return { discountId, discountAmount };
-  },
-});
-
-/** Get all discounts applied to a student for a given year. */
-export const getByStudentYear = query({
-  args: { studentId: v.id("students"), academicYear: v.id("academicYears") },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
-    const discounts = await ctx.db
-      .query("studentDiscounts")
-      .withIndex("by_student_year", (q) =>
-        q.eq("studentId", args.studentId).eq("academicYear", args.academicYear),
-      )
-      .collect();
-    return await Promise.all(
-      discounts.map(async (d) => ({
-        ...d,
-        ruleDoc: await ctx.db.get(d.discountRuleId),
-      })),
-    );
   },
 });

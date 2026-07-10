@@ -60,7 +60,6 @@ describe("generateCSVContent", () => {
 function makeLineItem(overrides: Partial<CSVLineItemRow> = {}): CSVLineItemRow {
   return {
     transactionDate: new Date("2025-01-15T00:00:00Z").getTime(),
-    invoiceNumber: "INV-001",
     studentName: "Alice Smith",
     studentNumber: "STU-001",
     campus: "Main",
@@ -81,35 +80,34 @@ describe("buildTransactionCSVRows", () => {
     expect(rows).toHaveLength(1);
     const row = rows[0];
     expect(row[0]).toMatch(/2025-01-15/); // Date
-    expect(row[1]).toBe("INV-001"); // Invoice #
-    expect(row[2]).toBe("Alice Smith"); // Student Name
-    expect(row[3]).toBe("STU-001"); // Admission #
-    expect(row[4]).toBe("Main"); // Campus
-    expect(row[5]).toBe("Monthly Tuition"); // Fee Name
-    expect(row[6]).toBe("Jan 2025"); // Billing Period (formatted)
-    expect(row[7]).toBe("5000"); // Amount
-    expect(row[8]).toBe("Cash"); // Payment Mode
-    expect(row[9]).toBe("completed"); // Status
-    expect(row[10]).toBe("Admin User"); // Collected By
+    expect(row[1]).toBe("Alice Smith"); // Student Name
+    expect(row[2]).toBe("STU-001"); // Admission #
+    expect(row[3]).toBe("Main"); // Campus
+    expect(row[4]).toBe("Monthly Tuition"); // Fee Name
+    expect(row[5]).toBe("Jan 2025"); // Billing Period (formatted)
+    expect(row[6]).toBe("5000"); // Amount
+    expect(row[7]).toBe("Cash"); // Payment Mode
+    expect(row[8]).toBe("completed"); // Status
+    expect(row[9]).toBe("Admin User"); // Collected By
   });
 
   it("handles null campus as empty string", () => {
     const rows = buildTransactionCSVRows([makeLineItem({ campus: null })]);
-    expect(rows[0][4]).toBe("");
+    expect(rows[0][3]).toBe("");
   });
 
   it("handles null billing period as empty string", () => {
     const rows = buildTransactionCSVRows([
       makeLineItem({ billingPeriod: null }),
     ]);
-    expect(rows[0][6]).toBe("");
+    expect(rows[0][5]).toBe("");
   });
 
   it("formats billing period correctly", () => {
     const rows = buildTransactionCSVRows([
       makeLineItem({ billingPeriod: "2025-12" }),
     ]);
-    expect(rows[0][6]).toBe("Dec 2025");
+    expect(rows[0][5]).toBe("Dec 2025");
   });
 
   it("returns empty array for empty input", () => {
@@ -119,19 +117,16 @@ describe("buildTransactionCSVRows", () => {
   it("produces multiple rows from a multi-item session", () => {
     const rows = buildTransactionCSVRows([
       makeLineItem({
-        invoiceNumber: "INV-100",
         feeName: "Sports Fee",
         billingPeriod: "2025-01",
         amount: 1000,
       }),
       makeLineItem({
-        invoiceNumber: "INV-100",
         feeName: "Sports Fee",
         billingPeriod: "2025-02",
         amount: 1000,
       }),
       makeLineItem({
-        invoiceNumber: "INV-100",
         feeName: "Sports Fee",
         billingPeriod: "2025-03",
         amount: 1000,
@@ -139,12 +134,12 @@ describe("buildTransactionCSVRows", () => {
     ]);
 
     expect(rows).toHaveLength(3);
-    expect(rows[0][1]).toBe("INV-100");
-    expect(rows[1][1]).toBe("INV-100");
-    expect(rows[2][1]).toBe("INV-100");
-    expect(rows[0][6]).toBe("Jan 2025");
-    expect(rows[1][6]).toBe("Feb 2025");
-    expect(rows[2][6]).toBe("Mar 2025");
+    expect(rows[0][4]).toBe("Sports Fee");
+    expect(rows[1][4]).toBe("Sports Fee");
+    expect(rows[2][4]).toBe("Sports Fee");
+    expect(rows[0][5]).toBe("Jan 2025");
+    expect(rows[1][5]).toBe("Feb 2025");
+    expect(rows[2][5]).toBe("Mar 2025");
   });
 
   it("column count matches header count", () => {

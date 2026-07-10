@@ -34,3 +34,19 @@ An admin can change a user's role via updateUserRole mutation. The getMe subscri
 
 **isLoading from useConvexAuth stays false during normal token refresh.**
 Per @convex-dev/auth internals: isLoading only becomes true during the initial auth determination, not during token refresh. Any guard that waits for isLoading=true will not fire during a mid-session JWT refresh. This is the scenario that causes the "transient Unauthenticated" errors.
+
+---
+
+**The student detail page (`/students/[studentId]`) has NO route-level role gate — but its tabs call admin/teacher-only queries.**
+As of 2026-07 there is no middleware/proxy role check keeping a `student` role off the student detail page. Yet the Grades and Academic History tabs call Convex queries that hard-gate on `requireRole(["admin","teacher"])`. Confirmed admin/teacher-only in `convex/computedGrades.ts`: getGradesByEnrollmentSemester, getLongitudinalSubjectPerformance, and ALL Phase B analytics (getClassAverages, getPerCaClassBaseline, getClassPositions, getGradeSpread). A student reaching this page makes those queries throw "Unauthorized".
+
+**Why:** the permission matrix in CLAUDE.md promises students can "view own grades", but the queries backing the detail-page tabs don't allow the student role at all. The UI has no client-side role gate around these sections either.
+
+**How to apply:** For any Phase C+ work on student-facing grade/analytics views, flag this as a design gap — either gate the section client-side to admin/teacher, or Backend must relax specific queries to let a student read their OWN row. Do not assume students can view the Academic History or Grades tabs.
+
+---
+
+**CLAUDE.md "KEY FILES" references `getTrendIndicator` in lib/gradeUtils.ts — it does NOT exist there.**
+gradeUtils.ts exports only getLetterGradeBadgeColor, formatPercentage, calculateLetterGrade. The Improving/Declining trend logic (getTrend/TrendIcon) lives LOCALLY inside AcademicHistoryTab.tsx, not in gradeUtils, and has no external consumers. Deleting it (ADR-0005 Phase C.5) is safe cross-file, but breaks the local SubjectStats "Overall Trend" cell if not removed together.
+
+**How to apply:** Don't trust the CLAUDE.md KEY FILES table as authoritative for gradeUtils exports — grep the file. When asked whether trend logic is safe to delete, the answer is yes (isolated to the one component).

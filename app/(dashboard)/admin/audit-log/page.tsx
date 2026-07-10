@@ -40,6 +40,7 @@ const ACTION_OPTIONS: { value: AuditAction; label: string }[] = [
   { value: "upload", label: "Upload" },
   { value: "promote", label: "Promote" },
   { value: "role_change", label: "Role Change" },
+  { value: "void", label: "Void" },
 ];
 
 const ACTION_BADGE_STYLES: Record<AuditAction, string> = {
@@ -53,6 +54,7 @@ const ACTION_BADGE_STYLES: Record<AuditAction, string> = {
   upload: "bg-blue-400/40 text-blue-700",
   promote: "bg-purple-400/40 text-purple-700",
   role_change: "bg-orange-400/40 text-orange-700",
+  void: "bg-gray-400/40 text-gray-700",
 };
 
 function formatActionLabel(action: AuditAction): string {

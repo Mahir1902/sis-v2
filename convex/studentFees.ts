@@ -12,11 +12,7 @@ export const createStudentFee = mutation({
     originalAmount: v.float64(),
     paidAmount: v.float64(),
     balance: v.float64(),
-    status: v.union(
-      v.literal("unpaid"),
-      v.literal("partial"),
-      v.literal("paid"),
-    ),
+    status: v.union(v.literal("unpaid"), v.literal("paid")),
     dueDate: v.optional(v.float64()),
     billingPeriod: v.optional(v.string()),
   },
@@ -126,40 +122,5 @@ export const deleteStudentFee = mutation({
       entityId: args.feeId,
       description: `Deleted unpaid fee record${fee.billingPeriod ? ` (${fee.billingPeriod})` : ""}`,
     });
-  },
-});
-
-/** Update a student fee after payment. */
-export const updateStudentFee = mutation({
-  args: {
-    feeId: v.id("studentFees"),
-    paidAmount: v.float64(),
-    balance: v.float64(),
-    status: v.union(
-      v.literal("unpaid"),
-      v.literal("partial"),
-      v.literal("paid"),
-    ),
-    paymentDetails: v.array(
-      v.object({
-        paymentId: v.id("feeTransactions"),
-        date: v.string(),
-        amount: v.float64(),
-        mode: v.string(),
-      }),
-    ),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
-    const { feeId, ...updates } = args;
-    await ctx.db.patch(feeId, updates);
-    await logAudit(ctx, {
-      user,
-      action: "update",
-      entityType: "studentFees",
-      entityId: feeId,
-      description: "Updated student fee",
-    });
-    return feeId;
   },
 });

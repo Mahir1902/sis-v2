@@ -3,3 +3,4 @@
 - [Inline dialog pattern](feedback_inline_dialog.md) — small dialogs (≤3 fields, single-page use) live inline in the page file; only extract when reused
 - [Audit Log Feature](project_audit_log.md) — architecture decisions for the 2026-04-26 audit log: logAudit as plain async function, 3-index schema, domain-split instrumentation
 - [Bulk mutation instrumentation](feedback_bulk_instrumentation.md) — split large cross-cutting backend changes into 2–3 domain groups; never one "instrument all N mutations" task
+- [Sheet URL param pattern](feedback_sheet_url_param.md) — side-panel Sheet open state uses URL search param + router.replace when a deep-link contract exists; thin Sheet wrapper, data in the detail component's own hook

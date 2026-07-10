@@ -11,7 +11,6 @@ import {
 
 export type SessionRow = {
   _id: Id<"feeCollectionSessions">;
-  invoiceNumber: string;
   transactionDate: number;
   campus: string | null;
   totalAmount: number;
@@ -39,13 +38,6 @@ export const columns: ColumnDef<SessionRow>[] = [
       <span className="whitespace-nowrap text-sm">
         {formatTransactionDate(row.original.transactionDate)}
       </span>
-    ),
-  },
-  {
-    accessorKey: "invoiceNumber",
-    header: "Invoice #",
-    cell: ({ row }) => (
-      <span className="font-mono text-sm">{row.original.invoiceNumber}</span>
     ),
   },
   {

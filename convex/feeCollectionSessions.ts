@@ -2,11 +2,17 @@ import { v } from "convex/values";
 import {
   computeNewFeeStatus,
   generateBillingPeriods,
-  generateInvoiceNumber,
   generateTransactionReference,
   resolveFutureMonths,
 } from "../lib/feeCollectionUtils";
-import { mutation, query } from "./_generated/server";
+import { currentBdYear, formatReceiptNumber } from "../lib/receiptNumber";
+import {
+  buildReceiptSnapshot,
+  type ReceiptSnapshotPaidLine,
+} from "../lib/receiptSnapshot";
+import { resolveBillingContact } from "../lib/resolveBillingContact";
+import type { Id } from "./_generated/dataModel";
+import { type MutationCtx, mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
@@ -19,9 +25,42 @@ const paymentModeValidator = v.union(
 );
 
 /**
+ * Allocates the next Receipt number for the current Bangladesh calendar year
+ * by reading-then-writing the `receiptCounters` doc for that year.
+ *
+ * Convex serialises overlapping reads/writes on the same row via OCC, so two
+ * concurrent `collectFees` calls cannot mint the same number — the second
+ * one is retried and observes the freshly-incremented counter (or the
+ * just-inserted row for the very first receipt of a new year).
+ */
+async function allocateReceiptNumber(
+  ctx: MutationCtx,
+  nowMs: number,
+): Promise<{ receiptNumber: string }> {
+  const year = currentBdYear(nowMs);
+  const counter = await ctx.db
+    .query("receiptCounters")
+    .withIndex("by_year", (q) => q.eq("year", year))
+    .first();
+
+  let sequence: number;
+  if (counter) {
+    sequence = counter.nextNumber;
+    await ctx.db.patch(counter._id, { nextNumber: sequence + 1 });
+  } else {
+    sequence = 1;
+    await ctx.db.insert("receiptCounters", { year, nextNumber: 2 });
+  }
+
+  return { receiptNumber: formatReceiptNumber(year, sequence) };
+}
+
+/**
  * Atomic multi-fee collection mutation.
- * Creates one session (future invoice), one transaction per fee, and updates
- * each studentFee record. All-or-nothing within a single Convex transaction.
+ * Creates one session (transaction log), one transaction per fee, updates
+ * each studentFee record, and issues a numbered Receipt (ADR-0002) with the
+ * full snapshot of student / billing contact / line items frozen at issue
+ * time. All-or-nothing within a single Convex transaction.
  */
 export const collectFees = mutation({
   args: {
@@ -60,9 +99,18 @@ export const collectFees = mutation({
       }),
     );
 
+    const feeStructures = await Promise.all(
+      fees.map((fee) => ctx.db.get(fee.feeStructureId)),
+    );
+    const feeStructureMap = new Map<string, { name: string }>();
+    for (let i = 0; i < fees.length; i++) {
+      const fs = feeStructures[i];
+      if (!fs) throw new Error("Fee structure not found");
+      feeStructureMap.set(fees[i].feeStructureId as string, { name: fs.name });
+    }
+
     const now = Date.now();
     const totalAmount = fees.reduce((sum, fee) => sum + fee.balance, 0);
-    const invoiceNumber = generateInvoiceNumber(now);
 
     const enrollment = await ctx.db
       .query("enrollments")
@@ -74,7 +122,6 @@ export const collectFees = mutation({
       .first();
 
     const sessionId = await ctx.db.insert("feeCollectionSessions", {
-      invoiceNumber,
       studentId: args.studentId,
       academicYear: student.academicYear,
       campus: enrollment?.campus ?? student.campus,
@@ -114,11 +161,7 @@ export const collectFees = mutation({
 
       const newPaidAmount = fee.paidAmount + amount;
       const newBalance = fee.balance - amount;
-      const newStatus = computeNewFeeStatus(
-        fee.balance,
-        fee.paidAmount,
-        amount,
-      );
+      const newStatus = computeNewFeeStatus(fee.balance, amount);
 
       await ctx.db.patch(fee._id, {
         paidAmount: newPaidAmount,
@@ -142,21 +185,76 @@ export const collectFees = mutation({
       });
     }
 
+    const paidLines: ReceiptSnapshotPaidLine[] = fees.map((fee) => ({
+      feeStructureId: fee.feeStructureId as string,
+      billingPeriod: fee.billingPeriod,
+      originalAmount: fee.originalAmount,
+      discountAmount: fee.appliedDiscounts.reduce(
+        (sum, d) => sum + d.amount,
+        0,
+      ),
+      paidAmount: fee.balance,
+    }));
+
+    const billing = resolveBillingContact(student);
+
+    const snapshot = buildReceiptSnapshot({
+      student: {
+        studentFullName: student.studentFullName,
+        studentNumber: student.studentNumber,
+      },
+      billingContact: {
+        name: billing.name,
+        contactType: billing.contactType,
+      },
+      issuer: { name: user.name },
+      feeStructures: feeStructureMap,
+      paidLines,
+    });
+
+    const { receiptNumber } = await allocateReceiptNumber(ctx, now);
+
+    const receiptId: Id<"receipts"> = await ctx.db.insert("receipts", {
+      studentId: args.studentId,
+      sessionId,
+      collectedBy: user._id,
+      receiptNumber,
+      status: "issued",
+      totalAmount,
+      paymentMethod: args.paymentMode,
+      paymentDate: now,
+      issuedAt: now,
+      payerName: snapshot.payerName,
+      payerRole: snapshot.payerRole,
+      studentNameSnapshot: snapshot.studentNameSnapshot,
+      studentNumberSnapshot: snapshot.studentNumberSnapshot,
+      issuerName: snapshot.issuerName,
+      lineItems: snapshot.lineItems,
+      remarks: args.remarks,
+    });
+
     await logAudit(ctx, {
       user,
       action: "collect_fees",
       entityType: "feeCollectionSessions",
       entityId: sessionId,
-      description: `Collected ${fees.length} fee(s) totaling ${totalAmount}`,
+      description: `Collected ${fees.length} fee(s) totaling ${totalAmount}; issued ${receiptNumber}`,
       metadata: {
-        invoiceNumber,
         feeCount: fees.length,
         totalAmount,
         paymentMode: args.paymentMode,
+        receiptNumber,
+        receiptId: receiptId as string,
       },
     });
 
-    return { sessionId, invoiceNumber, totalAmount, transactions };
+    return {
+      sessionId,
+      receiptId,
+      receiptNumber,
+      totalAmount,
+      transactions,
+    };
   },
 });
 

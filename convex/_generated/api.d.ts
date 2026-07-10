@@ -8,9 +8,13 @@
  * @module
  */
 
+import type * as _e2eTemp from "../_e2eTemp.js";
+import type * as _gradingFixtureSpec from "../_gradingFixtureSpec.js";
+import type * as _seedGradingAnalytics from "../_seedGradingAnalytics.js";
+import type * as _seedGradingFixture from "../_seedGradingFixture.js";
+import type * as _seedLongitudinalHistory from "../_seedLongitudinalHistory.js";
 import type * as academicYears from "../academicYears.js";
 import type * as assessmentQuestions from "../assessmentQuestions.js";
-import type * as assessmentWeightingRules from "../assessmentWeightingRules.js";
 import type * as assessments from "../assessments.js";
 import type * as assignFee from "../assignFee.js";
 import type * as auditLogs from "../auditLogs.js";
@@ -28,6 +32,7 @@ import type * as http from "../http.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as migrations from "../migrations.js";
 import type * as promotions from "../promotions.js";
+import type * as receipts from "../receipts.js";
 import type * as reportCards from "../reportCards.js";
 import type * as seed from "../seed.js";
 import type * as seedAdmin from "../seedAdmin.js";
@@ -47,9 +52,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  _e2eTemp: typeof _e2eTemp;
+  _gradingFixtureSpec: typeof _gradingFixtureSpec;
+  _seedGradingAnalytics: typeof _seedGradingAnalytics;
+  _seedGradingFixture: typeof _seedGradingFixture;
+  _seedLongitudinalHistory: typeof _seedLongitudinalHistory;
   academicYears: typeof academicYears;
   assessmentQuestions: typeof assessmentQuestions;
-  assessmentWeightingRules: typeof assessmentWeightingRules;
   assessments: typeof assessments;
   assignFee: typeof assignFee;
   auditLogs: typeof auditLogs;
@@ -67,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   "lib/permissions": typeof lib_permissions;
   migrations: typeof migrations;
   promotions: typeof promotions;
+  receipts: typeof receipts;
   reportCards: typeof reportCards;
   seed: typeof seed;
   seedAdmin: typeof seedAdmin;
@@ -106,4 +116,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
+};

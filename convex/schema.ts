@@ -128,6 +128,23 @@ export default defineSchema({
     guardianNidNumber: v.string(),
     guardianPhoneNumber: v.string(),
 
+    // Billing contact emails — used by the Receipt Compose Email launcher
+    // (ADR-0002). All three are optional because the school does not always
+    // capture all three on intake; they are widened here ahead of the parent
+    // intake form picking them up.
+    fatherEmail: v.optional(v.string()),
+    motherEmail: v.optional(v.string()),
+    guardianEmail: v.optional(v.string()),
+
+    // Billing Contact (CONTEXT.md domain term) — designates which parent/
+    // guardian is financially responsible. Required after the issue #33
+    // backfill migration; default for backfilled records was "father".
+    primaryBillingContact: v.union(
+      v.literal("father"),
+      v.literal("mother"),
+      v.literal("guardian"),
+    ),
+
     // Financial
     familyAnnualIncome: v.string(),
 
@@ -237,8 +254,11 @@ export default defineSchema({
     endDate: v.optional(v.string()),
   }),
 
+  // Issue #36 (ADR-0002): `invoiceNumber` and its `by_invoice` index were
+  // dropped in the narrow step. Sessions are pure transaction-log primitives;
+  // parent-facing numbering lives only on `receipts.receiptNumber`. UIs that
+  // need the Receipt while viewing a Session join via `receipts.by_session`.
   feeCollectionSessions: defineTable({
-    invoiceNumber: v.string(),
     studentId: v.id("students"),
     academicYear: v.id("academicYears"),
     campus: v.optional(v.id("campuses")),
@@ -258,7 +278,6 @@ export default defineSchema({
     standardLevelId: v.optional(v.id("standardLevels")),
   })
     .index("by_student", ["studentId"])
-    .index("by_invoice", ["invoiceNumber"])
     .index("by_academic_year", ["academicYear"])
     .index("by_academic_year_date", ["academicYear", "transactionDate"])
     .index("by_campus", ["campus"])
@@ -272,11 +291,10 @@ export default defineSchema({
     originalAmount: v.float64(),
     paidAmount: v.float64(),
     balance: v.float64(),
-    status: v.union(
-      v.literal("unpaid"),
-      v.literal("partial"),
-      v.literal("paid"),
-    ),
+    // Issue #36 (ADR-0002): `"partial"` was dropped. Any payment that does
+    // not fully cover the outstanding balance is rejected upstream; partial
+    // tracking now lives in the Receipt snapshot, not on the live fee row.
+    status: v.union(v.literal("unpaid"), v.literal("paid")),
     billingPeriod: v.optional(v.string()),
     appliedDiscounts: v.array(
       v.object({
@@ -296,7 +314,8 @@ export default defineSchema({
     lateFeeAmount: v.optional(v.float64()),
   })
     .index("by_student_year", ["studentId", "academicYear"])
-    .index("by_feeStructure", ["feeStructureId"]),
+    .index("by_feeStructure", ["feeStructureId"])
+    .index("by_status_and_due_date", ["status", "dueDate"]),
 
   feeTransactions: defineTable({
     studentId: v.id("students"),
@@ -345,6 +364,84 @@ export default defineSchema({
     status: v.string(), // "active" | "fully_applied"
   }).index("by_student_year", ["studentId", "academicYear"]),
 
+  // ─── Receipts (ADR-0002 + ADR-0003) ──────────────────────────────────────
+  //
+  // Money Receipt — the school's only parent-facing billing document. Issued
+  // 1:1 with `feeCollectionSessions` at payment time. Every PDF-renderable
+  // field is snapshotted at issue time so future fee edits cannot mutate an
+  // old document (the parent's copy and the school's copy must always agree).
+  //
+  // Correction model (ADR-0003) is three mutations: `editReceipt` (cosmetic
+  // fields only), `voidReceipt` (no replacement), and `voidAndReissueReceipt`
+  // (financial correction — cross-links via `supersedes` / `supersededBy`).
+
+  receipts: defineTable({
+    // Live references (NOT snapshotted — these point at current records)
+    studentId: v.id("students"),
+    sessionId: v.id("feeCollectionSessions"), // 1:1 by construction
+    collectedBy: v.id("users"),
+
+    // Identity + lifecycle
+    receiptNumber: v.string(), // RCP-YYYY-NNNNN, calendar-year reset
+    status: v.union(v.literal("issued"), v.literal("voided")),
+    totalAmount: v.float64(),
+    paymentMethod: v.union(
+      v.literal("Cash"),
+      v.literal("Bank Transfer"),
+      v.literal("Cheque"),
+      v.literal("UPI"),
+      v.literal("Online"),
+    ),
+    paymentDate: v.float64(),
+    issuedAt: v.float64(),
+    voidedAt: v.optional(v.float64()),
+    voidedBy: v.optional(v.id("users")),
+
+    // Snapshot fields (frozen at issue time — every renderable field on the
+    // PDF lives here, NOT joined from a live row, so the document is stable
+    // even if the underlying student/fee record changes later).
+    payerName: v.string(),
+    payerRole: v.union(
+      v.literal("father"),
+      v.literal("mother"),
+      v.literal("guardian"),
+    ),
+    studentNameSnapshot: v.string(),
+    studentNumberSnapshot: v.string(),
+    issuerName: v.string(),
+    lineItems: v.array(
+      v.object({
+        feeStructureName: v.string(),
+        billingPeriod: v.optional(v.string()),
+        originalAmount: v.float64(),
+        discountAmount: v.float64(),
+        paidAmount: v.float64(),
+      }),
+    ),
+    remarks: v.optional(v.string()),
+
+    // Re-issue chain (ADR-0003). Set atomically by `voidAndReissueReceipt`;
+    // never set by `voidReceipt` alone.
+    supersedes: v.optional(v.id("receipts")), // on the new replacement
+    supersededBy: v.optional(v.id("receipts")), // on the voided original
+  })
+    .index("by_student", ["studentId"])
+    .index("by_session", ["sessionId"])
+    .index("by_receipt_number", ["receiptNumber"])
+    .index("by_status_and_payment_date", ["status", "paymentDate"]),
+
+  // ─── Receipt counters ────────────────────────────────────────────────────
+  //
+  // One document per calendar year, holding the next receipt sequence to
+  // allocate. Read-then-write happens INSIDE the same mutation that creates
+  // the Receipt — Convex serialises mutations per document, so the counter
+  // is race-safe by construction (see DA prompt #1 in HANDOFF_issue_36.md).
+
+  receiptCounters: defineTable({
+    year: v.float64(), // calendar year, e.g. 2026
+    nextNumber: v.float64(), // 1-based; first receipt of 2026 uses 1
+  }).index("by_year", ["year"]),
+
   // ─── Report Cards ─────────────────────────────────────────────────────────
 
   reportCards: defineTable({
@@ -362,24 +459,11 @@ export default defineSchema({
     .index("by_enrollment_semester", ["enrollmentId", "semester"]),
 
   // ─── Assessment System (CA-1 / CA-2 / CA-3) ──────────────────────────────
-
-  assessmentWeightingRules: defineTable({
-    subjectId: v.id("subjects"),
-    standardLevelId: v.id("standardLevels"),
-    semester: v.union(v.literal(1), v.literal(2)),
-    ca1Weight: v.float64(),
-    ca2Weight: v.float64(),
-    ca3Weight: v.float64(),
-    classPerformanceWeight: v.optional(v.float64()),
-    continualAssessmentWeight: v.optional(v.float64()),
-    isActive: v.boolean(),
-  })
-    .index("by_standard_subject_semester", [
-      "standardLevelId",
-      "subjectId",
-      "semester",
-    ])
-    .index("by_active", ["isActive"]),
+  //
+  // `assessmentWeightingRules` was removed (ADR-0004 / A.3): CAs are always
+  // weighted equally, so the table, its mutation, and its query carried no
+  // reachable behaviour. Grade math renormalizes over present CAs in
+  // `lib/gradeComputation.ts`.
 
   assessments: defineTable({
     name: v.string(),
@@ -430,6 +514,12 @@ export default defineSchema({
   computedGrades: defineTable({
     studentId: v.id("students"),
     enrollmentId: v.id("enrollments"),
+    // Denormalised from the enrollment (immutable once the grade exists) so class-level
+    // analytics can index "all grades for a level + year + subject + semester" in ONE read
+    // instead of fanning out over every enrollment. Optional until the ADR-0004 recompute
+    // backfills every row; narrow to required afterward (widen-migrate-narrow).
+    standardLevelId: v.optional(v.id("standardLevels")),
+    academicYear: v.optional(v.id("academicYears")),
     subjectId: v.id("subjects"),
     semester: v.union(v.literal(1), v.literal(2)),
     ca1Marks: v.optional(v.float64()),
@@ -445,12 +535,25 @@ export default defineSchema({
     letterGrade: v.string(),
     totalMarksObtained: v.optional(v.float64()),
     totalPossibleMarks: v.optional(v.float64()),
+    // Number of CAs the subject runs this term, snapshotted at compute time
+    // (ADR-0004 / A.2). Powers the Provisional Grade tag: present CA count
+    // (derived from which caXPercentage fields are set) < expectedCaCount ⇒
+    // provisional. Optional until the A.4 backfill populates every row; narrow
+    // to required afterward (widen-migrate-narrow).
+    expectedCaCount: v.optional(v.float64()),
     remarks: v.optional(v.string()),
     computedAt: v.optional(v.float64()),
   })
     .index("by_enrollment_semester", ["enrollmentId", "semester"])
     .index("by_student", ["studentId"])
-    .index("by_subject", ["subjectId"]),
+    .index("by_subject", ["subjectId"])
+    // Class-level analytics: one indexed read returns an entire class for a subject + term.
+    .index("by_level_year_subject_semester", [
+      "standardLevelId",
+      "academicYear",
+      "subjectId",
+      "semester",
+    ]),
 
   // ─── Audit Logs ───────────────────────────────────────────────────────────
 
@@ -469,6 +572,7 @@ export default defineSchema({
       v.literal("upload"),
       v.literal("promote"),
       v.literal("role_change"),
+      v.literal("void"),
     ),
     entityType: v.string(),
     entityId: v.string(),

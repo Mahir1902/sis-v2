@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# graphify (local knowledge graph cache — not committed)
+/graphify-out
+
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -45,6 +48,38 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 /playwright/.cache/
+.playwright-cli/
 
 # Superpowers brainstorming
 .superpowers/
+
+# scratch / tooling working dirs (generated, not source)
+.sandcastle/
+.tmp/
+
+# scratch screenshots dropped at repo root (public/ logos are kept)
+/*.png
+
+# machine-specific Claude permissions — not shared
+.claude/settings.local.json
+
+# scratch / generated agent-tooling output (not source)
+convex/_e2eTemp.ts
+docs/wayfinder/
+docs/handoffs/HANDOFF_*.md
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md
+
+# new local-only agent skills (already-tracked skills are unaffected)
+**/skills/claude-handoff
+**/skills/grilling
+**/skills/implement
+**/skills/research
+**/skills/to-spec
+**/skills/to-tickets
+**/skills/wayfinder
+
+# grading analytics seeds + test — kept local per request
+convex/_seedGradingAnalytics.ts
+convex/_seedLongitudinalHistory.ts
+convex/_gradingFixtureSpec.ts
+convex/computedGrades.analytics.test.ts

@@ -63,12 +63,27 @@ export const createStudent = mutation({
     familyAnnualIncome: v.string(),
     siblingIds: v.optional(v.array(v.id("students"))),
     consultantName: v.string(),
+
+    // Issue #33 fields. Currently optional in the mutation args because the
+    // admission form (issue #31) has not yet wired them. The server defaults
+    // `primaryBillingContact` to `"father"` so the schema stays satisfied —
+    // matching the backfill rule used for pre-existing students.
+    fatherEmail: v.optional(v.string()),
+    motherEmail: v.optional(v.string()),
+    guardianEmail: v.optional(v.string()),
+    primaryBillingContact: v.optional(
+      v.union(v.literal("father"), v.literal("mother"), v.literal("guardian")),
+    ),
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
 
     const studentId = await ctx.db.insert("students", {
       ...args,
+      // Default Billing Contact to "father" until the admission form (#31)
+      // captures the caller's explicit choice. Stays consistent with the
+      // backfill default applied to pre-existing students.
+      primaryBillingContact: args.primaryBillingContact ?? "father",
       status: "active",
       admissionDate: Date.now(),
       createdAt: new Date().toISOString(),
@@ -288,6 +303,60 @@ export const updateStudentStatus = mutation({
       entityId: args.studentId,
       description: `Changed student ${student.studentFullName} status from ${oldStatus} to ${args.status}`,
       metadata: { oldStatus, newStatus: args.status },
+    });
+
+    return args.studentId;
+  },
+});
+
+/**
+ * Sets the email for a single Billing Contact slot on a student record
+ * (`father` → `fatherEmail`, `mother` → `motherEmail`, `guardian` →
+ * `guardianEmail`). Admin-only.
+ *
+ * Used by the inline "Add Email" affordance on the invoice Compose Email
+ * button (issue #31). Touches only the one email field — does not modify
+ * `primaryBillingContact` or any other student fields, and never overwrites
+ * a different slot than the one named.
+ *
+ * Errors loudly on an empty email; the form-level validation should catch
+ * format issues before the mutation is called, but we re-check here so a
+ * mis-wired caller cannot persist garbage.
+ */
+export const updateBillingContactEmail = mutation({
+  args: {
+    studentId: v.id("students"),
+    contactType: v.union(
+      v.literal("father"),
+      v.literal("mother"),
+      v.literal("guardian"),
+    ),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+    const trimmed = args.email.trim();
+    if (trimmed.length === 0) throw new Error("Email is required");
+
+    const student = await ctx.db.get(args.studentId);
+    if (!student) throw new Error("Student not found");
+
+    const fieldByType = {
+      father: "fatherEmail",
+      mother: "motherEmail",
+      guardian: "guardianEmail",
+    } as const;
+    const field = fieldByType[args.contactType];
+
+    await ctx.db.patch(args.studentId, { [field]: trimmed });
+
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "students",
+      entityId: args.studentId,
+      description: `Updated ${args.contactType} email for ${student.studentFullName}`,
+      metadata: { contactType: args.contactType, field },
     });
 
     return args.studentId;

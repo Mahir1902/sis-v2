@@ -5,3 +5,6 @@
 - [Patterns: Filter logic in hooks, not useMemo](feedback_filter_logic_in_hooks.md) — useMemo filter/derivation in component bodies is a blocking issue; extract to /hooks per CLAUDE.md rule 9
 - [Patterns: Unsafe as-cast on Convex Id props](feedback_unsafe_as_cast.md) — `someNullable as Id<"table">` to silence null on a non-nullable prop is a type lie; use conditional rendering instead
 - [Patterns: Zod schemas must be in lib/validations/](feedback_zod_schema_location.md) — Zod schemas defined inside _components/ files are a blocking issue; must live in lib/validations/ one file per domain
+- [Patterns: Hook extraction for Convex + display derivation](project_hook_extraction_pattern.md) — Approved pattern: FunctionReturnType+NonNullable, discriminated union state, as-cast allowed when schema union is structurally identical
+- [Patterns: Row-selection state belongs in a hook](feedback_selection_state_in_hooks.md) — Multi-row selection with value aggregation useMemo over query rows is blocking; extract to use-<domain>-selection.ts
+- [Patterns: Cohort analytics page architecture](project_cohort_analytics_pattern.md) — Approved DA-mitigation patterns for admin analytics: sentinel ALL_SUBJECTS, semester default "1", exactly-two cohort useQuery calls, pure view-model in lib/, 4-way empty state, output[aria-busy] skeleton

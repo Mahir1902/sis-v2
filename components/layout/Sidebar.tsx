@@ -3,6 +3,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   ArrowUpCircle,
+  BarChart3,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -71,8 +72,14 @@ const navGroups: NavGroup[] = [
     roles: ["admin"],
     items: [
       { href: "/fees", label: "Fee Structures", icon: BookOpen },
+      { href: "/receipts", label: "Receipts", icon: Receipt },
       { href: "/admin/transactions", label: "Transaction Log", icon: Receipt },
       { href: "/admin/assessments", label: "Assessments", icon: GraduationCap },
+      {
+        href: "/admin/class-analytics",
+        label: "Class Analytics",
+        icon: BarChart3,
+      },
       { href: "/admin/promotions", label: "Promotions", icon: ArrowUpCircle },
       { href: "/admin/subjects", label: "Subjects", icon: BookOpen },
       { href: "/admin/audit-log", label: "Audit Log", icon: ClipboardList },
