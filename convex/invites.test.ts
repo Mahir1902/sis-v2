@@ -239,3 +239,197 @@ describe("public signIn endpoint is gated server-side", () => {
     expect(await userByEmail(TEACHER_EMAIL)).toBeNull();
   });
 });
+
+// ── Ticket #57: create / list / regenerate / revoke ────────────────────────────
+
+/** The admin-scoped client. `requireRole` reads userId from `subject`'s prefix. */
+function asAdmin() {
+  return t.withIdentity({ subject: `${adminId}|test-session` });
+}
+
+function auditEntriesForInvites() {
+  return t.run(async (ctx) =>
+    ctx.db
+      .query("auditLogs")
+      .filter((q) => q.eq(q.field("entityType"), "invite"))
+      .collect(),
+  );
+}
+
+describe("createInvite", () => {
+  it("issues a pending, unexpired invite bound to the email", async () => {
+    const invite = await asAdmin().mutation(api.invites.createInvite, {
+      name: "New Teacher",
+      email: TEACHER_EMAIL,
+      role: "teacher",
+    });
+
+    expect(invite?.status).toBe("pending");
+    expect(invite?.email).toBe(TEACHER_EMAIL);
+    expect(invite?.role).toBe("teacher");
+    expect(invite?.name).toBe("New Teacher");
+    expect(invite?.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(invite?.expiresAt).toBeGreaterThan(Date.now());
+
+    // Audit entry written (assert THAT one exists, not its wording).
+    expect((await auditEntriesForInvites()).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("rejects an email with an existing ACTIVE account (reactivate code)", async () => {
+    await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Existing",
+        email: TEACHER_EMAIL,
+        role: "teacher",
+        isActive: true,
+      }),
+    );
+
+    await expect(
+      asAdmin().mutation(api.invites.createInvite, {
+        name: "New Teacher",
+        email: TEACHER_EMAIL,
+        role: "teacher",
+      }),
+    ).rejects.toMatchObject({ data: { code: "ACCOUNT_EXISTS" } });
+  });
+
+  it("rejects an email with an existing DEACTIVATED account (reactivate code)", async () => {
+    await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Deactivated",
+        email: TEACHER_EMAIL,
+        role: "teacher",
+        isActive: false,
+      }),
+    );
+
+    await expect(
+      asAdmin().mutation(api.invites.createInvite, {
+        name: "New Teacher",
+        email: TEACHER_EMAIL,
+        role: "teacher",
+      }),
+    ).rejects.toMatchObject({ data: { code: "ACCOUNT_EXISTS" } });
+  });
+
+  it("rejects an email that already has a pending invite (pending code)", async () => {
+    await seedInvite({ token: "existing", expiresAt: Date.now() + 1000 });
+
+    await expect(
+      asAdmin().mutation(api.invites.createInvite, {
+        name: "New Teacher",
+        email: TEACHER_EMAIL,
+        role: "teacher",
+      }),
+    ).rejects.toMatchObject({ data: { code: "PENDING_INVITE_EXISTS" } });
+  });
+
+  it("is admin-only — a teacher caller is rejected by requireRole", async () => {
+    const teacherId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Teacher",
+        email: "someteacher@school.edu",
+        role: "teacher",
+        isActive: true,
+      }),
+    );
+
+    await expect(
+      t
+        .withIdentity({ subject: `${teacherId}|s` })
+        .mutation(api.invites.createInvite, {
+          name: "New Teacher",
+          email: TEACHER_EMAIL,
+          role: "teacher",
+        }),
+    ).rejects.toThrow("Unauthorized");
+  });
+});
+
+describe("listInvites", () => {
+  it("excludes accepted, includes pending/expired/revoked, derives displayStatus", async () => {
+    const now = Date.now();
+    await seedInvite({ token: "p", email: "p@s.edu", expiresAt: now + 100000 });
+    await seedInvite({ token: "e", email: "e@s.edu", expiresAt: now - 1 });
+    await seedInvite({
+      token: "r",
+      email: "r@s.edu",
+      status: "revoked",
+      expiresAt: now + 100000,
+    });
+    await seedInvite({
+      token: "a",
+      email: "a@s.edu",
+      status: "accepted",
+      expiresAt: now + 100000,
+    });
+
+    const rows = await asAdmin().query(api.invites.listInvites, {});
+    const byEmail = new Map(rows.map((r) => [r.email, r]));
+
+    expect(byEmail.has("a@s.edu")).toBe(false); // accepted hidden
+    expect(byEmail.get("p@s.edu")?.displayStatus).toBe("valid");
+    expect(byEmail.get("e@s.edu")?.displayStatus).toBe("expired");
+    expect(byEmail.get("r@s.edu")?.displayStatus).toBe("revoked");
+    expect(byEmail.get("p@s.edu")?.invitedByName).toBe("Admin");
+  });
+});
+
+describe("regenerateInvite", () => {
+  it("rotates the token + resets expiry on a pending invite; old token dies", async () => {
+    const id = await seedInvite({
+      token: "old1",
+      expiresAt: Date.now() + 1000,
+    });
+
+    const updated = await asAdmin().mutation(api.invites.regenerateInvite, {
+      id,
+    });
+
+    expect(updated?.token).not.toBe("old1");
+    expect(updated?.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(await inviteByToken("old1")).toBeNull(); // old link no longer resolves
+    expect(updated?.expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  it("revives an EXPIRED invite (rotates token, pushes expiry into the future)", async () => {
+    const id = await seedInvite({ token: "old2", expiresAt: Date.now() - 1 });
+
+    const updated = await asAdmin().mutation(api.invites.regenerateInvite, {
+      id,
+    });
+
+    expect(updated?.token).not.toBe("old2");
+    expect(updated?.expiresAt).toBeGreaterThan(Date.now());
+    expect((await auditEntriesForInvites()).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("cannot regenerate a terminal (revoked) invite", async () => {
+    const id = await seedInvite({
+      token: "rev",
+      status: "revoked",
+      expiresAt: Date.now() + 1000,
+    });
+
+    await expect(
+      asAdmin().mutation(api.invites.regenerateInvite, { id }),
+    ).rejects.toMatchObject({ data: { code: "INVITE_NOT_REGENERATABLE" } });
+  });
+});
+
+describe("revokeInvite", () => {
+  it("moves pending → revoked (terminal) and audits", async () => {
+    const id = await seedInvite({ token: "tok", expiresAt: Date.now() + 1000 });
+
+    await asAdmin().mutation(api.invites.revokeInvite, { id });
+
+    expect((await inviteByToken("tok"))?.status).toBe("revoked");
+    expect((await auditEntriesForInvites()).length).toBeGreaterThanOrEqual(1);
+
+    // Terminal — a second revoke is rejected.
+    await expect(
+      asAdmin().mutation(api.invites.revokeInvite, { id }),
+    ).rejects.toMatchObject({ data: { code: "INVITE_NOT_REVOCABLE" } });
+  });
+});
