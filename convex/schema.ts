@@ -56,6 +56,39 @@ export default defineSchema({
     studentId: v.optional(v.id("students")), // links student-role users to their record
   }).index("by_email", ["email"]),
 
+  // ─── Invites (admin-created accounts, self-service redemption) ────────────
+  //
+  // Spec #55 / #56. An invite is NOT an account — the `users` row is created at
+  // acceptance (in `convex/auth.ts`), never here. Role-agnostic on purpose (a
+  // future student-invite UI needs no migration). `expired` is DERIVED from
+  // `status === "pending" && now > expiresAt` (see `lib/inviteStatus.ts`) — it
+  // is never stored, so no cron/sweep. Single-use: the auth gate flips
+  // `status → "accepted"` + stamps `acceptedAt` in the same transaction as the
+  // user insert. `by_token` is the redemption lookup (required by the gate);
+  // `by_email` backs the create-time duplicate guards.
+
+  invites: defineTable({
+    token: v.string(), // crypto-random, unguessable — the sole authZ for signup
+    email: v.string(), // bound at issue time; the account is created for THIS email
+    role: v.union(
+      v.literal("admin"),
+      v.literal("teacher"),
+      v.literal("student"),
+    ),
+    name: v.string(), // admin-set; becomes the new user's name at acceptance
+    studentId: v.optional(v.id("students")), // future student invites
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("revoked"),
+    ),
+    expiresAt: v.float64(), // Unix ms; now + INVITE_TTL_MS at issue/regenerate
+    invitedBy: v.id("users"),
+    acceptedAt: v.optional(v.float64()),
+  })
+    .index("by_token", ["token"])
+    .index("by_email", ["email"]),
+
   // ─── Staff (stub — required by assessment references) ─────────────────────
 
   staff: defineTable({
