@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Shield, UserCheck, UserX } from "lucide-react";
+import { Shield, UserCheck, UserPlus, UserX } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/shared/RoleGate";
@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { InviteUserDialog } from "./_components/InviteUserDialog";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ function AdminSettingsPageContent() {
   const reactivate = useMutation(api.users.reactivateUser);
 
   const [deactivateId, setDeactivateId] = useState<Id<"users"> | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   async function handleRoleChange(
     userId: Id<"users">,
@@ -103,11 +105,20 @@ function AdminSettingsPageContent() {
 
       {/* User management */}
       <div className="bg-white rounded-lg border">
-        <div className="px-4 py-3 border-b">
-          <h2 className="font-semibold text-gray-900">User Management</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Manage user roles and account status.
-          </p>
+        <div className="px-4 py-3 border-b flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-gray-900">User Management</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Manage user roles and account status.
+            </p>
+          </div>
+          <Button
+            onClick={() => setInviteOpen(true)}
+            className="bg-school-green hover:bg-school-green/90 text-white"
+          >
+            <UserPlus className="h-4 w-4" />
+            Invite user
+          </Button>
         </div>
 
         {users === undefined ? (
@@ -216,6 +227,9 @@ function AdminSettingsPageContent() {
           </div>
         )}
       </div>
+
+      {/* Invite user dialog */}
+      <InviteUserDialog open={inviteOpen} onOpenChange={setInviteOpen} />
 
       {/* Deactivate confirm dialog */}
       <AlertDialog
