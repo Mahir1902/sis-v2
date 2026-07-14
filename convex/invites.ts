@@ -187,3 +187,42 @@ export const revokeInvite = mutation({
     });
   },
 });
+
+/**
+ * Public (unauthenticated) token resolver for the acceptance page (ticket #58) —
+ * the ONLY invite read that isn't admin-gated, because the invitee has no account
+ * yet. It takes just the 256-bit unguessable token and returns the MINIMUM the
+ * page needs to render one of its five non-leaky screens.
+ *
+ * Identity (name/email/role) is returned ONLY for a still-valid invite; a dead or
+ * unknown token reveals nothing but its state — so this endpoint can't be used to
+ * probe which emails have accounts or learn WHY a link died. `email` is returned
+ * on the valid path because the client must echo it back as the `signUp`
+ * credential id (the auth gate rejects a mismatch against the bound email).
+ */
+export const getInviteByToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const invite = await ctx.db
+      .query("invites")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .unique();
+    if (invite === null) return { state: "invalid" as const };
+
+    switch (deriveInviteState(invite.status, invite.expiresAt, Date.now())) {
+      case "valid":
+        return {
+          state: "valid" as const,
+          name: invite.name,
+          email: invite.email,
+          role: invite.role,
+        };
+      case "accepted":
+        return { state: "used" as const };
+      case "expired":
+        return { state: "expired" as const };
+      case "revoked":
+        return { state: "revoked" as const };
+    }
+  },
+});

@@ -433,3 +433,47 @@ describe("revokeInvite", () => {
     ).rejects.toMatchObject({ data: { code: "INVITE_NOT_REVOCABLE" } });
   });
 });
+
+describe("getInviteByToken (public acceptance-page resolver)", () => {
+  it("returns identity ONLY for a valid token", async () => {
+    await seedInvite({
+      token: "good",
+      email: "new@school.edu",
+      role: "teacher",
+      name: "New Teacher",
+      expiresAt: Date.now() + 100000,
+    });
+
+    // No identity — this endpoint is public, so it must run unauthenticated.
+    const res = await t.query(api.invites.getInviteByToken, { token: "good" });
+
+    expect(res).toEqual({
+      state: "valid",
+      email: "new@school.edu",
+      role: "teacher",
+      name: "New Teacher",
+    });
+  });
+
+  it("leaks nothing but the state for dead/unknown tokens", async () => {
+    await seedInvite({ token: "exp", expiresAt: Date.now() - 1 });
+    await seedInvite({
+      token: "acc",
+      status: "accepted",
+      expiresAt: Date.now() + 100000,
+    });
+    await seedInvite({
+      token: "rev",
+      status: "revoked",
+      expiresAt: Date.now() + 100000,
+    });
+
+    const q = (token: string) =>
+      t.query(api.invites.getInviteByToken, { token });
+
+    expect(await q("exp")).toEqual({ state: "expired" });
+    expect(await q("acc")).toEqual({ state: "used" }); // accepted → "used" wording
+    expect(await q("rev")).toEqual({ state: "revoked" });
+    expect(await q("nope")).toEqual({ state: "invalid" }); // unknown token
+  });
+});
