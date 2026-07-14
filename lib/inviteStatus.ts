@@ -45,3 +45,24 @@ export function isExpiringSoon(expiresAt: number, now: number): boolean {
   const remaining = expiresAt - now;
   return remaining > 0 && remaining < INVITE_AMBER_MS;
 }
+
+const RELATIVE_TIME = new Intl.RelativeTimeFormat("en", { numeric: "always" });
+
+/**
+ * Human countdown for a still-valid invite's badge: "in 6 days" / "in 22 hours".
+ * Switches to hours below the 48h amber band so an amber row always reads in
+ * hours (coherent urgency); `Intl.RelativeTimeFormat` handles pluralization.
+ * Only meaningful when `deriveInviteState(...) === "valid"`.
+ */
+export function formatInviteCountdown(expiresAt: number, now: number): string {
+  const HOUR = 60 * 60 * 1000;
+  const remaining = expiresAt - now;
+  if (remaining < INVITE_AMBER_MS) {
+    // Never round a sliver of remaining life down to "in 0 hours".
+    return RELATIVE_TIME.format(
+      Math.max(1, Math.round(remaining / HOUR)),
+      "hour",
+    );
+  }
+  return RELATIVE_TIME.format(Math.round(remaining / (24 * HOUR)), "day");
+}
