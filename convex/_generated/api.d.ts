@@ -29,6 +29,7 @@ import type * as feeCollectionSessions from "../feeCollectionSessions.js";
 import type * as feeStructure from "../feeStructure.js";
 import type * as feeTransactions from "../feeTransactions.js";
 import type * as http from "../http.js";
+import type * as invites from "../invites.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as migrations from "../migrations.js";
 import type * as promotions from "../promotions.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   feeStructure: typeof feeStructure;
   feeTransactions: typeof feeTransactions;
   http: typeof http;
+  invites: typeof invites;
   "lib/permissions": typeof lib_permissions;
   migrations: typeof migrations;
   promotions: typeof promotions;
