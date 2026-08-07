@@ -646,7 +646,9 @@ function StudentSearch({
                           {isSelected ? "✓" : ""}
                         </span>
                         <div>
-                          <p className="text-sm">{student.studentFullName}</p>
+                          <p className="text-sm">
+                            {student.studentFullName ?? "Name not recorded"}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {student.studentNumber}
                           </p>

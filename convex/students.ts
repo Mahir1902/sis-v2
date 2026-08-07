@@ -120,6 +120,9 @@ export const createStudent = mutation({
  * Get all students with optional server-side filters.
  * Pre-fetches lookup tables to avoid N+1 reads.
  * Returns a slim projection for the list view.
+ *
+ * `status: ["unspecified"]` is a filter-only sentinel meaning "no status on
+ * record" — it is never a stored value, so `updateStudentStatus` rejects it.
  */
 export const getAllStudents = query({
   args: {
@@ -137,6 +140,9 @@ export const getAllStudents = query({
           v.literal("withdrawn"),
           v.literal("suspended"),
           v.literal("expelled"),
+          // UI sentinel (#95) for "no status on record" — imported students
+          // (#93) have no status and would otherwise be unfilterable.
+          v.literal("unspecified"),
         ),
       ),
     ),
@@ -177,7 +183,12 @@ export const getAllStudents = query({
     if (args.status && args.status.length > 0) {
       const statuses = args.status;
       q = q.filter((qb) =>
-        qb.or(...statuses.map((s) => qb.eq(qb.field("status"), s))),
+        qb.or(
+          ...statuses.map((s) =>
+            // "unspecified" means the field is absent, not a stored value.
+            qb.eq(qb.field("status"), s === "unspecified" ? undefined : s),
+          ),
+        ),
       );
     }
 
@@ -304,7 +315,9 @@ export const updateStudentStatus = mutation({
       action: "status_change",
       entityType: "students",
       entityId: args.studentId,
-      description: `Changed student ${student.studentFullName} status from ${oldStatus} to ${args.status}`,
+      // Imported students (#93) may have neither a name nor a prior status,
+      // and this is the flow that first sets one — never write "undefined".
+      description: `Changed student ${student.studentFullName ?? student.studentNumber} status from ${oldStatus ?? "unspecified"} to ${args.status}`,
       metadata: { oldStatus, newStatus: args.status },
     });
 

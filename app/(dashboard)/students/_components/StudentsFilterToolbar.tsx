@@ -20,6 +20,8 @@ const STATUS_OPTIONS = [
   { label: "Withdrawn", value: "withdrawn" },
   { label: "Suspended", value: "suspended" },
   { label: "Expelled", value: "expelled" },
+  // Sentinel, not a stored value — matches students with no status (#93 import).
+  { label: "Unspecified", value: "unspecified" },
 ];
 
 const GENDER_OPTIONS = [

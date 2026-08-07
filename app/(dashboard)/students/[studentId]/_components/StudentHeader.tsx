@@ -149,16 +149,7 @@ export function StudentHeader({
                   </span>
                 )}
               </h1>
-              {student.status ? (
-                <StatusBadge studentId={studentId} status={student.status} />
-              ) : (
-                // No status on record (imported row, #93). Say so rather than
-                // showing an "active" pill nobody ever set.
-                // TODO(#95): fold into StatusBadge once its prop accepts undefined.
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                  Unspecified
-                </span>
-              )}
+              <StatusBadge studentId={studentId} status={student.status} />
             </div>
 
             {/* Color-coded chips */}
