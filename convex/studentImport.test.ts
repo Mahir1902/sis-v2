@@ -84,8 +84,8 @@ const row = (over: Partial<ImportRow> = {}): ImportRow => ({
   ...over,
 });
 
-const commit = (rows: ImportRow[], runId = "run-1") =>
-  asAdmin.mutation(api.studentImport.commitImportBatch, { runId, rows });
+const commit = (rows: ImportRow[], runId = "run-1", batch = 1) =>
+  asAdmin.mutation(api.studentImport.commitImportBatch, { runId, batch, rows });
 
 const studentByNumber = (studentNumber: string) =>
   t.run((ctx) =>
@@ -133,6 +133,7 @@ describe("permissions", () => {
         .withIdentity({ subject: `${teacherId}|s` })
         .mutation(api.studentImport.commitImportBatch, {
           runId: "run-1",
+          batch: 1,
           rows: [row()],
         }),
     ).rejects.toThrow("Unauthorized");
@@ -190,6 +191,19 @@ describe("commitImportBatch — insert", () => {
     });
     expect(enrollments[0].exitDate).toBeUndefined();
     expect(enrollments[0].previousEnrollmentId).toBeUndefined();
+  });
+
+  it("writes the derived admission date the preview showed", async () => {
+    // R5: it mirrors CLASS STARTING DATE. Dropping it here would make the
+    // inspector's `derived` pill a promise the write does not keep.
+    await commit([
+      row({ classStartDate: 1_000_000, admissionDate: 1_000_000 }),
+    ]);
+
+    expect(await existingStudent(NUMBER)).toMatchObject({
+      classStartDate: 1_000_000,
+      admissionDate: 1_000_000,
+    });
   });
 
   it("leaves an absent field unset rather than inventing a placeholder", async () => {
@@ -293,6 +307,26 @@ describe("commitImportBatch — re-commit (upsert)", () => {
     expect(after[0].enrollmentDate).toBe(1_700_000_000_000);
     expect(after[0].standardLevelId).toBe(grade2);
   });
+
+  it("completes a run whose first attempt died between batches", async () => {
+    // §3.3: no rollback, because there is nothing to roll back. The admin
+    // re-uploads the same file; batch 1's rows are rewritten identically and
+    // batch 2's land for the first time.
+    await commit([row({ studentNumber: NUMBER })], "run-1", 1);
+    // …the browser is closed here, before batch 2 ever goes out.
+
+    await commit([row({ studentNumber: NUMBER })], "run-2", 1);
+    await commit([row({ studentNumber: NUMBER_2 })], "run-2", 2);
+
+    const students = await t.run((ctx) => ctx.db.query("students").collect());
+    expect(students.map((s) => s.studentNumber).sort()).toEqual([
+      NUMBER,
+      NUMBER_2,
+    ]);
+    for (const student of students) {
+      expect(await enrollmentsOf(student._id)).toHaveLength(1);
+    }
+  });
 });
 
 describe("commitImportBatch — audit", () => {
@@ -301,6 +335,7 @@ describe("commitImportBatch — audit", () => {
     await commit(
       [row({ studentNumber: NUMBER }), row({ studentNumber: NUMBER_2 })],
       "run-42",
+      2,
     );
 
     const logs = await auditRows();
@@ -311,6 +346,9 @@ describe("commitImportBatch — audit", () => {
       userId: adminId,
       metadata: {
         runId: "run-42",
+        // Nothing server-side tracks a run, so the batch index is the only
+        // thing that orders its audit documents.
+        batch: 2,
         inserted: [NUMBER_2],
         updated: [NUMBER],
       },
@@ -351,6 +389,7 @@ describe("commitImportBatch — server-side validation", () => {
         .withIdentity({ subject: `${bareAdmin}|s` })
         .mutation(api.studentImport.commitImportBatch, {
           runId: "run-1",
+          batch: 1,
           rows: [row()],
         }),
     ).rejects.toThrow(IMPORT_ACADEMIC_YEAR);
@@ -373,6 +412,7 @@ describe("commitImportBatch — server-side validation", () => {
     await expect(
       asAdmin.mutation(api.studentImport.commitImportBatch, {
         runId: "run-1",
+        batch: 1,
         // biome-ignore lint/suspicious/noExplicitAny: hostile payload by design
         rows: [{ ...row(), isActive: true } as any],
       }),

@@ -43,10 +43,14 @@ export default function ImportStudentsPage() {
 }
 
 function ImportSurface() {
-  const { phase, drop, reset } = useStudentImport();
+  const { phase, drop, commit, reset } = useStudentImport();
 
-  if (phase.kind === "preview") {
-    return <Preview phase={phase} onReset={reset} />;
+  if (
+    phase.kind === "preview" ||
+    phase.kind === "committing" ||
+    phase.kind === "done"
+  ) {
+    return <Preview phase={phase} onCommit={commit} onReset={reset} />;
   }
 
   return (
@@ -127,7 +131,19 @@ function DropZone({ onFile }: { onFile: (file: File) => void }) {
   );
 }
 
-function ProgressBar({ fraction, label }: { fraction: number; label: string }) {
+function ProgressBar({
+  fraction,
+  label,
+  busy = false,
+}: {
+  fraction: number;
+  label: string;
+  /** Pulse the track while a step is in flight. The commit advances only at
+   * batch boundaries, so a single-batch file would otherwise hold 0% for the
+   * whole write — exactly the frozen look the determinate bar exists to
+   * prevent. */
+  busy?: boolean;
+}) {
   const pct = Math.round(fraction * 100);
   return (
     <div className="w-full space-y-2">
@@ -136,7 +152,7 @@ function ProgressBar({ fraction, label }: { fraction: number; label: string }) {
         <span>{pct}%</span>
       </div>
       <div
-        className="h-2 w-full overflow-hidden rounded-full bg-gray-100"
+        className={`h-2 w-full overflow-hidden rounded-full bg-gray-100 ${busy ? "animate-pulse" : ""}`}
         role="progressbar"
         aria-label={label}
         aria-valuenow={pct}
@@ -154,11 +170,18 @@ function ProgressBar({ fraction, label }: { fraction: number; label: string }) {
 
 // ── Preview ───────────────────────────────────────────────────────────────────
 
+type LoadedPhase = Extract<
+  ImportPhase,
+  { kind: "preview" | "committing" | "done" }
+>;
+
 function Preview({
   phase,
+  onCommit,
   onReset,
 }: {
-  phase: Extract<ImportPhase, { kind: "preview" }>;
+  phase: LoadedPhase;
+  onCommit: () => void;
   onReset: () => void;
 }) {
   const { preview, fileName } = phase;
@@ -187,9 +210,11 @@ function Preview({
             <Download className="mr-2 h-4 w-4" aria-hidden="true" />
             Issues CSV
           </Button>
-          <Button size="sm" variant="ghost" onClick={onReset}>
-            Start over
-          </Button>
+          {phase.kind === "preview" && (
+            <Button size="sm" variant="ghost" onClick={onReset}>
+              Start over
+            </Button>
+          )}
         </div>
       </div>
 
@@ -231,21 +256,87 @@ function Preview({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-white px-4 py-3">
-        <span className="text-sm text-gray-600">
-          <strong className="font-medium text-gray-900">
-            {counts.insert} new
-          </strong>{" "}
-          ·{" "}
-          <strong className="font-medium text-gray-900">
-            {counts.update} updates
-          </strong>{" "}
-          ·{" "}
-          <strong className="font-medium text-gray-900">
-            {counts.reject} rejected
-          </strong>
-        </span>
+      <CommitBar
+        phase={phase}
+        counts={counts}
+        onCommit={onCommit}
+        onReset={onReset}
+      />
+    </div>
+  );
+}
+
+/**
+ * The bottom bar across all three post-parse states (§7.4). One button, no
+ * confirm dialog — the preview above *is* the gate — and the button states the
+ * split on its face so a number that looks wrong stops the admin here.
+ */
+function CommitBar({
+  phase,
+  counts,
+  onCommit,
+  onReset,
+}: {
+  phase: LoadedPhase;
+  counts: Record<RowFilter, number>;
+  onCommit: () => void;
+  onReset: () => void;
+}) {
+  if (phase.kind === "committing") {
+    return (
+      <div className="rounded-lg border bg-white px-4 py-3">
+        <ProgressBar
+          busy
+          fraction={phase.total === 0 ? 1 : phase.written / phase.total}
+          label={`Writing ${phase.written}/${phase.total} rows…`}
+        />
       </div>
+    );
+  }
+
+  if (phase.kind === "done") {
+    return (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+        <p className="text-sm font-medium text-green-900">
+          {phase.created} created · {phase.updated} updated · {phase.skipped}{" "}
+          skipped
+        </p>
+        <Button
+          size="sm"
+          className="ml-auto bg-school-green hover:bg-school-green/90"
+          onClick={onReset}
+        >
+          Import another file
+        </Button>
+      </div>
+    );
+  }
+
+  const writable = counts.insert + counts.update;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-white px-4 py-3">
+      <span className="text-sm text-gray-600">
+        <strong className="font-medium text-gray-900">
+          {counts.insert} new
+        </strong>{" "}
+        ·{" "}
+        <strong className="font-medium text-gray-900">
+          {counts.update} updates
+        </strong>{" "}
+        ·{" "}
+        <strong className="font-medium text-gray-900">
+          {counts.reject} rejected
+        </strong>
+      </span>
+      <Button
+        className="ml-auto bg-school-green hover:bg-school-green/90"
+        // A file-level abort means nothing at all may be written (§3.2); a
+        // file of nothing but rejections has nothing to write.
+        disabled={phase.preview.fileError !== undefined || writable === 0}
+        onClick={onCommit}
+      >
+        Import {writable} {writable === 1 ? "row" : "rows"}
+      </Button>
     </div>
   );
 }

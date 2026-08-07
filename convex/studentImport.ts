@@ -69,6 +69,9 @@ export const importRowValidator = v.object({
   admissionAcademicYear: v.optional(v.string()),
   admissionSemester: v.optional(v.string()),
   classStartDate: v.optional(v.float64()),
+  /** R5: mirrors `classStartDate`, never `Date.now()` — an imported record
+   * must not claim it was admitted on the day of the import. */
+  admissionDate: v.optional(v.float64()),
   fatherName: v.optional(v.string()),
   motherName: v.optional(v.string()),
   fatherPhoneNumber: v.optional(v.string()),
@@ -188,6 +191,7 @@ function resolveRow(row: ImportRow, ref: Reference, label: string) {
     passportNumber: cleanText(row.passportNumber, label),
     admissionSemester: cleanText(row.admissionSemester, label),
     classStartDate: epochMs(row.classStartDate, label),
+    admissionDate: epochMs(row.admissionDate, label),
     fatherName: cleanText(row.fatherName, label),
     motherName: cleanText(row.motherName, label),
     fatherPhoneNumber: cleanText(row.fatherPhoneNumber, label),
@@ -293,11 +297,17 @@ function insertEnrollment(
  * academic year, then writes a single audit document for the batch.
  *
  * @param runId Client-generated id stitching a run's batches together.
+ * @param batch Which batch of the run this is, 1-based — the only thing that
+ *   orders a run's audit documents, since nothing server-side tracks a run.
  * @param rows Parsed rows, at most one batch's worth.
  * @returns What each student number did — inserted or updated.
  */
 export const commitImportBatch = mutation({
-  args: { runId: v.string(), rows: v.array(importRowValidator) },
+  args: {
+    runId: v.string(),
+    batch: v.float64(),
+    rows: v.array(importRowValidator),
+  },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
 
@@ -342,7 +352,7 @@ export const commitImportBatch = mutation({
       entityType: "students",
       entityId: runId,
       description: `Student import: ${inserted.length} added, ${updated.length} updated`,
-      metadata: { runId, inserted, updated },
+      metadata: { runId, batch: args.batch, inserted, updated },
     });
 
     return results;
@@ -424,6 +434,7 @@ export const getExistingStudents = query({
             : null,
           admissionSemester: s.admissionSemester ?? null,
           classStartDate: dateText(s.classStartDate),
+          admissionDate: dateText(s.admissionDate),
           fatherName: s.fatherName ?? null,
           motherName: s.motherName ?? null,
           fatherPhoneNumber: s.fatherPhoneNumber ?? null,

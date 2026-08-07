@@ -7,12 +7,15 @@
  * student numbers already in the database; out comes the preview model the
  * import surface renders. No I/O, no React, no Convex — everything here is a
  * function of its arguments, so the whole column→field table is unit-testable
- * against the real sample file.
+ * against the real sample file. The one Convex import is a type: the commit
+ * payload's shape is the mutation's to define, not this file's.
  *
  * The governing rule throughout (§3.1): **absent → import it unset; present
  * but unrecognisable → reject the row.** No placeholders, ever. A blank field
  * reads as a visible gap someone fills; `"Unknown"` reads as fact forever.
  */
+
+import type { ImportRow } from "@/convex/studentImport";
 
 /* ────────────────────────────── the contract ────────────────────────────── */
 
@@ -837,6 +840,39 @@ export function buildImportPreview(input: ImportPreviewInput): ImportPreview {
   }
 
   return { tabs, rows, fileError: fileErrorOf(tabs, rows) };
+}
+
+/* ───────────────────────────── the commit payload ───────────────────────── */
+
+/** Fields the preview renders as `YYYY-MM-DD` but the payload sends as ms. */
+const DATE_KEYS: ReadonlySet<string> = new Set([
+  "dateOfBirth",
+  "classStartDate",
+  "admissionDate",
+]);
+
+/**
+ * One previewed row as `commitImportBatch` takes it (§5.1): display strings
+ * back to the typed shape, dates back to epoch ms (§5.5).
+ *
+ * A blank field is **left out**, never sent as null — the mutation strips
+ * `undefined` for the same reason, because a missing key reaching `ctx.db.patch`
+ * deletes a value an admin set in the app between uploads. Which is also why
+ * the no-source fields need no filter here: they are always null, so they
+ * never reach the payload at all.
+ */
+export function toCommitRow(row: PreviewRow) {
+  const payload: Record<string, string | number> = {};
+  for (const field of row.fields) {
+    if (field.value === null) continue;
+    if (!DATE_KEYS.has(field.key)) {
+      payload[field.key] = field.value;
+      continue;
+    }
+    const ms = toUtcMidnightMs(field.value);
+    if (ms !== null) payload[field.key] = ms;
+  }
+  return payload as ImportRow;
 }
 
 /**

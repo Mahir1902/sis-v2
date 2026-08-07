@@ -15,6 +15,7 @@ import {
   buildImportPreview,
   type ImportPreview,
   type PreviewRow,
+  toCommitRow,
 } from "@/lib/studentImportMapping";
 
 /**
@@ -24,17 +25,63 @@ import {
  * byte reaches the backend — the preview *is* the gate.
  */
 
+/** The file, once read — the split pane stays on screen through the commit. */
+type Loaded = { fileName: string; preview: ImportPreview };
+
 export type ImportPhase =
   | { kind: "idle" }
   | { kind: "parsing"; fraction: number; label: string }
   | { kind: "error"; message: string }
-  | { kind: "preview"; fileName: string; preview: ImportPreview };
+  | ({ kind: "preview" } & Loaded)
+  | ({ kind: "committing"; written: number; total: number } & Loaded)
+  | ({
+      kind: "done";
+      created: number;
+      updated: number;
+      skipped: number;
+    } & Loaded);
 
 /**
  * §5.2: one index range per student number, so the lookup is chunked rather
  * than sent as one 400-element argument that grows with the school.
  */
 const LOOKUP_CHUNK = 250;
+
+/**
+ * §4.4. Not for atomicity — cross-batch atomicity is ruled out. 250 rows × 2
+ * ops is half Convex's concurrent-IO limit, no file is ever too big, and the
+ * client knowing batch *i* of *n* is what makes progress determinate and free.
+ */
+const COMMIT_BATCH = 250;
+
+/** What one committed row did — the mutation's return, minus the number. */
+type BatchResult = { action: "inserted" | "updated" };
+
+/**
+ * The write loop itself, kept out of React so it is testable without a Convex
+ * provider: sequential batches, a progress call after each, and the run
+ * summary at the end. A batch that throws propagates — the caller decides,
+ * and the rows already written stay written (there is nothing to roll back).
+ */
+export async function commitInBatches(
+  rows: readonly PreviewRow[],
+  send: (
+    batch: ReturnType<typeof toCommitRow>[],
+    index: number,
+  ) => Promise<BatchResult[]>,
+  onProgress: (written: number) => void,
+) {
+  let created = 0;
+  let updated = 0;
+  for (let i = 0; i < rows.length; i += COMMIT_BATCH) {
+    const batch = rows.slice(i, i + COMMIT_BATCH);
+    const results = await send(batch.map(toCommitRow), i / COMMIT_BATCH + 1);
+    created += results.filter((r) => r.action === "inserted").length;
+    updated += results.filter((r) => r.action === "updated").length;
+    onProgress(i + batch.length);
+  }
+  return { created, updated };
+}
 
 export function useStudentImport() {
   const convex = useConvex();
@@ -69,7 +116,61 @@ export function useStudentImport() {
     [convex],
   );
 
-  return { phase, drop, reset };
+  /**
+   * §4.4 + §3.3: valid rows only, in sequential 250-row batches under one
+   * run id. There is no rollback and none is needed — the write is an upsert
+   * on `studentNumber`, so a run that dies halfway is completed by simply
+   * re-uploading the same file.
+   */
+  const commit = useCallback(async () => {
+    if (phase.kind !== "preview" || phase.preview.fileError) return;
+
+    const { preview, fileName } = phase;
+    const rows = preview.rows.filter((row) => row.outcome !== "reject");
+    const skipped = preview.rows.length - rows.length;
+    const runId = crypto.randomUUID();
+    let written = 0;
+
+    setPhase({
+      kind: "committing",
+      fileName,
+      preview,
+      written: 0,
+      total: rows.length,
+    });
+    try {
+      const { created, updated } = await commitInBatches(
+        rows,
+        (payload, batch) =>
+          convex.mutation(api.studentImport.commitImportBatch, {
+            runId,
+            batch,
+            rows: payload,
+          }),
+        (done) => {
+          written = done;
+          setPhase((current) =>
+            current.kind === "committing"
+              ? { ...current, written: done }
+              : current,
+          );
+        },
+      );
+      setPhase({ kind: "done", fileName, preview, created, updated, skipped });
+      toast.success(
+        `${created} created · ${updated} updated · ${skipped} skipped`,
+      );
+    } catch {
+      // Back to the preview: the rows that landed are already correct, and the
+      // fix is the same file again rather than anything the admin must undo.
+      setPhase({ kind: "preview", fileName, preview });
+      toast.error(
+        `Import stopped after ${written} of ${rows.length} rows. Upload the same file again to finish it.`,
+      );
+    }
+  }, [convex, phase]);
+
+  return { phase, drop, commit, reset };
 }
 
 type ConvexClient = ReturnType<typeof useConvex>;
