@@ -45,7 +45,13 @@ export const run = migrations.runner();
  */
 export const backfillPrimaryBillingContact = migrations.define({
   table: "students",
-  migrateOne: (_ctx, student) => applyBillingContactBackfill(student),
+  // `primaryBillingContact` is optional on the document since the import
+  // widening (#93), so pass it explicitly rather than the whole doc — the
+  // helper's parameter is a required-but-nullable property.
+  migrateOne: (_ctx, student) =>
+    applyBillingContactBackfill({
+      primaryBillingContact: student.primaryBillingContact,
+    }),
 });
 
 export const runBackfillPrimaryBillingContact = migrations.runner(

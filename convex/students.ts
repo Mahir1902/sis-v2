@@ -234,7 +234,10 @@ export const getStudentById = query({
     ] = await Promise.all([
       ctx.db.get(student.standardLevel),
       ctx.db.get(student.academicYear),
-      ctx.db.get(student.campus),
+      // `campus` is optional since the import widening (#93) — a student whose
+      // CAMPUS cell was blank has no campus to resolve, so `campusDoc` is null
+      // and the UI renders an em-dash rather than a fabricated campus name.
+      student.campus ? ctx.db.get(student.campus) : null,
       student.studentPhotoUrl
         ? ctx.storage.getUrl(student.studentPhotoUrl)
         : null,
@@ -380,14 +383,18 @@ export const getSiblingsByStudent = query({
         if (!sibling) return null;
         const [level, campus] = await Promise.all([
           ctx.db.get(sibling.standardLevel),
-          ctx.db.get(sibling.campus),
+          // Optional since #93 — see `getStudentById`.
+          sibling.campus ? ctx.db.get(sibling.campus) : null,
         ]);
         return {
           _id: sibling._id,
+          // `studentFullName`, `campusName` and `status` may be undefined for
+          // imported records. They are returned as-is rather than filled with
+          // an "Unknown" placeholder — the caller omits what it cannot show.
           studentFullName: sibling.studentFullName,
           studentNumber: sibling.studentNumber,
-          standardLevelName: level?.name ?? "Unknown",
-          campusName: campus?.name ?? "Unknown",
+          standardLevelName: level?.name,
+          campusName: campus?.name,
           status: sibling.status,
         };
       }),
