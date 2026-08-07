@@ -2,6 +2,72 @@
 
 ---
 
+## Current Feature: Import transform — derivations, validation, warnings (issue #96) (2026-08-07)
+**Status**: ✅ COMPLETE — `tsc --noEmit` clean · `biome check` clean · `npm run build` clean · 400/400 unit tests green (80 in `studentImportMapping.test.ts`)
+**Active Agent**: BACKEND AGENT — issue #96 of map #80 (spec §2, §3, §11, §12)
+
+Second half of the pure transform module started in #94. Everything lands in
+`lib/studentImportMapping.ts` — one seam, no new file — because derivation and validation
+read the same raw rows the mapping table already walks.
+
+### Sub-tasks
+- [x] 1. **Derivations (R1–R6)** — `parseStudentNumber` (`S{MM}{YY}-{seq}`, MM 01–12),
+      `derivedAcademicYearName` (June cutoff), `toUtcMidnightMs` / `formatUtcDate`.
+      Dates convert once, to **UTC midnight** — tests pass under `TZ=Asia/Dhaka` and
+      `TZ=America/New_York`. `classStartDate` is sheet-only; `admissionDate` mirrors it and
+      is never `Date.now()`.
+- [x] 2. **Precedence (R6)** — a filled cell beats a derived value, silently. Derivation
+      runs only where the raw cell text was `null`, so `S0221-0969` imports as its stated
+      2021-2022 with **no warning**.
+- [x] 3. **Rejections (§3.2)** — declarative `required` / `unrecognised` reasons on the
+      column-mapping table, so every mapped column's failure mode is stated where the
+      column is defined. All failures in a row are collected, never just the first.
+- [x] 4. **Whole-file aborts (§3.2)** — `ImportPreview.fileError` for an in-file duplicate
+      student number and for a file where no tab survives header validation. One bad tab
+      stays a tab-level rejection.
+- [x] 5. **Warnings (§3.5)** — closed list of three, `code: 1 | 2 | 3`. Never block.
+- [x] 6. Tests: 41 → 83 in `lib/studentImportMapping.test.ts`, one per §12 fixture row.
+- [x] 7. `/code-review` (Standards + Spec axes, parallel). Three findings applied:
+      **(spec)** warning 2 was counting a key field blank when its *column was missing
+      from the tab* — §3.5 rules that out by name ("every row would carry an identical
+      warning; that is not information"). Now only present-but-blank cells count.
+      **(spec)** a student number that is malformed on two rows was aborting the whole
+      file; both rows are already rejected on their own, so it no longer does.
+      **(standards)** `fileAbort` → `fileErrorOf` (matches the `xOf` idiom and the field
+      it fills), duplicate level transform extracted to `levelNameOf`, three exports with
+      no consumers made module-private, a `findIndex` that could silently return `-1`
+      routed through `fieldOf`, one stale doc comment corrected.
+
+### Decisions made here (not pre-decided by the spec)
+- **Warning 2's key-field set and threshold.** `KEY_FIELDS` = name, gender, DOB, birth-reg
+  number, present address, both parent phones; threshold **3**. `EMAIL`, `PASSPORT NUMBER`
+  and `CLASS STARTING DATE` are deliberately excluded — they are blank on nearly every
+  sample row, so counting them would fire the warning on all 30, which is exactly the noise
+  the closed list exists to avoid. Fires on 0/30 sample rows today.
+- **Accepted date shapes.** `YYYY-MM-DD` (what `cellText` makes of a parsed `Date`) and a
+  bare Excel day serial. `10/07/2024` rejects rather than guessing DD/MM vs MM/DD, and
+  `2024-02-31` rejects instead of rolling into March.
+- **A malformed `STUDENT ID` keeps its raw text** on `PreviewRow.studentNumber` so the
+  rejection is findable in the sheet; §3.4's "blank when that *is* the failure" applies to
+  the genuinely empty cell.
+- **Warnings are computed on rejected rows too** — one code path, and a rejected row is
+  never written either way.
+
+### One deliberate deviation from the spec, flagged
+§3.2 calls its table "the complete rejection list" and `CLASS STARTING DATE` is not on it,
+but an unreadable value there rejects the row here. The ticket's own governing rule is
+emphatic — "the governing rule **everywhere**: … present but unrecognisable → reject the
+row" — and the alternative is silently dropping a date the school typed, which is the one
+thing §3.1 says never happens ("never silently dropped"). It also feeds `admissionDate`.
+Reverting is a one-line change: drop `unrecognised` from the `classStartDate` mapping.
+
+### Out of scope (later tickets)
+- Epoch-ms conversion at the commit boundary reuses the exported `toUtcMidnightMs`;
+  `PreviewField.value` stays a display string (#97).
+- Issues CSV, filter chips and the `severity` column are the surface's (#98).
+
+---
+
 ## Current Feature: Widen `students` schema for Excel import + fix type blast radius (issue #93) (2026-08-07)
 **Status**: ✅ COMPLETE — 30/30 blast-radius errors cleared · root + convex `tsc --noEmit` clean · `npm run lint` clean · 307/307 unit tests green
 **Active Agent**: BACKEND AGENT — resolved issue #93 of map #80 (spec §6.1, §6.3)
