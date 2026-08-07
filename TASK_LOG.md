@@ -2,6 +2,52 @@
 
 ---
 
+## Current Feature: Widen `students` schema for Excel import + fix type blast radius (issue #93) (2026-08-07)
+**Status**: ✅ COMPLETE — 30/30 blast-radius errors cleared · root + convex `tsc --noEmit` clean · `npm run lint` clean · 307/307 unit tests green
+**Active Agent**: BACKEND AGENT — resolved issue #93 of map #80 (spec §6.1, §6.3)
+
+Applies `docs/wayfinder/excel-import/tickets/assets/0086-schema.diff` verbatim: 29 `students`
+fields required → optional (all but `studentNumber`, `standardLevel`, `academicYear`,
+`createdAt`), three new optional admission-fact fields, `by_student_number` index, and
+`enrollments.campus` widened. Backward-compatible widen — no `@convex-dev/migrations` cycle.
+
+### Sub-tasks
+- [x] 1. Applied `0086-schema.diff` verbatim via `git apply` — 29 fields widened,
+      3 admission-fact fields added, `by_student_number` index, `enrollments.campus` widened.
+      Baseline measured first: exactly 30 errors, matching §6.3's table file-for-file.
+- [x] 2. Fixed all 30 sites across 9 files + 3 collateral files whose narrow prop/interface
+      types were the actual root cause (`StudentHeader.tsx`, `lib/resolveBillingContact.ts`,
+      `lib/launcherDisabled.ts`). No placeholder values introduced anywhere.
+- [x] 3. Verified — root `tsc --noEmit` clean, `tsc -p convex` clean, `biome check` clean,
+      `vitest --project unit` 307/307. (`npm run build` deferred to the coordinator.)
+
+### How each absent field degrades
+| Site | Behaviour when the field is unset |
+|---|---|
+| `students.campus` → `campusDoc` | resolves to `null`; UI omits the campus chip / shows "—" |
+| sibling `standardLevelName` / `campusName` | returned undefined; sidebar joins only what exists |
+| `transactionLog` student name | map value nullable; existing "Unknown Student" label fires |
+| `searchStudents` / student-fees search | an unnamed student never matches a *name* query (still findable by number) |
+| `collectFees` | **refuses to issue the receipt** — a frozen payer/student name is never invented |
+| sidebar dates (DOB/admitted/class-start/created) | `formatDate()` → em-dash, never "Invalid Date" |
+| sidebar + header parent names | em-dash avatar + muted "Not recorded" |
+| sidebar + header phones | no `tel:` link rendered at all (no `tel:undefined`) |
+| sidebar `healthIssue` | "Not recorded" — never asserts the medical claim "No issues" |
+| `EditStudentDialog` dates | pre-fills ""; `studentInfoSchema.min(1)` blocks save until filled |
+| `EditStudentDialog` health checkbox | form value stays genuinely undefined; `z.boolean()` blocks save |
+| `StudentHeader` status | "Unspecified" pill (temporary — folds into `StatusBadge` under #95) |
+
+### Out of scope (owned by sibling tickets) — deliberately left alone
+- `convex/seed.ts` + academic-year backfill mutation → #92
+- `lib/` import-transform modules → #94
+- §6.4 silent sites → #95. Specifically **still live**: the
+  `data={students as unknown as StudentRow[]}` double cast in `students/page.tsx`, and
+  `columns.tsx:49 getInitials(row.original.studentFullName)` behind it, which throws on an
+  unnamed student. Nothing can reach that state until the importer lands, but #95 must ship
+  before the first import runs.
+
+---
+
 ## Current State (2026-04-05 — POST-AUDIT RESET)
 
 All code from Phases 1–3 and partial Phase 4 was written WITHOUT:
@@ -13,6 +59,28 @@ All code from Phases 1–3 and partial Phase 4 was written WITHOUT:
 
 This reset establishes proper tracking. All existing code goes through review before any
 new feature work begins.
+
+---
+
+## Feature: Academic-year seed range + idempotent backfill (issue #92, excel-import §6.2/§14) (2026-08-07)
+**Status**: ✅ DONE — pending Backend Review Agent approval
+**Active Agent**: BACKEND AGENT
+
+- `convex/seed.ts` — extracted the year list to a module-level `ACADEMIC_YEAR_DEFS`
+  (shared by both paths so they cannot drift) and extended it from 2019-2020 → 2025-2026
+  to **2015-2016 → 2026-2027**. `seedReferenceData` now loops over it.
+- New admin-gated `seed:backfillAcademicYears` mutation — reads existing `academicYears`
+  names into a `Set` and inserts only the missing ones with the same
+  `${start}-06-01` / `${end}-07-31` convention. Idempotent; returns
+  `{ inserted: string[]; skipped: number }`. `requireRole(ctx, ["admin"])` is the first line.
+  Needed because `seedReferenceData` early-returns on **any** existing `academicYears` row,
+  so editing the seed list alone is a no-op on staging and production.
+- `docs/wayfinder/staging-uat/DEPLOYMENT-PREREQUISITES.md` — new; records the order
+  schema deploy → backfill → first import for map #62, incl. how to invoke an admin-gated
+  mutation (dashboard function runner acting as an admin; `npx convex run` is unauthenticated).
+- Verified: `npx tsc --noEmit -p convex/tsconfig.json` clean for `seed.ts` (remaining errors
+  are the schema-widening blast radius owned by #93); `npm run lint` clean. Build deferred to
+  the coordinator. `convex/schema.ts` untouched.
 
 ---
 
