@@ -95,7 +95,7 @@ export type ImportReferenceData = {
 export type ImportPreviewInput = {
   sheets: readonly RawSheet[];
   reference: ImportReferenceData;
-  /** Drives the new-vs-update split (`getExistingStudentNumbers`, §5.2). */
+  /** Drives the new-vs-update split (`getExistingStudents`, §5.2). */
   existingStudentNumbers: Iterable<string>;
   /**
    * Current database values keyed by `studentNumber`, then by `students`

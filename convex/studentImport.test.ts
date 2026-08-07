@@ -140,9 +140,9 @@ describe("permissions", () => {
     expect(await studentByNumber(NUMBER)).toBeNull();
   });
 
-  it("getExistingStudentNumbers rejects a non-admin caller", async () => {
+  it("getExistingStudents rejects a non-admin caller", async () => {
     await expect(
-      t.query(api.studentImport.getExistingStudentNumbers, {
+      t.query(api.studentImport.getExistingStudents, {
         studentNumbers: [NUMBER],
       }),
     ).rejects.toThrow("Unauthenticated");
@@ -402,26 +402,55 @@ describe("commitImportBatch — server-side validation", () => {
   });
 });
 
-describe("getExistingStudentNumbers", () => {
+describe("getExistingStudents", () => {
+  const existingFor = (studentNumbers: string[]) =>
+    asAdmin.query(api.studentImport.getExistingStudents, { studentNumbers });
+
   it("returns only the numbers already in the database", async () => {
     await commit([row({ studentNumber: NUMBER })]);
 
-    const existing = await asAdmin.query(
-      api.studentImport.getExistingStudentNumbers,
-      { studentNumbers: [NUMBER, NUMBER_2] },
-    );
+    const existing = await existingFor([NUMBER, NUMBER_2]);
 
-    expect(existing).toEqual([NUMBER]);
+    expect(existing.map((s) => s.studentNumber)).toEqual([NUMBER]);
   });
 
   it("matches the same number the commit does, whitespace and all", async () => {
     await commit([row({ studentNumber: "S0724-1304" })]);
 
-    const existing = await asAdmin.query(
-      api.studentImport.getExistingStudentNumbers,
-      { studentNumbers: [" S0724-1304 "] },
-    );
+    const existing = await existingFor([" S0724-1304 "]);
 
-    expect(existing).toEqual(["S0724-1304"]);
+    expect(existing.map((s) => s.studentNumber)).toEqual(["S0724-1304"]);
+  });
+
+  it("returns each mapped field as the preview renders it, for the old → new diff", async () => {
+    await commit([
+      row({
+        studentNumber: NUMBER,
+        studentFullName: "Amina Rahman",
+        standardLevel: "Grade 2",
+        campus: "Campus 01",
+        admittedLevel: "Grade 1",
+        admissionAcademicYear: "2021-2022",
+        // 2016-03-21 at UTC midnight — the preview renders dates as YYYY-MM-DD.
+        dateOfBirth: Date.UTC(2016, 2, 21),
+        fatherPhoneNumber: "01711111111",
+      }),
+    ]);
+
+    const [existing] = await existingFor([NUMBER]);
+
+    expect(existing.fields).toMatchObject({
+      studentFullName: "Amina Rahman",
+      // Ids resolve to names: the inspector shows what the sheet would say.
+      standardLevel: "Grade 2",
+      campus: "Campus 01",
+      admittedLevel: "Grade 1",
+      admissionAcademicYear: "2021-2022",
+      dateOfBirth: "2016-03-21",
+      fatherPhoneNumber: "01711111111",
+      // A field the school never filled is null, not absent — otherwise the
+      // inspector cannot tell "unchanged" from "we did not look".
+      motherName: null,
+    });
   });
 });

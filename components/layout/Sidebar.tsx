@@ -15,6 +15,7 @@ import {
   type LucideIcon,
   Receipt,
   Settings,
+  Upload,
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -82,6 +83,11 @@ const navGroups: NavGroup[] = [
       },
       { href: "/admin/promotions", label: "Promotions", icon: ArrowUpCircle },
       { href: "/admin/subjects", label: "Subjects", icon: BookOpen },
+      {
+        href: "/admin/import-students",
+        label: "Import Students",
+        icon: Upload,
+      },
       { href: "/admin/audit-log", label: "Audit Log", icon: ClipboardList },
       { href: "/admin/settings", label: "Settings", icon: Settings },
     ],

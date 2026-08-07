@@ -1,6 +1,11 @@
 import { type Infer, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { type MutationCtx, mutation, query } from "./_generated/server";
+import {
+  type MutationCtx,
+  mutation,
+  type QueryCtx,
+  query,
+} from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
@@ -344,28 +349,90 @@ export const commitImportBatch = mutation({
   },
 });
 
+/** The three lookup tables the other way round — id → name, for the preview. */
+async function loadNames(ctx: QueryCtx) {
+  const [levels, years, campuses] = await Promise.all([
+    ctx.db.query("standardLevels").collect(),
+    ctx.db.query("academicYears").collect(),
+    ctx.db.query("campuses").collect(),
+  ]);
+  return {
+    levels: new Map(levels.map((l) => [l._id, l.name])),
+    years: new Map(years.map((y) => [y._id, y.name])),
+    campuses: new Map(campuses.map((c) => [c._id, c.name])),
+  };
+}
+
+/** Epoch ms → the `YYYY-MM-DD` the preview shows, read in UTC (§5.5). */
+const dateText = (ms: number | undefined) =>
+  ms === undefined ? null : new Date(ms).toISOString().slice(0, 10);
+
 /**
- * Returns the subset of the given student numbers that already exists, so the
- * client can derive the new-vs-update split. Admin-only. One index range per
- * number, so the caller chunks at 250 alongside the commit batches (§5.2) —
- * the ceiling that actually binds is Convex's own, not one invented here.
+ * The students among the given numbers that already exist, each with the
+ * current value of every field the import writes. Admin-only.
+ *
+ * Two jobs, one round trip: the returned numbers drive the new-vs-update split
+ * (§5.2), and the field values are what the inspector renders as `old → new`
+ * (§7.3) — the entire overwrite mitigation. Values are formatted the way the
+ * preview formats them (ids as names, dates as `YYYY-MM-DD`) so an unchanged
+ * field never reads as a change. Fields the import does not write are left
+ * out: showing a diff for one would promise an overwrite that never happens.
+ *
+ * One index range per number, so the caller chunks at 250 alongside the commit
+ * batches — the ceiling that actually binds is Convex's own, not one invented
+ * here.
  */
-export const getExistingStudentNumbers = query({
+export const getExistingStudents = query({
   args: { studentNumbers: v.array(v.string()) },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin"]);
 
     const unique = [...new Set(args.studentNumbers.map(normalise))];
-    const found = await Promise.all(
-      unique.map((studentNumber) =>
-        ctx.db
-          .query("students")
-          .withIndex("by_student_number", (q) =>
-            q.eq("studentNumber", studentNumber),
-          )
-          .first(),
+    const [found, names] = await Promise.all([
+      Promise.all(
+        unique.map((studentNumber) =>
+          ctx.db
+            .query("students")
+            .withIndex("by_student_number", (q) =>
+              q.eq("studentNumber", studentNumber),
+            )
+            .first(),
+        ),
       ),
-    );
-    return found.filter((s) => s !== null).map((s) => s.studentNumber);
+      loadNames(ctx),
+    ]);
+
+    return found
+      .filter((s) => s !== null)
+      .map((s) => ({
+        studentNumber: s.studentNumber,
+        fields: {
+          studentFullName: s.studentFullName ?? null,
+          gender: s.gender ?? null,
+          dateOfBirth: dateText(s.dateOfBirth),
+          citizenship: s.citizenship ?? null,
+          religion: s.religion ?? null,
+          birthCertificateNumber: s.birthCertificateNumber ?? null,
+          passportNumber: s.passportNumber ?? null,
+          standardLevel: names.levels.get(s.standardLevel) ?? null,
+          campus: s.campus ? (names.campuses.get(s.campus) ?? null) : null,
+          admittedLevel: s.admittedLevel
+            ? (names.levels.get(s.admittedLevel) ?? null)
+            : null,
+          admissionAcademicYear: s.admissionAcademicYear
+            ? (names.years.get(s.admissionAcademicYear) ?? null)
+            : null,
+          admissionSemester: s.admissionSemester ?? null,
+          classStartDate: dateText(s.classStartDate),
+          fatherName: s.fatherName ?? null,
+          motherName: s.motherName ?? null,
+          fatherPhoneNumber: s.fatherPhoneNumber ?? null,
+          motherPhoneNumber: s.motherPhoneNumber ?? null,
+          presentAddress: s.presentAddress ?? null,
+          permanentAddress: s.permanentAddress ?? null,
+          fatherEmail: s.fatherEmail ?? null,
+          status: s.status ?? null,
+        },
+      }));
   },
 });

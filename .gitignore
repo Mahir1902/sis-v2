@@ -85,7 +85,6 @@ docs/handoffs/HANDOFF_*.md
 assets/
 lib/fixtures/
 lib/studentImportMapping.test.ts
-app/(dashboard)/admin/import-students-prototype/
 scripts/build_import_fixture.py
 scripts/transform_student_import.py
 
