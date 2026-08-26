@@ -13,10 +13,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { RoleGate } from "@/components/shared/RoleGate";
-import { homeForRole } from "@/lib/homeForRole";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
+import { homeForRole } from "@/lib/homeForRole";
 
 export default function DashboardPage() {
   const me = useQuery(api.users.getMe);
@@ -25,7 +25,7 @@ export default function DashboardPage() {
   // /dashboard is the default landing page ("/" and the login redirect both
   // point here), but it is admin-only. Send non-admins to their own home
   // instead of showing them Access Denied.
-  const shouldRedirect = me != null && me.isActive && me.role !== "admin";
+  const shouldRedirect = me?.isActive && me.role !== "admin";
   useEffect(() => {
     if (shouldRedirect) router.replace(homeForRole(me?.role));
   }, [shouldRedirect, me?.role, router]);
