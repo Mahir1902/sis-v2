@@ -41,6 +41,7 @@ import type * as standardLevels from "../standardLevels.js";
 import type * as studentAssessmentAnswers from "../studentAssessmentAnswers.js";
 import type * as studentDiscounts from "../studentDiscounts.js";
 import type * as studentFees from "../studentFees.js";
+import type * as studentImport from "../studentImport.js";
 import type * as students from "../students.js";
 import type * as subjects from "../subjects.js";
 import type * as transactionLog from "../transactionLog.js";
@@ -86,6 +87,7 @@ declare const fullApi: ApiFromModules<{
   studentAssessmentAnswers: typeof studentAssessmentAnswers;
   studentDiscounts: typeof studentDiscounts;
   studentFees: typeof studentFees;
+  studentImport: typeof studentImport;
   students: typeof students;
   subjects: typeof subjects;
   transactionLog: typeof transactionLog;

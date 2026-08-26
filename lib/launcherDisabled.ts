@@ -20,11 +20,14 @@ import {
   resolveBillingContact,
 } from "./resolveBillingContact";
 
+// `primaryBillingContact` is an optional property (not merely a nullable one)
+// so a `Pick<Doc<"students">, …>` projection satisfies this type directly —
+// the field became optional on the document in the import widening (#93).
 export type LauncherStudent = Omit<
   BillingContactInput,
   "primaryBillingContact"
 > & {
-  primaryBillingContact: PrimaryBillingContact | undefined;
+  primaryBillingContact?: PrimaryBillingContact;
 };
 
 export const NO_BILLING_CONTACT_TOOLTIP =

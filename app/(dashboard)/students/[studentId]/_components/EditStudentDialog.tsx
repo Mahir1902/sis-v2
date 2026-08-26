@@ -81,7 +81,14 @@ interface EditStudentDialogProps {
   studentId: Id<"students">;
 }
 
-function formatTimestampToDateString(timestamp: number): string {
+/**
+ * Formats a stored timestamp for a `<input type="date">`. Returns "" when the
+ * date was never recorded (optional since the import widening, #93) — the
+ * field renders blank and `studentInfoSchema`'s `.min(1)` blocks the save
+ * until an admin supplies a real date, rather than a stand-in being written.
+ */
+function formatTimestampToDateString(timestamp: number | undefined): string {
+  if (timestamp === undefined) return "";
   const date = new Date(timestamp);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -169,8 +176,12 @@ export function EditStudentDialog({
         permanentAddress: student.permanentAddress ?? "",
         previousSchoolName: student.previousSchoolName ?? "",
         previousSchoolAddress: student.previousSchoolAddress ?? "",
-        hasHealthIssues: student.healthIssue.hasHealthIssues,
-        healthIssueDescription: student.healthIssue.issueDescription ?? "",
+        // `healthIssue` is optional since #93. When it was never recorded the
+        // checkbox is left genuinely unset — NOT pre-filled `false`, which
+        // would assert "no health issues" on the next save. `z.boolean()`
+        // rejects undefined, so the admin has to answer before saving.
+        hasHealthIssues: student.healthIssue?.hasHealthIssues,
+        healthIssueDescription: student.healthIssue?.issueDescription ?? "",
         fatherName: student.fatherName,
         fatherOccupation: student.fatherOccupation,
         fatherNidNumber: (data.fatherNidNumber as string) ?? "",
@@ -612,8 +623,12 @@ export function EditStudentDialog({
                     render={({ field }) => (
                       <FormItem className="flex items-center gap-2 space-y-0">
                         <FormControl>
+                          {/* `?? false` keeps the input controlled while the
+                              value is genuinely unset (#93); the form state
+                              itself stays undefined until the admin clicks,
+                              so nothing is saved that they did not assert. */}
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>

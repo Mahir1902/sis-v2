@@ -157,7 +157,14 @@ function EmailReceiptButton({
 
   const handleClick = () => {
     if (loading || contactArgs === null || disabledReason !== null) return;
-    const billingContact = resolveBillingContact(contactArgs);
+    // `disabledReason` already rules this out, but the field is optional on
+    // the document since #93 so narrow it explicitly rather than assert.
+    const primaryBillingContact = contactArgs.primaryBillingContact;
+    if (!primaryBillingContact) return;
+    const billingContact = resolveBillingContact({
+      ...contactArgs,
+      primaryBillingContact,
+    });
     if (!billingContact.email) return;
     const url = buildGmailComposeUrl({
       to: billingContact.email,

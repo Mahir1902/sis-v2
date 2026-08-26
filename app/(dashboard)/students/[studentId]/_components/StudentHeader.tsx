@@ -31,19 +31,23 @@ type Status =
   | "suspended"
   | "expelled";
 
+// Every field below `studentNumber` is optional because the `students` table
+// was widened for the Excel import (#93) — a sheet with no column for a field
+// leaves it unset. Each render site degrades to an em-dash, a muted
+// "not recorded" label, or an omitted element; nothing is defaulted.
 interface StudentHeaderProps {
   studentId: Id<"students">;
   student: {
-    studentFullName: string;
+    studentFullName?: string;
     studentNumber: string;
-    status: Status;
+    status?: Status;
     studentPhotoUrl?: string | null;
-    fatherName: string;
-    fatherPhoneNumber: string;
-    motherName: string;
-    motherPhoneNumber: string;
-    guardianName: string;
-    guardianPhoneNumber: string;
+    fatherName?: string;
+    fatherPhoneNumber?: string;
+    motherName?: string;
+    motherPhoneNumber?: string;
+    guardianName?: string;
+    guardianPhoneNumber?: string;
     standardLevelDoc?: { name: string } | null;
     academicYearDoc?: { name: string } | null;
     campusDoc?: { name: string } | null;
@@ -53,13 +57,42 @@ interface StudentHeaderProps {
   } | null;
 }
 
-function getInitials(name: string) {
+function getInitials(name: string | undefined) {
+  if (!name) return "—";
   return name
     .split(" ")
     .map((n) => n[0])
     .slice(0, 2)
     .join("")
     .toUpperCase();
+}
+
+/**
+ * One "call this parent" chip. Renders nothing when no phone number is on
+ * record — a `tel:` link to an absent number is worse than no link at all.
+ */
+function ContactChip({
+  label,
+  relation,
+  name,
+  phone,
+}: {
+  label: string;
+  relation: string;
+  name: string | undefined;
+  phone: string | undefined;
+}) {
+  if (!phone) return null;
+  return (
+    <a
+      href={`tel:${phone}`}
+      className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-green-100 transition-colors"
+      aria-label={name ? `Call ${relation} ${name}` : `Call ${relation}`}
+    >
+      <Phone className="h-3 w-3" />
+      {label}
+    </a>
+  );
 }
 
 export function StudentHeader({
@@ -92,7 +125,7 @@ export function StudentHeader({
                     ? student.studentPhotoUrl
                     : undefined
                 }
-                alt={student.studentFullName}
+                alt={student.studentFullName ?? student.studentNumber}
               />
               <AvatarFallback className="rounded-xl bg-gradient-to-br from-school-green to-school-green/80 text-white text-base font-bold">
                 {getInitials(student.studentFullName)}
@@ -110,7 +143,11 @@ export function StudentHeader({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg font-bold text-gray-900 truncate">
-                {student.studentFullName}
+                {student.studentFullName ?? (
+                  <span className="italic font-medium text-gray-400">
+                    Name not recorded
+                  </span>
+                )}
               </h1>
               <StatusBadge studentId={studentId} status={student.status} />
             </div>
@@ -141,30 +178,24 @@ export function StudentHeader({
 
         {/* Quick contacts + Edit */}
         <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-          <a
-            href={`tel:${student.fatherPhoneNumber}`}
-            className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-green-100 transition-colors"
-            aria-label={`Call father ${student.fatherName}`}
-          >
-            <Phone className="h-3 w-3" />
-            Father
-          </a>
-          <a
-            href={`tel:${student.motherPhoneNumber}`}
-            className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-green-100 transition-colors"
-            aria-label={`Call mother ${student.motherName}`}
-          >
-            <Phone className="h-3 w-3" />
-            Mother
-          </a>
-          <a
-            href={`tel:${student.guardianPhoneNumber}`}
-            className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-green-100 transition-colors"
-            aria-label={`Call guardian ${student.guardianName}`}
-          >
-            <Phone className="h-3 w-3" />
-            Guardian
-          </a>
+          <ContactChip
+            label="Father"
+            relation="father"
+            name={student.fatherName}
+            phone={student.fatherPhoneNumber}
+          />
+          <ContactChip
+            label="Mother"
+            relation="mother"
+            name={student.motherName}
+            phone={student.motherPhoneNumber}
+          />
+          <ContactChip
+            label="Guardian"
+            relation="guardian"
+            name={student.guardianName}
+            phone={student.guardianPhoneNumber}
+          />
 
           <div className="w-px h-5 bg-gray-200 mx-1 hidden md:block" />
 
@@ -194,9 +225,11 @@ export function StudentHeader({
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Student</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete {student.studentFullName} and all
-                  associated records (enrollments, fees, grades, report cards).
-                  This action cannot be undone.
+                  This will permanently delete{" "}
+                  {student.studentFullName ??
+                    `student ${student.studentNumber}`}{" "}
+                  and all associated records (enrollments, fees, grades, report
+                  cards). This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

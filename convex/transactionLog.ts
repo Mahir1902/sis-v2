@@ -119,7 +119,13 @@ export const getTransactionLog = query({
       Promise.all(collectorIds.map((id) => ctx.db.get(id))),
     ]);
 
-    const studentMap = new Map<string, { name: string; number: string }>();
+    // `name` is nullable since the import widening (#93) — an unnamed student
+    // falls through to the existing "Unknown Student" display fallback below
+    // rather than having a name invented for it here.
+    const studentMap = new Map<
+      string,
+      { name: string | undefined; number: string }
+    >();
     for (const s of students) {
       if (s)
         studentMap.set(s._id, {
@@ -331,7 +337,13 @@ export const getTransactionLogExport = query({
       Promise.all(collectorIds.map((id) => ctx.db.get(id))),
     ]);
 
-    const studentMap = new Map<string, { name: string; number: string }>();
+    // `name` is nullable since the import widening (#93) — an unnamed student
+    // falls through to the existing "Unknown Student" display fallback below
+    // rather than having a name invented for it here.
+    const studentMap = new Map<
+      string,
+      { name: string | undefined; number: string }
+    >();
     for (const s of students) {
       if (s)
         studentMap.set(s._id, {
@@ -435,13 +447,20 @@ export const searchStudents = query({
     const allStudents = await ctx.db.query("students").take(2000);
     const query = args.nameQuery.toLowerCase();
 
-    return allStudents
-      .filter((s) => s.studentFullName.toLowerCase().includes(query))
-      .slice(0, 20)
-      .map((s) => ({
-        _id: s._id,
-        studentFullName: s.studentFullName,
-        studentNumber: s.studentNumber,
-      }));
+    return (
+      allStudents
+        // `studentFullName` is optional since the import widening (#93). A
+        // student with no recorded name simply never matches a name search
+        // rather than matching on a stand-in value.
+        .filter(
+          (s) => s.studentFullName?.toLowerCase().includes(query) ?? false,
+        )
+        .slice(0, 20)
+        .map((s) => ({
+          _id: s._id,
+          studentFullName: s.studentFullName,
+          studentNumber: s.studentNumber,
+        }))
+    );
   },
 });
