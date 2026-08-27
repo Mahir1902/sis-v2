@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 
 const ADMIN_EMAIL = "admin@school.edu";
 
@@ -46,8 +46,9 @@ export const insertAdminRecords = internalMutation({
  * Seeds all reference data (academic years, campuses, standard levels,
  * grade mapping, subjects, discount rules).
  * Idempotent — safe to run multiple times.
+ * Internal: dashboard-only bootstrap, not callable by public clients.
  */
-export const seedReferenceData = mutation({
+export const seedReferenceData = internalMutation({
   args: {},
   handler: async (ctx) => {
     // Guard: skip if already seeded

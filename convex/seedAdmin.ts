@@ -2,7 +2,7 @@
 
 import { makeFunctionReference } from "convex/server";
 import { Scrypt } from "lucia";
-import { action } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 
 const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD;
 
@@ -23,8 +23,9 @@ const insertAdminRecords = makeFunctionReference<
  * Run once from the Convex dashboard after first deploy.
  * Credentials: admin@school.edu / Admin1234!
  * Idempotent — safe to run multiple times.
+ * Internal: dashboard-only bootstrap, not callable by public clients.
  */
-export const seedAdminUser = action({
+export const seedAdminUser = internalAction({
   args: {},
   handler: async (ctx) => {
     if (!ADMIN_PASSWORD) {
