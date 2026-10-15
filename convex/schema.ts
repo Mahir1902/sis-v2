@@ -11,6 +11,11 @@ export default defineSchema({
     name: v.string(), // "2024-2025"
     startDate: v.float64(), // Unix ms
     endDate: v.float64(), // Unix ms
+
+    // The semester-1/2 boundary. Optional because 12 years already exist
+    // without it; a year with no split date yields "—", never a figure
+    // derived from a guessed boundary. Typed on /admin/calendar. (#115)
+    semester1EndDate: v.optional(v.float64()), // Unix ms
   }),
 
   campuses: defineTable({
@@ -231,7 +236,54 @@ export default defineSchema({
   })
     .index("by_student_academic_year", ["studentId", "academicYear"])
     .index("by_standard_level", ["standardLevelId"])
-    .index("by_campus_standard", ["campus", "standardLevelId"]),
+    .index("by_campus_standard", ["campus", "standardLevelId"])
+    // Which classes exist in a year, for the day view's "N of M classes
+    // marked" and the report's completeness banner. No existing index can
+    // range on academicYear alone. (attendance spec §7 A3)
+    .index("by_academic_year", ["academicYear"]),
+
+  // ─── Attendance ───────────────────────────────────────────────────────────
+
+  attendance: defineTable({
+    studentId: v.id("students"),
+    date: v.string(), // "YYYY-MM-DD", the Dhaka-local calendar day
+    status: v.union(
+      v.literal("present"),
+      v.literal("absent"),
+      v.literal("late"),
+    ),
+
+    // The class AS AT MARK TIME — frozen, never re-derived. Correcting a
+    // child's enrolment in April does not rewrite March's registers. (#112)
+    standardLevelId: v.id("standardLevels"),
+    campus: v.id("campuses"),
+    academicYear: v.id("academicYears"),
+
+    // Why the student was out, typed by the office. Changes NO number —
+    // this is not `excused`. (#118)
+    note: v.optional(v.string()),
+
+    markedBy: v.id("users"),
+    markedAt: v.float64(), // epoch ms, last touch
+  })
+    .index("by_class_date", [
+      "campus",
+      "standardLevelId",
+      "academicYear",
+      "date",
+    ])
+    .index("by_student_date", ["studentId", "date"])
+    .index("by_date", ["date"]),
+
+  // Exception days only — ~30–60 rows/year. Normal is the ABSENCE of a row.
+  // A closure VOIDS the date for the campuses it covers, marked or not. (#113)
+  closures: defineTable({
+    date: v.string(), // "YYYY-MM-DD", Dhaka-local
+    campuses: v.array(v.id("campuses")), // form defaults to all ticked
+    reason: v.string(), // free text: "Eid-ul-Fitr", "hartal", "flood"
+    createdBy: v.id("users"),
+    createdAt: v.float64(),
+  }).index("by_date", ["date"]),
 
   // ─── Simple Grades (kept alongside assessment system) ─────────────────────
 

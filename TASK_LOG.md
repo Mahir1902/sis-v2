@@ -128,6 +128,23 @@ new feature work begins.
 
 ---
 
+## Current Feature: Daily student attendance — PR 1 of 2, data model + server (2026-10-15)
+**Status**: ✅ COMPLETE (2026-10-15) — build · lint · 302 tests green. Screens are PR 2.
+**Active Agent**: BACKEND AGENT (spec: issue #111, design tickets #112–#119; spec §7 read first)
+
+- [x] 1. Schema (additive, no migration): `attendance` + `closures` tables, `academicYears.semester1EndDate`, `enrollments.by_academic_year`
+- [x] 2. `lib/attendanceDate.ts` (Dhaka UTC+6 day label, shift, Fri/Sat weekend, DD-MM-YYYY) + `lib/attendancePercentage.ts` (floor, null on 0) — both with tests
+- [x] 3. `convex/lib/attendancePermissions.ts` — `requireAttendanceWrite` (admin|teacher; no future; teacher ≤14 calendar days), kept out of `requireRole`
+- [x] 4. `convex/enrollments.ts` — campus-aware `getClassRoster`, `getClassesForYear` (#120 not fixed here)
+- [x] 5. `convex/academicYears.ts` — `update` (admin, validates bounds + semester-1 split)
+- [x] 6. `convex/closures.ts` — `list` / `create` (confirm before voiding existing marks; marks never deleted) / `remove`
+- [x] 7. `convex/attendance.ts` — `getRegister`, `saveRegister` (uniqueness per student+date via `by_student_date`, audit row only on status change), `getDay`, `getClassReport`, `getStudentAttendance`, `setNote`
+- [x] 8. `convex/attendance.test.ts` — mover uniqueness, audit-on-change, write gate, denominator union/closure/no-row-absent, closure confirm
+
+**Decisions logged:** `schoolDaysUnmarked` is capped at today (a mid-semester report must not flag days that have not happened). `getStudentAttendance.missedDays` lists no-row class-marked days as `absent` so the list matches the count. `convex/_generated/api.d.ts` hand-extended for the two new modules (codegen needs a deployment).
+
+---
+
 ## Feature: Academic-year seed range + idempotent backfill (issue #92, excel-import §6.2/§14) (2026-08-07)
 **Status**: ✅ DONE — pending Backend Review Agent approval
 **Active Agent**: BACKEND AGENT
