@@ -91,9 +91,12 @@ export function DashboardWrapper({ children }: { children: React.ReactNode }) {
       >
         {/* Padding lives inside the scroller: a scroll container's own padding
             shrinks the area `sticky` elements pin to, so a `sticky bottom-0`
-            bar would float 24px above the real bottom edge. */}
+            bar would float 24px above the real bottom edge. The inner wrapper
+            is `h-full` so pages sized with `h-full` (e.g. the students
+            DataTable) keep a viewport-height box; taller pages overflow it and
+            scroll in the outer scroller. */}
         <div className="flex-1 min-h-0 overflow-auto">
-          <div className="p-6">{children}</div>
+          <div className="h-full p-6">{children}</div>
         </div>
       </main>
     </div>
