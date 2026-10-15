@@ -528,7 +528,7 @@ export const getStudentAttendance = query({
     const enrollment =
       enrollments.find((e) => e.exitDate === undefined) ??
       enrollments.sort((a, b) => b.enrollmentDate - a.enrollmentDate)[0];
-    if (!enrollment) return empty;
+    if (!enrollment?.campus) return empty;
 
     const cls = {
       campus: enrollment.campus,

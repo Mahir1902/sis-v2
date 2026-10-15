@@ -308,6 +308,8 @@ export async function loadClassesForYear(
     }
   >();
   for (const e of enrollments) {
+    // Imported rows may lack a campus; they cannot form a class.
+    if (!e.campus) continue;
     const key = `${e.campus}|${e.standardLevelId}`;
     let entry = counts.get(key);
     if (!entry) {
