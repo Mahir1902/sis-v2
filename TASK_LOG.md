@@ -2,6 +2,28 @@
 
 ---
 
+## Current Feature: Attendance — call list ignores a register saved under another year (bug after PR #127, 2026-10-15)
+**Status**: Review — fix + regression test; review via the no-mistakes pipeline
+**Active Agent**: CODING AGENT (Firstmate crewmate; implementation inline)
+
+Captain's report: a register saved as present still shows the class "Not marked yet" on `/attendance/today`.
+Reproduced end to end on a throwaway local Convex backend (never the shared dev deployment):
+the register page's year is the teacher's pick (the student's enrollment sits in `2025-2026`),
+while `/attendance/today` always opens on the year containing today (`2026-2027`, a PR #127
+review decision) and `getDay` filtered the date's rows by that year — so the saved marks were
+invisible. The register's own "Marked at … by …" line masks it. Same path with the register
+saved under `2026-2027` shows "1 of 1 class marked".
+
+### Devil's Advocate Findings
+- Concern: re-persist the year so both pages agree → Rejected: PR #127's review dropped year memory on purpose (stale year after rollover); the smaller fix is in `getDay`.
+- Concern: dropping the year filter mixes years → Accepted: marks are matched by (campus, level); the year argument still decides which classes are *expected*. A date's marks belong to that date, whichever year record the register was saved under.
+- Concern: a marked class whose (campus, level) is absent from the selected year → unchanged from before (those rows were dropped by the year filter too); the other year's list shows them.
+
+### Sub-tasks
+- [x] 1. `convex/attendance.ts` `getDay` — derive marked classes and absentees from every row on the date; one `by_date` range kept. Regression test in `convex/attendance.test.ts` (fails on the pre-fix code).
+
+---
+
 ## Current Feature: Daily attendance — PR 2 of 2, the screens (issue #111, 2026-10-15)
 **Status**: Review — `tsc --noEmit` clean · `biome check` clean · `npm run build` clean · 370/370 vitest green (7 new in `app/(dashboard)/attendance/page.test.tsx`, 1 new in `convex/attendance.test.ts`, 7 new in `lib/attendanceView.test.ts`)
 **Active Agent**: CODING AGENT (Firstmate crewmate; implementation done inline, review via the no-mistakes pipeline)

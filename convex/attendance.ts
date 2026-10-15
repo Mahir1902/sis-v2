@@ -352,6 +352,11 @@ export const saveRegister = mutation({
  * The morning call list: every absent/late student on a date, grouped by
  * class with one contact phone each, plus which classes have been marked.
  * One `by_date` range; the marked classes are derived from those same rows.
+ * `academicYear` only picks which classes are EXPECTED. Marks are matched by
+ * (campus, level) across every year, because the register's year is the
+ * teacher's pick while the call list defaults to the year containing today —
+ * a school whose enrollments still sit in last year's record saves under
+ * that year, and its marks must still count for this date.
  */
 export const getDay = query({
   args: { date: v.string(), academicYear: v.id("academicYears") },
@@ -366,12 +371,11 @@ export const getDay = query({
         .take(5000),
       loadClassesForYear(ctx, args.academicYear),
     ]);
-    const yearRows = rows.filter((r) => r.academicYear === args.academicYear);
     const key = (c: { campus: string; standardLevelId: string }) =>
       `${c.campus}|${c.standardLevelId}`;
-    const markedKeys = new Set(yearRows.map(key));
+    const markedKeys = new Set(rows.map(key));
 
-    const absentRows = yearRows.filter((r) => r.status !== "present");
+    const absentRows = rows.filter((r) => r.status !== "present");
     const students = await Promise.all(
       absentRows.map((r) => ctx.db.get(r.studentId)),
     );

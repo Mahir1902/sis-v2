@@ -501,6 +501,41 @@ describe("getClassReport — the denominator", () => {
     expect(emptyDay.groups.map((g) => g.levelName)).toEqual(["Grade 4"]);
   });
 
+  it("getDay counts a class marked for the date under another academic year", async () => {
+    // Rafi's enrollment and his marks live under a year that does not contain
+    // today (the school has not rolled its data over); the call list opens on
+    // the year that does, where Mina is enrolled in the same class.
+    const rafi = await seedStudent("Rafi");
+    const mina = await seedStudent("Mina");
+    await t.run((ctx) =>
+      ctx.db.insert("enrollments", {
+        studentId: rafi,
+        academicYear: yearNoSplit,
+        standardLevelId: grade4,
+        campus: campusA,
+        enrollmentType: "new_admission",
+        enrollmentDate: Date.now(),
+        status: "active",
+      }),
+    );
+    await enrol(mina, grade4, campusA);
+    await asAdmin().mutation(api.attendance.saveRegister, {
+      campus: campusA,
+      standardLevelId: grade4,
+      academicYear: yearNoSplit,
+      date: d(1),
+      marks: [{ studentId: rafi, status: "absent" }],
+    });
+
+    const day = await asAdmin().query(api.attendance.getDay, {
+      date: d(1),
+      academicYear: yearId,
+    });
+    expect(day).toMatchObject({ classesMarked: 1, classesTotal: 1 });
+    expect(day.groups[0].marked).toBe(true);
+    expect(day.groups[0].absentees.map((a) => a.studentName)).toEqual(["Rafi"]);
+  });
+
   it("returns no figure for a year without a semester split", async () => {
     const report = await asAdmin().query(api.attendance.getClassReport, {
       campus: campusA,
