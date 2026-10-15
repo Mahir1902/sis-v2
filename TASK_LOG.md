@@ -129,7 +129,7 @@ new feature work begins.
 ---
 
 ## Current Feature: Daily student attendance — PR 1 of 2, data model + server (2026-10-15)
-**Status**: ✅ COMPLETE (2026-10-15) — build · lint · 302 tests green. Screens are PR 2.
+**Status**: ✅ COMPLETE (2026-10-15) — build · lint · tests green. Screens are PR 2.
 **Active Agent**: BACKEND AGENT (spec: issue #111, design tickets #112–#119; spec §7 read first)
 
 - [x] 1. Schema (additive, no migration): `attendance` + `closures` tables, `academicYears.semester1EndDate`, `enrollments.by_academic_year`
@@ -141,7 +141,7 @@ new feature work begins.
 - [x] 7. `convex/attendance.ts` — `getRegister`, `saveRegister` (uniqueness per student+date via `by_student_date`, audit row only on status change), `getDay`, `getClassReport`, `getStudentAttendance`, `setNote`
 - [x] 8. `convex/attendance.test.ts` — mover uniqueness, audit-on-change, write gate, denominator union/closure/no-row-absent, closure confirm
 
-**Decisions logged:** `schoolDaysUnmarked` is capped at today (a mid-semester report must not flag days that have not happened). `getStudentAttendance.missedDays` lists no-row class-marked days as `absent` so the list matches the count. `convex/_generated/api.d.ts` hand-extended for the two new modules (codegen needs a deployment).
+**Decisions logged:** `schoolDaysUnmarked` is capped at today (a mid-semester report must not flag days that have not happened). `getStudentAttendance.missedDays` lists no-row class-marked days as `absent` so the list matches the count. `convex/_generated/api.d.ts` is `npx convex codegen` output. Review rounds: marking roster (`getClassRoster`) stays active-only, but `getClassReport` and `getClassesForYear` include every enrollment in the year so past years and leavers stay reportable; `studentCount` and `getDay`'s `classesTotal` count distinct active students / classes with an active student only. `closures.create` merges campuses into an existing row for the date. Dates must be real calendar days. Leaver denominators are not clipped on `exitDate` (D11) — PR 2 surfaces it.
 
 ---
 

@@ -258,9 +258,7 @@ export async function loadClassRoster(
           ),
     )
     .take(200);
-  const enrollments = [
-    ...new Map(all.map((e) => [e.studentId, e])).values(),
-  ];
+  const enrollments = [...new Map(all.map((e) => [e.studentId, e])).values()];
 
   const rows = await Promise.all(
     enrollments.map(async (e) => {
@@ -278,9 +276,10 @@ export async function loadClassRoster(
 
 /**
  * The distinct (campus, standardLevel) classes with enrollments (any status)
- * in a year; `studentCount` is distinct active students, with student counts. A class exists because students are enrolled in
- * it — there is no classes table. One range on `by_academic_year`
- * (~400 active rows per year), reduced in JS (attendance spec §7 A3).
+ * in a year; `studentCount` is distinct active students. A class exists
+ * because students are enrolled in it — there is no classes table. One range
+ * on `by_academic_year` (~400 rows per year), reduced in JS (attendance spec
+ * §7 A3).
  */
 export const getClassesForYear = query({
   args: { academicYear: v.id("academicYears") },

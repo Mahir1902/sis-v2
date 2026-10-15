@@ -501,3 +501,83 @@ describe("closures.create", () => {
     ).rejects.toThrow("real calendar day");
   });
 });
+
+describe("getRegister lock verdict and role gates", () => {
+  it("reports future / outside_window / closed per role, and gates setNote to admin", async () => {
+    const rafi = await seedStudent("Rafi");
+    await enrol(rafi, grade4, campusA);
+    const reg = (as: ReturnType<typeof asAdmin>, date: string) =>
+      as.query(api.attendance.getRegister, { ...grade4A(), date });
+
+    expect((await reg(asTeacher(), d(-1))).lockReason).toBe("future");
+    expect((await reg(asAdmin(), d(-1))).lockReason).toBe("future");
+    expect((await reg(asTeacher(), d(15))).lockReason).toBe("outside_window");
+    const adminOld = await reg(asAdmin(), d(15));
+    expect(adminOld).toMatchObject({ canWrite: true, lockReason: null });
+    expect(adminOld.students.map((s) => s.studentName)).toEqual(["Rafi"]);
+
+    await asAdmin().mutation(api.closures.create, {
+      startDate: d(1),
+      endDate: d(1),
+      campuses: [campusA],
+      reason: "Eid",
+    });
+    expect(await reg(asTeacher(), d(1))).toMatchObject({
+      canWrite: false,
+      lockReason: "closed",
+      closure: { reason: "Eid" },
+    });
+    // Removing the closure reopens the day.
+    const [closure] = await t.run((ctx) => ctx.db.query("closures").collect());
+    await asAdmin().mutation(api.closures.remove, { closureId: closure._id });
+    expect((await reg(asTeacher(), d(1))).canWrite).toBe(true);
+
+    // Teacher marks; who/when is surfaced back on the register.
+    await asTeacher().mutation(api.attendance.saveRegister, {
+      ...grade4A(),
+      date: d(1),
+      marks: [{ studentId: rafi, status: "absent" }],
+    });
+    const marked = await reg(asAdmin(), d(1));
+    expect(marked.markedBy).toEqual({ name: "Teacher" });
+    expect(marked.students[0].status).toBe("absent");
+
+    // setNote is admin-only; empty string clears it.
+    const [row] = await rowsFor(rafi);
+    await expect(
+      asTeacher().mutation(api.attendance.setNote, {
+        attendanceId: row._id,
+        note: "sick",
+      }),
+    ).rejects.toThrow("Unauthorized");
+    await asAdmin().mutation(api.attendance.setNote, {
+      attendanceId: row._id,
+      note: " sick ",
+    });
+    expect((await rowsFor(rafi))[0].note).toBe("sick");
+    await asAdmin().mutation(api.attendance.setNote, {
+      attendanceId: row._id,
+      note: "",
+    });
+    expect((await rowsFor(rafi))[0].note).toBeUndefined();
+
+    // A student account cannot read registers or write marks.
+    const studentUser = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Kid",
+        email: "kid@school.edu",
+        role: "student",
+        isActive: true,
+      }),
+    );
+    const asStudent = t.withIdentity({ subject: `${studentUser}|s` });
+    await expect(reg(asStudent, d(1))).rejects.toThrow("Unauthorized");
+    await expect(
+      asStudent.mutation(api.attendance.saveRegister, {
+        ...grade4A(),
+        date: d(1),
+        marks: [{ studentId: rafi, status: "present" }],
+      }),
+    ).rejects.toThrow("Unauthorized");
+  });
+});
