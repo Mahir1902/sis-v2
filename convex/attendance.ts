@@ -122,7 +122,6 @@ function closureMap(closures: Doc<"closures">[]) {
  */
 function tallyStudent(opts: {
   classDates: Set<string>;
-  classFirstMarked: string | null;
   classCampus: Id<"campuses">;
   studentRows: Doc<"attendance">[];
   closures: Map<string, Set<Id<"campuses">>>;
@@ -153,20 +152,28 @@ function tallyStudent(opts: {
     }
   }
 
-  const firstRow = [...byDate.keys()].sort()[0] ?? null;
-  const firstAppearance =
-    firstRow !== null &&
-    opts.classFirstMarked !== null &&
-    firstRow > opts.classFirstMarked
-      ? firstRow
-      : null;
+  // Flag 2 (§2.3) and its mirror: how many class-marked days fall before the
+  // student's first row / after their last. A mid-period joiner reads low on
+  // the first; a mid-period leaver reads low on the second. Neither changes
+  // the figure — the typist writes "joined in January" in their own words.
+  const ownDates = [...byDate.keys()].sort();
+  const firstRow = ownDates[0] ?? null;
+  const lastRow = ownDates[ownDates.length - 1] ?? null;
+  const classDates = [...opts.classDates];
+  const markedBeforeFirst =
+    firstRow === null ? 0 : classDates.filter((d) => d < firstRow).length;
+  const markedAfterLast =
+    lastRow === null ? 0 : classDates.filter((d) => d > lastRow).length;
 
   return {
     present,
     late,
     absent: denominator - present - late,
     denominator,
-    firstAppearance,
+    firstAppearance: markedBeforeFirst > 0 ? firstRow : null,
+    markedBeforeFirst,
+    lastAppearance: markedAfterLast > 0 ? lastRow : null,
+    markedAfterLast,
     missedDays,
   };
 }
@@ -418,7 +425,8 @@ export const getDay = query({
  * report-card typist reads. `periodStart: null` means the year has no
  * semester-1 end date and the screen renders "—" for everyone.
  * `schoolDaysUnmarked` (flag 1) and `firstAppearance` (flag 2) are part of
- * the figure, not decoration (spec §2.3).
+ * the figure, not decoration (spec §2.3); `lastAppearance` mirrors flag 2
+ * for a student who left mid-period.
  */
 export const getClassReport = query({
   args: { ...classArgs, semester: v.union(v.literal(1), v.literal(2)) },
@@ -471,7 +479,6 @@ export const getClassReport = query({
       students: roster.map((s, i) => {
         const { missedDays: _m, ...counts } = tallyStudent({
           classDates: cls.classDates,
-          classFirstMarked: cls.classFirstMarked,
           classCampus: args.campus,
           studentRows: studentRows[i],
           closures: cls.closures,
@@ -514,6 +521,9 @@ export const getStudentAttendance = query({
       absent: 0,
       denominator: 0,
       firstAppearance: null,
+      markedBeforeFirst: 0,
+      lastAppearance: null,
+      markedAfterLast: 0,
       missedDays: [],
     };
     const period = semesterPeriod(year, args.semester);
@@ -545,7 +555,6 @@ export const getStudentAttendance = query({
       periodEnd: period.end,
       ...tallyStudent({
         classDates: classPeriod.classDates,
-        classFirstMarked: classPeriod.classFirstMarked,
         classCampus: cls.campus,
         studentRows,
         closures: classPeriod.closures,

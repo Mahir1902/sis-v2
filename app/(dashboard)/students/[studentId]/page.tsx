@@ -10,19 +10,21 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { AcademicHistoryTab } from "./_components/AcademicHistoryTab";
+import { AttendanceTab } from "./_components/AttendanceTab";
 import { FeesTab } from "./_components/FeesTab";
 import { GradesTab } from "./_components/GradesTab";
 import { ReportCardsTab } from "./_components/ReportCardsTab";
 import { StudentHeader } from "./_components/StudentHeader";
 import { StudentInfoSidebar } from "./_components/StudentInfoSidebar";
 
-type Tab = "fees" | "academic" | "grades" | "reports";
+type Tab = "fees" | "academic" | "grades" | "reports" | "attendance";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "fees", label: "Fees" },
   { id: "grades", label: "Grades" },
   { id: "academic", label: "Academic History" },
   { id: "reports", label: "Report Cards" },
+  { id: "attendance", label: "Attendance" },
 ];
 
 export default function StudentDetailPage() {
@@ -154,6 +156,9 @@ export default function StudentDetailPage() {
               )}
               {activeTab === "reports" && (
                 <ReportCardsTab studentId={studentId} />
+              )}
+              {activeTab === "attendance" && (
+                <AttendanceTab studentId={studentId} />
               )}
             </ErrorBoundary>
           </div>

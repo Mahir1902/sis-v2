@@ -2,6 +2,40 @@
 
 ---
 
+## Current Feature: Daily attendance — PR 2 of 2, the screens (issue #111, 2026-10-15)
+**Status**: Review — `tsc --noEmit` clean · `biome check` clean · `npm run build` clean · 370/370 vitest green (7 new in `app/(dashboard)/attendance/page.test.tsx`, 1 new in `convex/attendance.test.ts`, 7 new in `lib/attendanceView.test.ts`)
+**Active Agent**: CODING AGENT (Firstmate crewmate; implementation done inline, review via the no-mistakes pipeline)
+
+Server side (schema, `convex/attendance.ts`, `convex/closures.ts`, roster queries,
+`academicYears.update`) merged in PR 1 (#126). This PR adds the surfaces of spec §5.
+
+### Devil's Advocate Findings
+- Concern: a teacher navigates to a date outside the 14-day window and marks thirty rows before learning it is locked → Mitigation: `getRegister.lockReason` drives an amber banner on arrival and the rows are not tappable; the date input only bounds `max=today` because locked days must stay readable (spec §5.3).
+- Concern: green "Present" on every untouched row looks marked → Mitigation: the save button carries the signal ("Confirm all N present" + hint) exactly as §5.3 requires; nothing is written until pressed.
+- Concern: a stale override map after saving or switching class/date re-applies old taps → Mitigation: overrides are keyed by class+date and cleared on save success; the server result is the base.
+- Concern: a withdrawn student reads low (counted absent after leaving) → Mitigation: smallest server change — `tallyStudent` also returns `lastAppearance` / `markedAfterLast` (mirrors `firstAppearance`); the percentage rule and D11 are untouched.
+- Concern: closures merge per date and keep the earlier reason, which looks like a silent failure → Mitigation: the add form shows the existing closure for a typed start date before submit.
+- Concern: double-submit of the closure form → Mitigation: button disabled while `isSubmitting`; `closures.create` is idempotent per date (merges campuses).
+- Concern: `/attendance/today` renders nothing for a marked class with nobody absent → Accepted per spec §5.4; header count carries the accounting.
+
+### Sub-tasks
+- [x] 1. `convex/attendance.ts` — `lastAppearance`/`markedAfterLast` (+ `markedBeforeFirst`) on `getClassReport` and `getStudentAttendance`; test.
+- [x] 2. `lib/attendanceView.ts` pure copy/label helpers + test; `hooks/use-attendance-class.ts` (last class remembered), `hooks/use-attendance-register.ts` (tap cycle, tally, button copy).
+- [x] 3. Sidebar lines + `app/(dashboard)/attendance/layout.tsx` (RoleGate admin+teacher, tab strip).
+- [x] 4. `/admin/calendar` — closures list, add form (RHF+Zod, campus ticks default all, void-confirm dialog, merge hint), semester-1 end date per year.
+- [x] 5. `/attendance` — the register, all seven states.
+- [x] 6. `/attendance/today` — morning call list.
+- [x] 7. `/attendance/report` — class term report with both flags + leaver warning.
+- [x] 8. Student detail → fifth "Attendance" tab.
+- [x] 9. tsc / build / lint / vitest green — 2026-10-15. no-mistakes pipeline review: pending.
+
+## Decisions Made
+- 2026-10-15 Native `<input type="date">` for the date stepper and calendar form instead of the react-day-picker Calendar — ponytail rung 3, and `max=today` is the only bound the register needs.
+- 2026-10-15 The report's "note" column carries the computed flags in words (first/last appearance, "never appears in this period's register") rather than a non-persisted text box — it is what the typist transcribes from, and an input nobody saves would mislead.
+- 2026-10-15 Appearance warnings count days server-side (`markedBeforeFirst` / `markedAfterLast`) because the screen has no access to the class's marked-date set.
+
+---
+
 ## Current Feature: Import transform — derivations, validation, warnings (issue #96) (2026-08-07)
 **Status**: ✅ COMPLETE — `tsc --noEmit` clean · `biome check` clean · `npm run build` clean · 400/400 unit tests green (80 in `studentImportMapping.test.ts`)
 **Active Agent**: BACKEND AGENT — issue #96 of map #80 (spec §2, §3, §11, §12)

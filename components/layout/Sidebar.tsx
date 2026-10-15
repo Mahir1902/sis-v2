@@ -5,8 +5,10 @@ import {
   ArrowUpCircle,
   BarChart3,
   BookOpen,
+  CalendarOff,
   ChevronLeft,
   ChevronRight,
+  ClipboardCheck,
   ClipboardList,
   DollarSign,
   GraduationCap,
@@ -60,6 +62,14 @@ const navGroups: NavGroup[] = [
     label: "Student Management",
     items: [
       { href: "/students", label: "Students", icon: Users },
+      // roles written explicitly (spec §5.1): a future student account must
+      // not inherit this the way the /students line above would let it.
+      {
+        href: "/attendance",
+        label: "Attendance",
+        icon: ClipboardCheck,
+        roles: ["admin", "teacher"],
+      },
       {
         href: "/student-fees",
         label: "Student Fees",
@@ -89,6 +99,7 @@ const navGroups: NavGroup[] = [
         icon: Upload,
       },
       { href: "/admin/audit-log", label: "Audit Log", icon: ClipboardList },
+      { href: "/admin/calendar", label: "School Calendar", icon: CalendarOff },
       { href: "/admin/settings", label: "Settings", icon: Settings },
     ],
   },
