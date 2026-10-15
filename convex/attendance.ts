@@ -156,7 +156,10 @@ function tallyStudent(opts: {
   // student's first row / after their last. A mid-period joiner reads low on
   // the first; a mid-period leaver reads low on the second. Neither changes
   // the figure — the typist writes "joined in January" in their own words.
-  const ownDates = [...byDate.keys()].sort();
+  const ownDates = [...byDate.entries()]
+    .filter(([date, row]) => !opts.closures.get(date)?.has(row.campus))
+    .map(([date]) => date)
+    .sort();
   const firstRow = ownDates[0] ?? null;
   const lastRow = ownDates[ownDates.length - 1] ?? null;
   const classDates = [...opts.classDates];

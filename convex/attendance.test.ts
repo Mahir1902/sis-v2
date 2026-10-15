@@ -412,6 +412,40 @@ describe("getClassReport — the denominator", () => {
     expect(mine).toMatchObject({ lastAppearance: d(5), markedAfterLast: 3 });
   });
 
+  it("ignores a leaver's row on a closed day when naming their last appearance", async () => {
+    const rafi = await seedStudent("Rafi");
+    const lina = await seedStudent("Lina");
+    await Promise.all([rafi, lina].map((s) => enrol(s, grade4, campusA)));
+    const mark = (date: string, ids: Id<"students">[]) =>
+      asAdmin().mutation(api.attendance.saveRegister, {
+        ...grade4A(),
+        date,
+        marks: ids.map((studentId) => ({ studentId, status: "present" })),
+      });
+    await mark(d(5), [rafi, lina]);
+    await mark(d(4), [rafi, lina]);
+    await mark(d(3), [rafi]);
+    await mark(d(2), [rafi]);
+    await asAdmin().mutation(api.closures.create, {
+      startDate: d(4),
+      endDate: d(4),
+      campuses: [campusA],
+      reason: "hartal",
+      confirmVoid: true,
+    });
+
+    const report = await asAdmin().query(api.attendance.getClassReport, {
+      ...grade4A(),
+      semester: 1,
+    });
+    const lina4 = report.students.find((s) => s.studentName === "Lina");
+    expect(lina4).toMatchObject({
+      lastAppearance: d(5),
+      markedAfterLast: 2,
+      denominator: 3,
+    });
+  });
+
   it("counts distinct active students per class in the year's class list", async () => {
     const rafi = await seedStudent("Rafi");
     const mina = await seedStudent("Mina");

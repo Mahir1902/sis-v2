@@ -16,8 +16,8 @@ const STORAGE_KEY = "attendance.lastClass";
 
 /**
  * The register unit (campus, level, year) chosen on the attendance screens.
- * The last class is remembered in localStorage and restored on open (spec
- * §5.3); the year defaults to the one containing today.
+ * The last campus and level are remembered in localStorage and restored on
+ * open (spec §5.3); the year always defaults to the one containing today.
  */
 export function useAttendanceClass() {
   const campuses = useQuery(api.campus.list);
@@ -29,7 +29,12 @@ export function useAttendanceClass() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setSelection(JSON.parse(saved) as Partial<ClassKey>);
+      if (saved) {
+        const { campus, standardLevelId } = JSON.parse(
+          saved,
+        ) as Partial<ClassKey>;
+        setSelection({ campus, standardLevelId });
+      }
     } catch {
       // ponytail: a corrupt entry just means "nothing remembered"
     }
@@ -46,7 +51,13 @@ export function useAttendanceClass() {
     setSelection((s) => {
       const next = { ...s, ...patch };
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            campus: next.campus,
+            standardLevelId: next.standardLevelId,
+          }),
+        );
       } catch {
         // storage unavailable — selection still works for this visit
       }

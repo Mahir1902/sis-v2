@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { AlertTriangle, Phone, PhoneCall } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AcademicYearSelect } from "@/components/shared/AcademicYearSelect";
@@ -247,6 +247,11 @@ function NoteLine({
 }) {
   const setNote = useMutation(api.attendance.setNote);
   const [draft, setDraft] = useState(note ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) setDraft(note ?? "");
+  }, [note]);
 
   if (!canNote) {
     return note ? <p className="mt-0.5 text-xs text-gray-600">{note}</p> : null;
@@ -264,6 +269,7 @@ function NoteLine({
 
   return (
     <Input
+      ref={inputRef}
       aria-label="Reason"
       placeholder="Reason (e.g. sick, family travel)"
       className="mt-1 h-8 text-xs"

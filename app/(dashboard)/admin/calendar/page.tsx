@@ -301,12 +301,18 @@ function AddClosureForm({
   async function submit(values: ClosureValues, confirmVoid = false) {
     try {
       const result = await create({
-        ...values,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        reason: values.reason,
         campuses: values.campuses as Id<"campuses">[],
         confirmVoid,
       });
       if (!result.ok) {
-        setPending({ ...values, ...result });
+        setPending({
+          ...values,
+          markCount: result.markCount,
+          classCount: result.classCount,
+        });
         return;
       }
       toast.success(
