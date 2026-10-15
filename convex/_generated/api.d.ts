@@ -8,19 +8,17 @@
  * @module
  */
 
-import type * as _e2eTemp from "../_e2eTemp.js";
-import type * as _gradingFixtureSpec from "../_gradingFixtureSpec.js";
-import type * as _seedGradingAnalytics from "../_seedGradingAnalytics.js";
 import type * as _seedGradingFixture from "../_seedGradingFixture.js";
-import type * as _seedLongitudinalHistory from "../_seedLongitudinalHistory.js";
 import type * as academicYears from "../academicYears.js";
 import type * as assessmentQuestions from "../assessmentQuestions.js";
 import type * as assessments from "../assessments.js";
 import type * as assignFee from "../assignFee.js";
+import type * as attendance from "../attendance.js";
 import type * as auditLogs from "../auditLogs.js";
 import type * as auth from "../auth.js";
 import type * as backfillEnrollments from "../backfillEnrollments.js";
 import type * as campus from "../campus.js";
+import type * as closures from "../closures.js";
 import type * as computedGrades from "../computedGrades.js";
 import type * as dashboard from "../dashboard.js";
 import type * as discounts from "../discounts.js";
@@ -30,6 +28,7 @@ import type * as feeStructure from "../feeStructure.js";
 import type * as feeTransactions from "../feeTransactions.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
+import type * as lib_attendancePermissions from "../lib/attendancePermissions.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as migrations from "../migrations.js";
 import type * as promotions from "../promotions.js";
@@ -54,19 +53,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  _e2eTemp: typeof _e2eTemp;
-  _gradingFixtureSpec: typeof _gradingFixtureSpec;
-  _seedGradingAnalytics: typeof _seedGradingAnalytics;
   _seedGradingFixture: typeof _seedGradingFixture;
-  _seedLongitudinalHistory: typeof _seedLongitudinalHistory;
   academicYears: typeof academicYears;
   assessmentQuestions: typeof assessmentQuestions;
   assessments: typeof assessments;
   assignFee: typeof assignFee;
+  attendance: typeof attendance;
   auditLogs: typeof auditLogs;
   auth: typeof auth;
   backfillEnrollments: typeof backfillEnrollments;
   campus: typeof campus;
+  closures: typeof closures;
   computedGrades: typeof computedGrades;
   dashboard: typeof dashboard;
   discounts: typeof discounts;
@@ -76,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   feeTransactions: typeof feeTransactions;
   http: typeof http;
   invites: typeof invites;
+  "lib/attendancePermissions": typeof lib_attendancePermissions;
   "lib/permissions": typeof lib_permissions;
   migrations: typeof migrations;
   promotions: typeof promotions;
