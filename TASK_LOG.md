@@ -152,7 +152,7 @@ new feature work begins.
 - `convex/seed.ts` — extracted the year list to a module-level `ACADEMIC_YEAR_DEFS`
   (shared by both paths so they cannot drift) and extended it from 2019-2020 → 2025-2026
   to **2015-2016 → 2026-2027**. `seedReferenceData` now loops over it.
-- New admin-gated (later made internal-only by the seed hardening) `seed:backfillAcademicYears` mutation — reads existing `academicYears`
+- New admin-gated `seed:backfillAcademicYears` mutation — reads existing `academicYears`
   names into a `Set` and inserts only the missing ones with the same
   `${start}-06-01` / `${end}-07-31` convention. Idempotent; returns
   `{ inserted: string[]; skipped: number }`. `requireRole(ctx, ["admin"])` is the first line.

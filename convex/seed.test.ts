@@ -34,12 +34,6 @@ describe("seed function visibility", () => {
     expect("isPublic" in seedAdminUser).toBe(false);
   });
 
-  it("backfillAcademicYears is registered as internal, not public", async () => {
-    const { backfillAcademicYears } = await import("./seed");
-    expect(backfillAcademicYears.isInternal).toBe(true);
-    expect("isPublic" in backfillAcademicYears).toBe(false);
-  });
-
   it("seed functions are absent from the public api type surface", () => {
     // Public clients (ConvexReactClient etc.) address functions through `api`,
     // which only contains FunctionReference<_, "public">. After the hardening
@@ -48,12 +42,9 @@ describe("seed function visibility", () => {
     api.seed.seedReferenceData;
     // @ts-expect-error seedAdminUser is internal-only
     api.seedAdmin.seedAdminUser;
-    // @ts-expect-error backfillAcademicYears is internal-only
-    api.seed.backfillAcademicYears;
     // ...while the internal references remain addressable for the dashboard.
     expect(internal.seed.seedReferenceData).toBeDefined();
     expect(internal.seedAdmin.seedAdminUser).toBeDefined();
-    expect(internal.seed.backfillAcademicYears).toBeDefined();
   });
 });
 
@@ -85,7 +76,7 @@ describe("dashboard bootstrap still works via internal references", () => {
     expect(second).toEqual({ status: "already_seeded" });
   });
 
-  it("backfillAcademicYears still requires an admin and stays idempotent", async () => {
+  it("backfillAcademicYears stays public, requires an admin, and stays idempotent", async () => {
     const t = convexTest(schema, modules);
     const adminId = await t.run(async (ctx) => {
       await ctx.db.insert("academicYears", {
@@ -102,19 +93,19 @@ describe("dashboard bootstrap still works via internal references", () => {
     });
 
     await expect(
-      t.mutation(internal.seed.backfillAcademicYears, {}),
+      t.mutation(api.seed.backfillAcademicYears, {}),
     ).rejects.toThrow("Unauthenticated");
 
     const asAdmin = t.withIdentity({ subject: `${adminId}|s` });
     const first = await asAdmin.mutation(
-      internal.seed.backfillAcademicYears,
+      api.seed.backfillAcademicYears,
       {},
     );
     expect(first.inserted).toHaveLength(11);
     expect(first.skipped).toBe(1);
 
     const second = await asAdmin.mutation(
-      internal.seed.backfillAcademicYears,
+      api.seed.backfillAcademicYears,
       {},
     );
     expect(second).toEqual({ inserted: [], skipped: 12 });

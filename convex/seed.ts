@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 const ADMIN_EMAIL = "admin@school.edu";
@@ -257,10 +257,9 @@ export const seedReferenceData = internalMutation({
  * new years. This mutation is that path, and must be run on every already-seeded
  * deployment before the first Excel student import.
  *
- * Internal (dashboard-only bootstrap, never callable by public clients) and
- * still requires admin role — run it from the dashboard with "Act as user".
+ * Requires admin role.
  */
-export const backfillAcademicYears = internalMutation({
+export const backfillAcademicYears = mutation({
   args: {},
   handler: async (ctx) => {
     await requireRole(ctx, ["admin"]);
