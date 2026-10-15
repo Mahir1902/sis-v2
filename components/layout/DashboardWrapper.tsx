@@ -89,7 +89,12 @@ export function DashboardWrapper({ children }: { children: React.ReactNode }) {
           isCollapsed ? "pl-16" : "pl-[300px]",
         )}
       >
-        <div className="flex-1 min-h-0 overflow-auto p-6">{children}</div>
+        {/* Padding lives inside the scroller: a scroll container's own padding
+            shrinks the area `sticky` elements pin to, so a `sticky bottom-0`
+            bar would float 24px above the real bottom edge. */}
+        <div className="flex-1 min-h-0 overflow-auto">
+          <div className="p-6">{children}</div>
+        </div>
       </main>
     </div>
   );

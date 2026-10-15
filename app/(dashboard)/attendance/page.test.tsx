@@ -56,16 +56,22 @@ describe("/attendance register", () => {
     expect(screen.getByText("Choose a class")).toBeInTheDocument();
   });
 
-  it("fresh day: everyone present, a tap cycles the row and the button carries the tally", () => {
+  it("fresh day: everyone present, one tap on a segment sets the row and the button carries the tally", () => {
     queries.set("attendance:getRegister", register());
     render(<AttendanceRegisterPage />);
     expect(
       screen.getByRole("button", { name: "Confirm all 3 present" }),
     ).toBeInTheDocument();
     expect(screen.getByText(/Nothing tapped yet/)).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Rafi: present" })).toBeVisible();
+    expect(
+      screen.getByRole("radio", { name: "Mark Rafi present" }),
+    ).toHaveAttribute("aria-checked", "true");
 
-    const row = screen.getByRole("button", { name: /^Rafi: present/ });
-    fireEvent.click(row);
+    fireEvent.click(screen.getByRole("radio", { name: "Mark Rafi absent" }));
+    expect(
+      screen.getByRole("radio", { name: "Mark Rafi absent" }),
+    ).toHaveAttribute("aria-checked", "true");
     expect(
       screen.getByRole("button", {
         name: "Save — 2 present · 0 late · 1 absent",
@@ -75,12 +81,19 @@ describe("/attendance register", () => {
       screen.getByRole("list", { name: "Marked exceptions" }),
     ).toHaveTextContent("Rafi");
 
-    fireEvent.click(screen.getByRole("button", { name: /^Rafi: absent/ }));
+    // Straight from absent to late — no cycling through present.
+    fireEvent.click(screen.getByRole("radio", { name: "Mark Rafi late" }));
     expect(
       screen.getByRole("button", {
         name: "Save — 2 present · 1 late · 0 absent",
       }),
     ).toBeInTheDocument();
+
+    // Tapping the selected segment again keeps it selected.
+    fireEvent.click(screen.getByRole("radio", { name: "Mark Rafi late" }));
+    expect(
+      screen.getByRole("radio", { name: "Mark Rafi late" }),
+    ).toHaveAttribute("aria-checked", "true");
 
     // Removing the chip returns the row to present.
     fireEvent.click(screen.getByRole("button", { name: /Rafi late — tap/ }));
@@ -92,7 +105,7 @@ describe("/attendance register", () => {
   it("saves one mark per student on the roster", async () => {
     queries.set("attendance:getRegister", register());
     render(<AttendanceRegisterPage />);
-    fireEvent.click(screen.getByRole("button", { name: /^Mina: present/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Mark Mina absent" }));
     fireEvent.click(screen.getByRole("button", { name: /^Save — 2 present/ }));
     await vi.waitFor(() => expect(saveRegister).toHaveBeenCalledTimes(1));
     expect(saveRegister.mock.calls[0][0]).toMatchObject({
@@ -145,9 +158,11 @@ describe("/attendance register", () => {
     expect(
       screen.getByRole("button", { name: "Confirm all 3 present" }),
     ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: /^Rafi: present/ }),
-    ).toBeDisabled();
+    for (const s of ["present", "late", "absent"]) {
+      expect(
+        screen.getByRole("radio", { name: `Mark Rafi ${s}` }),
+      ).toBeDisabled();
+    }
   });
 
   it("outside the window: amber banner names the office, register stays readable", () => {
@@ -158,6 +173,12 @@ describe("/attendance register", () => {
     render(<AttendanceRegisterPage />);
     expect(screen.getByRole("status")).toHaveTextContent(/ask the office/i);
     expect(screen.getByText("Rafi")).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: "Mark Rafi present" }),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      screen.getByRole("radio", { name: "Mark Rafi absent" }),
+    ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Confirm all 3 present" }),
     ).toBeDisabled();
