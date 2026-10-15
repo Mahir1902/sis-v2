@@ -17,10 +17,11 @@ saved under `2026-2027` shows "1 of 1 class marked".
 ### Devil's Advocate Findings
 - Concern: re-persist the year so both pages agree → Rejected: PR #127's review dropped year memory on purpose (stale year after rollover); the smaller fix is in `getDay`.
 - Concern: dropping the year filter mixes years → Accepted: marks are matched by (campus, level); the year argument still decides which classes are *expected*. A date's marks belong to that date, whichever year record the register was saved under.
-- Concern: a marked class whose (campus, level) is absent from the selected year → unchanged from before (those rows were dropped by the year filter too); the other year's list shows them.
+- Concern: a marked class whose (campus, level) is absent from the selected year → unchanged from before (those rows were dropped by the year filter too); the other year's list shows them. **Reopened 2026-10-15 (PR #129 follow-up):** this is the captain's real case — the school's roster sits in last year's record and this year's record has other classes, so the class and every Update to it were invisible on the call list. `getDay` now lists such a class from its rows.
 
 ### Sub-tasks
 - [x] 1. `convex/attendance.ts` `getDay` — derive marked classes and absentees from every row on the date; one `by_date` range kept. Regression test in `convex/attendance.test.ts` (fails on the pre-fix code).
+- [x] 2. `getDay` — a class with marks on the date but no enrollment in the selected year is appended to the groups (names from the campus/level docs, `studentCount` = rows on the date) so it counts in "N of M" and its absentees show. Reproduced end to end on a throwaway local backend (register saved under 2025-2026 for a Grade 4 that only exists there; call list on 2026-2027 with a Grade 3): before, "0 of 1 class marked" and no Grade 4 after Update to absent/late; after, "1 of 2 classes marked · 1 to call" with Rafi absent, then late. Regression test "getDay lists a class marked under a year where the call list's year has no such class, and follows updates" (fails on the pre-fix code).
 
 ---
 
