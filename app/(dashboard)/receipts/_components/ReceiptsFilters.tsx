@@ -204,7 +204,7 @@ function StudentPicker({
                     onSelect={() => {
                       onSelect(
                         s._id,
-                        `${s.studentFullName} (${s.studentNumber})`,
+                        `${s.studentFullName ?? "Name not recorded"} (${s.studentNumber})`,
                       );
                       setOpen(false);
                       setSearchQuery("");

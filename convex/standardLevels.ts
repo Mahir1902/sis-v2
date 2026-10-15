@@ -1,6 +1,26 @@
 import { query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
+/** Progression order of level codes (PG → Grade 12). */
+export const LEVEL_CODE_ORDER = [
+  "PG",
+  "NUR",
+  "KG1",
+  "KG2",
+  "01",
+  "02",
+  "03",
+  "04",
+  "05",
+  "06",
+  "07",
+  "08",
+  "09",
+  "10",
+  "11",
+  "12",
+];
+
 /** List all standard levels in progression order (PG → Grade 12). */
 export const list = query({
   args: {},
@@ -21,26 +41,9 @@ export const list = query({
     );
 
     // Fallback: sort by code if linked list walk fails
-    const codeOrder = [
-      "PG",
-      "NUR",
-      "KG1",
-      "KG2",
-      "01",
-      "02",
-      "03",
-      "04",
-      "05",
-      "06",
-      "07",
-      "08",
-      "09",
-      "10",
-      "11",
-      "12",
-    ];
     return levels.sort(
-      (a, b) => codeOrder.indexOf(a.code) - codeOrder.indexOf(b.code),
+      (a, b) =>
+        LEVEL_CODE_ORDER.indexOf(a.code) - LEVEL_CODE_ORDER.indexOf(b.code),
     );
   },
 });

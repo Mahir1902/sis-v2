@@ -25,13 +25,19 @@ describe("seed function visibility", () => {
   it("seedReferenceData is registered as internal, not public", async () => {
     const { seedReferenceData } = await import("./seed");
     expect(seedReferenceData.isInternal).toBe(true);
-    expect(seedReferenceData.isPublic).toBeUndefined();
+    expect("isPublic" in seedReferenceData).toBe(false);
   });
 
   it("seedAdminUser is registered as internal, not public", async () => {
     const { seedAdminUser } = await import("./seedAdmin");
     expect(seedAdminUser.isInternal).toBe(true);
-    expect(seedAdminUser.isPublic).toBeUndefined();
+    expect("isPublic" in seedAdminUser).toBe(false);
+  });
+
+  it("backfillAcademicYears is registered as internal, not public", async () => {
+    const { backfillAcademicYears } = await import("./seed");
+    expect(backfillAcademicYears.isInternal).toBe(true);
+    expect("isPublic" in backfillAcademicYears).toBe(false);
   });
 
   it("seed functions are absent from the public api type surface", () => {
@@ -42,9 +48,12 @@ describe("seed function visibility", () => {
     api.seed.seedReferenceData;
     // @ts-expect-error seedAdminUser is internal-only
     api.seedAdmin.seedAdminUser;
+    // @ts-expect-error backfillAcademicYears is internal-only
+    api.seed.backfillAcademicYears;
     // ...while the internal references remain addressable for the dashboard.
     expect(internal.seed.seedReferenceData).toBeDefined();
     expect(internal.seedAdmin.seedAdminUser).toBeDefined();
+    expect(internal.seed.backfillAcademicYears).toBeDefined();
   });
 });
 
@@ -64,7 +73,7 @@ describe("dashboard bootstrap still works via internal references", () => {
       discountRules: (await ctx.db.query("discountRules").collect()).length,
     }));
     expect(counts).toEqual({
-      academicYears: 7,
+      academicYears: 12,
       campuses: 3,
       standardLevels: 16,
       gradeMapping: 6,
@@ -74,6 +83,41 @@ describe("dashboard bootstrap still works via internal references", () => {
 
     const second = await t.mutation(internal.seed.seedReferenceData, {});
     expect(second).toEqual({ status: "already_seeded" });
+  });
+
+  it("backfillAcademicYears still requires an admin and stays idempotent", async () => {
+    const t = convexTest(schema, modules);
+    const adminId = await t.run(async (ctx) => {
+      await ctx.db.insert("academicYears", {
+        name: "2024-2025",
+        startDate: 0,
+        endDate: 1,
+      });
+      return ctx.db.insert("users", {
+        name: "Admin",
+        email: "admin@school.edu",
+        role: "admin",
+        isActive: true,
+      });
+    });
+
+    await expect(
+      t.mutation(internal.seed.backfillAcademicYears, {}),
+    ).rejects.toThrow("Unauthenticated");
+
+    const asAdmin = t.withIdentity({ subject: `${adminId}|s` });
+    const first = await asAdmin.mutation(
+      internal.seed.backfillAcademicYears,
+      {},
+    );
+    expect(first.inserted).toHaveLength(11);
+    expect(first.skipped).toBe(1);
+
+    const second = await asAdmin.mutation(
+      internal.seed.backfillAcademicYears,
+      {},
+    );
+    expect(second).toEqual({ inserted: [], skipped: 12 });
   });
 
   it("seedAdminUser creates the admin account and stays idempotent", async () => {

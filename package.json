@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS=--no-network-family-autoselection next dev",
     "build": "next build",
     "start": "next start",
     "lint": "biome check",
@@ -33,6 +33,7 @@
     "react-dom": "19.2.4",
     "react-dropzone": "^15.0.0",
     "react-hook-form": "^7.72.1",
+    "read-excel-file": "^9.3.5",
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",

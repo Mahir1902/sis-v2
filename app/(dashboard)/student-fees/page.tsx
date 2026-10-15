@@ -27,7 +27,11 @@ import {
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-function getInitials(name: string) {
+// `name` is optional because `students.studentFullName` was widened for the
+// Excel import (#93). An unnamed record shows an em-dash, never invented
+// initials.
+function getInitials(name: string | undefined) {
+  if (!name) return "—";
   return name
     .split(" ")
     .map((n) => n[0])
@@ -80,7 +84,10 @@ function StudentFeesPageContent() {
   const filtered = students.filter((s) => {
     const matchesSearch =
       !search ||
-      s.studentFullName.toLowerCase().includes(search.toLowerCase()) ||
+      // An unnamed student is still findable by student number; it just never
+      // matches a name search rather than matching on a stand-in value.
+      (s.studentFullName?.toLowerCase().includes(search.toLowerCase()) ??
+        false) ||
       s.studentNumber.toLowerCase().includes(search.toLowerCase());
     const matchesYear =
       selectedYearId === "all" || s.academicYear === selectedYearId;
@@ -178,7 +185,7 @@ function StudentFeeRow({
 }: {
   student: {
     _id: Id<"students">;
-    studentFullName: string;
+    studentFullName?: string;
     studentNumber: string;
     studentPhotoUrl?: string | null;
     standardLevelName?: string;
@@ -211,7 +218,7 @@ function StudentFeeRow({
                   ? student.studentPhotoUrl
                   : undefined
               }
-              alt={student.studentFullName}
+              alt={student.studentFullName ?? student.studentNumber}
             />
             <AvatarFallback className="text-xs bg-school-green/10 text-school-green">
               {getInitials(student.studentFullName)}
@@ -219,7 +226,9 @@ function StudentFeeRow({
           </Avatar>
           <div>
             <p className="font-medium text-sm text-gray-900">
-              {student.studentFullName}
+              {student.studentFullName ?? (
+                <span className="italic text-gray-400">Name not recorded</span>
+              )}
             </p>
             <p className="text-xs text-gray-500">{student.studentNumber}</p>
           </div>

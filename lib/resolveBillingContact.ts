@@ -11,19 +11,24 @@
 
 export type PrimaryBillingContact = "father" | "mother" | "guardian";
 
+// The three name fields are optional because `students` was widened for the
+// Excel import (#93) — an imported record may carry an email for a parent
+// whose name was never recorded. `name` is therefore nullable on the way out;
+// callers that need a name (e.g. freezing a receipt payer) must refuse rather
+// than substitute a stand-in.
 export interface BillingContactInput {
   primaryBillingContact: PrimaryBillingContact;
-  fatherName: string;
+  fatherName?: string;
   fatherEmail?: string;
-  motherName: string;
+  motherName?: string;
   motherEmail?: string;
-  guardianName: string;
+  guardianName?: string;
   guardianEmail?: string;
 }
 
 export interface BillingContact {
   contactType: PrimaryBillingContact;
-  name: string;
+  name: string | undefined;
   email: string | undefined;
   hasEmail: boolean;
 }
@@ -43,7 +48,7 @@ export function resolveBillingContact(
 }
 
 function pickContact(student: BillingContactInput): {
-  name: string;
+  name: string | undefined;
   rawEmail: string | undefined;
 } {
   switch (student.primaryBillingContact) {

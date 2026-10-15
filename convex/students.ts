@@ -120,6 +120,9 @@ export const createStudent = mutation({
  * Get all students with optional server-side filters.
  * Pre-fetches lookup tables to avoid N+1 reads.
  * Returns a slim projection for the list view.
+ *
+ * `status: ["unspecified"]` is a filter-only sentinel meaning "no status on
+ * record" — it is never a stored value, so `updateStudentStatus` rejects it.
  */
 export const getAllStudents = query({
   args: {
@@ -137,6 +140,9 @@ export const getAllStudents = query({
           v.literal("withdrawn"),
           v.literal("suspended"),
           v.literal("expelled"),
+          // UI sentinel (#95) for "no status on record" — imported students
+          // (#93) have no status and would otherwise be unfilterable.
+          v.literal("unspecified"),
         ),
       ),
     ),
@@ -177,7 +183,12 @@ export const getAllStudents = query({
     if (args.status && args.status.length > 0) {
       const statuses = args.status;
       q = q.filter((qb) =>
-        qb.or(...statuses.map((s) => qb.eq(qb.field("status"), s))),
+        qb.or(
+          ...statuses.map((s) =>
+            // "unspecified" means the field is absent, not a stored value.
+            qb.eq(qb.field("status"), s === "unspecified" ? undefined : s),
+          ),
+        ),
       );
     }
 
@@ -234,7 +245,10 @@ export const getStudentById = query({
     ] = await Promise.all([
       ctx.db.get(student.standardLevel),
       ctx.db.get(student.academicYear),
-      ctx.db.get(student.campus),
+      // `campus` is optional since the import widening (#93) — a student whose
+      // CAMPUS cell was blank has no campus to resolve, so `campusDoc` is null
+      // and the UI renders an em-dash rather than a fabricated campus name.
+      student.campus ? ctx.db.get(student.campus) : null,
       student.studentPhotoUrl
         ? ctx.storage.getUrl(student.studentPhotoUrl)
         : null,
@@ -301,7 +315,9 @@ export const updateStudentStatus = mutation({
       action: "status_change",
       entityType: "students",
       entityId: args.studentId,
-      description: `Changed student ${student.studentFullName} status from ${oldStatus} to ${args.status}`,
+      // Imported students (#93) may have neither a name nor a prior status,
+      // and this is the flow that first sets one — never write "undefined".
+      description: `Changed student ${student.studentFullName ?? student.studentNumber} status from ${oldStatus ?? "unspecified"} to ${args.status}`,
       metadata: { oldStatus, newStatus: args.status },
     });
 
@@ -380,14 +396,18 @@ export const getSiblingsByStudent = query({
         if (!sibling) return null;
         const [level, campus] = await Promise.all([
           ctx.db.get(sibling.standardLevel),
-          ctx.db.get(sibling.campus),
+          // Optional since #93 — see `getStudentById`.
+          sibling.campus ? ctx.db.get(sibling.campus) : null,
         ]);
         return {
           _id: sibling._id,
+          // `studentFullName`, `campusName` and `status` may be undefined for
+          // imported records. They are returned as-is rather than filled with
+          // an "Unknown" placeholder — the caller omits what it cannot show.
           studentFullName: sibling.studentFullName,
           studentNumber: sibling.studentNumber,
-          standardLevelName: level?.name ?? "Unknown",
-          campusName: campus?.name ?? "Unknown",
+          standardLevelName: level?.name,
+          campusName: campus?.name,
           status: sibling.status,
         };
       }),
