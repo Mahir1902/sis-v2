@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { dhakaDate, shiftDate } from "../lib/attendanceDate";
+import { dhakaDate, isDateLabel, shiftDate } from "../lib/attendanceDate";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type QueryCtx, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
@@ -63,8 +63,6 @@ export const list = query({
   },
 });
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
  * Close every date in an inclusive range for the given campuses.
  * Counts existing attendance marks on those dates; if any exist and
@@ -83,8 +81,8 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
 
-    if (!DATE_RE.test(args.startDate) || !DATE_RE.test(args.endDate)) {
-      throw new Error("Dates must be YYYY-MM-DD");
+    if (!isDateLabel(args.startDate) || !isDateLabel(args.endDate)) {
+      throw new Error("Dates must be real calendar days as YYYY-MM-DD");
     }
     if (args.startDate > args.endDate) {
       throw new Error("Start date must not be after end date");
@@ -129,13 +127,23 @@ export const create = mutation({
       date <= args.endDate;
       date = shiftDate(date, 1)
     ) {
-      await ctx.db.insert("closures", {
-        date,
-        campuses,
-        reason,
-        createdBy: user._id,
-        createdAt: now,
-      });
+      const existing = await ctx.db
+        .query("closures")
+        .withIndex("by_date", (q) => q.eq("date", date))
+        .first();
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          campuses: [...new Set([...existing.campuses, ...campuses])],
+        });
+      } else {
+        await ctx.db.insert("closures", {
+          date,
+          campuses,
+          reason,
+          createdBy: user._id,
+          createdAt: now,
+        });
+      }
       created += 1;
     }
     return { ok: true as const, created };

@@ -325,6 +325,37 @@ describe("getClassReport — the denominator", () => {
     ]);
   });
 
+  it("keeps a completed enrollment in the report and the year's class list", async () => {
+    const rafi = await seedStudent("Rafi");
+    const enrollmentId = await enrol(rafi, grade4, campusA);
+    await asAdmin().mutation(api.attendance.saveRegister, {
+      ...grade4A(),
+      date: d(2),
+      marks: [{ studentId: rafi, status: "present" }],
+    });
+    await t.run((ctx) => ctx.db.patch(enrollmentId, { status: "completed" }));
+
+    const report = await asAdmin().query(api.attendance.getClassReport, {
+      ...grade4A(),
+      semester: 1,
+    });
+    expect(report.students).toHaveLength(1);
+    expect(report.students[0]).toMatchObject({
+      studentName: "Rafi",
+      present: 1,
+      denominator: 1,
+    });
+
+    const classes = await asAdmin().query(api.enrollments.getClassesForYear, {
+      academicYear: yearId,
+    });
+    expect(classes).toHaveLength(1);
+    // The marking register stays active-only.
+    expect(
+      await asAdmin().query(api.enrollments.getClassRoster, grade4A()),
+    ).toEqual([]);
+  });
+
   it("returns no figure for a year without a semester split", async () => {
     const report = await asAdmin().query(api.attendance.getClassReport, {
       campus: campusA,
@@ -381,5 +412,37 @@ describe("closures.create", () => {
     expect(listed.map((c) => c.date).sort()).toEqual(
       [d(10), d(4), d(3), d(2)].sort(),
     );
+  });
+
+  it("merges campuses into an existing row for the same date", async () => {
+    const base = { startDate: d(3), endDate: d(3), reason: "Eid" };
+    await asAdmin().mutation(api.closures.create, {
+      ...base,
+      campuses: [campusA],
+    });
+    await asAdmin().mutation(api.closures.create, {
+      ...base,
+      campuses: [campusA, campusB],
+    });
+    const rows = await t.run((ctx) => ctx.db.query("closures").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0].campuses.sort()).toEqual([campusA, campusB].sort());
+  });
+
+  it("rejects impossible calendar dates", async () => {
+    await expect(
+      asAdmin().mutation(api.closures.create, {
+        startDate: "2026-02-30",
+        endDate: "2026-02-30",
+        campuses: [campusA],
+        reason: "x",
+      }),
+    ).rejects.toThrow("real calendar days");
+    await expect(
+      asAdmin().query(api.attendance.getDay, {
+        date: "2026-00-99",
+        academicYear: yearId,
+      }),
+    ).rejects.toThrow("real calendar day");
   });
 });

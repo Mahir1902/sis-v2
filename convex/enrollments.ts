@@ -230,7 +230,11 @@ export const getClassRoster = query({
   },
 });
 
-/** Shared roster loader for `getClassRoster` and `attendance.getRegister`. */
+/**
+ * Shared roster loader for `getClassRoster`, `attendance.getRegister` and
+ * `attendance.getClassReport`. Active enrollments only, unless
+ * `includeInactive` — reports keep leavers and past-year classes.
+ */
 export async function loadClassRoster(
   ctx: QueryCtx,
   args: {
@@ -238,19 +242,25 @@ export async function loadClassRoster(
     standardLevelId: Id<"standardLevels">;
     academicYear: Id<"academicYears">;
   },
+  opts: { includeInactive?: boolean } = {},
 ) {
-  const enrollments = await ctx.db
+  const all = await ctx.db
     .query("enrollments")
     .withIndex("by_campus_standard", (q) =>
       q.eq("campus", args.campus).eq("standardLevelId", args.standardLevelId),
     )
     .filter((q) =>
-      q.and(
-        q.eq(q.field("academicYear"), args.academicYear),
-        q.eq(q.field("status"), "active"),
-      ),
+      opts.includeInactive
+        ? q.eq(q.field("academicYear"), args.academicYear)
+        : q.and(
+            q.eq(q.field("academicYear"), args.academicYear),
+            q.eq(q.field("status"), "active"),
+          ),
     )
     .take(200);
+  const enrollments = [
+    ...new Map(all.map((e) => [e.studentId, e])).values(),
+  ];
 
   const rows = await Promise.all(
     enrollments.map(async (e) => {
@@ -267,8 +277,8 @@ export async function loadClassRoster(
 }
 
 /**
- * The distinct (campus, standardLevel) classes with active enrollments in a
- * year, with student counts. A class exists because students are enrolled in
+ * The distinct (campus, standardLevel) classes with enrollments (any status)
+ * in a year, with student counts. A class exists because students are enrolled in
  * it — there is no classes table. One range on `by_academic_year`
  * (~400 active rows per year), reduced in JS (attendance spec §7 A3).
  */
@@ -288,7 +298,6 @@ export async function loadClassesForYear(
   const enrollments = await ctx.db
     .query("enrollments")
     .withIndex("by_academic_year", (q) => q.eq("academicYear", academicYear))
-    .filter((q) => q.eq(q.field("status"), "active"))
     .take(2000);
 
   const counts = new Map<

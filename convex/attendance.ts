@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { dhakaDate, isWeekend, shiftDate } from "../lib/attendanceDate";
+import {
+  dhakaDate,
+  isDateLabel,
+  isWeekend,
+  shiftDate,
+} from "../lib/attendanceDate";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type QueryCtx, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
@@ -25,9 +30,10 @@ const statusValidator = v.union(
   v.literal("late"),
 );
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function assertDate(date: string) {
-  if (!DATE_RE.test(date)) throw new Error("Date must be YYYY-MM-DD");
+  if (!isDateLabel(date)) {
+    throw new Error("Date must be a real calendar day as YYYY-MM-DD");
+  }
 }
 
 const classArgs = {
@@ -429,7 +435,7 @@ export const getClassReport = query({
     if (!period) return empty;
 
     const [roster, cls] = await Promise.all([
-      loadClassRoster(ctx, args),
+      loadClassRoster(ctx, args, { includeInactive: true }),
       loadClassPeriod(ctx, args, period.start, period.end),
     ]);
     const studentRows = await Promise.all(
