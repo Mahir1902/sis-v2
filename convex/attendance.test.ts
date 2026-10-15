@@ -356,6 +356,61 @@ describe("getClassReport — the denominator", () => {
     ).toEqual([]);
   });
 
+  it("counts distinct active students per class in the year's class list", async () => {
+    const rafi = await seedStudent("Rafi");
+    const mina = await seedStudent("Mina");
+    const old = await enrol(rafi, grade4, campusA);
+    await t.run((ctx) => ctx.db.patch(old, { status: "completed" }));
+    await enrol(rafi, grade4, campusA);
+    await enrol(rafi, grade4, campusA);
+    const minaGrade3 = await enrol(mina, grade3, campusA);
+    await t.run((ctx) => ctx.db.patch(minaGrade3, { status: "completed" }));
+
+    const classes = await asAdmin().query(api.enrollments.getClassesForYear, {
+      academicYear: yearId,
+    });
+    expect(
+      Object.fromEntries(classes.map((c) => [c.levelName, c.studentCount])),
+    ).toEqual({ "Grade 3": 0, "Grade 4": 1 });
+  });
+
+  it("getDay totals only classes with active students", async () => {
+    const rafi = await seedStudent("Rafi");
+    const mina = await seedStudent("Mina");
+    await enrol(rafi, grade4, campusA);
+    const minaGrade3 = await enrol(mina, grade3, campusA);
+    await asAdmin().mutation(api.attendance.saveRegister, {
+      ...grade4A(),
+      date: d(1),
+      marks: [{ studentId: rafi, status: "present" }],
+    });
+    await asAdmin().mutation(api.attendance.saveRegister, {
+      campus: campusA,
+      standardLevelId: grade3,
+      academicYear: yearId,
+      date: d(1),
+      marks: [{ studentId: mina, status: "absent" }],
+    });
+    await t.run((ctx) => ctx.db.patch(minaGrade3, { status: "completed" }));
+
+    const day = await asAdmin().query(api.attendance.getDay, {
+      date: d(1),
+      academicYear: yearId,
+    });
+    expect(day).toMatchObject({ classesMarked: 1, classesTotal: 1 });
+    expect(day.groups.map((g) => g.levelName).sort()).toEqual([
+      "Grade 3",
+      "Grade 4",
+    ]);
+
+    const emptyDay = await asAdmin().query(api.attendance.getDay, {
+      date: d(2),
+      academicYear: yearId,
+    });
+    expect(emptyDay).toMatchObject({ classesMarked: 0, classesTotal: 1 });
+    expect(emptyDay.groups.map((g) => g.levelName)).toEqual(["Grade 4"]);
+  });
+
   it("returns no figure for a year without a semester split", async () => {
     const report = await asAdmin().query(api.attendance.getClassReport, {
       campus: campusA,

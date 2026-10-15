@@ -386,22 +386,26 @@ export const getDay = query({
       };
     });
 
-    const groups = classes.map((c) => ({
-      campus: c.campus,
-      campusName: c.campusName,
-      standardLevelId: c.standardLevelId,
-      levelName: c.levelName,
-      marked: markedKeys.has(key(c)),
-      absentees: absentees
-        .filter((a) => a.classKey === key(c))
-        .sort((a, b) => a.studentName.localeCompare(b.studentName))
-        .map(({ classKey: _k, ...a }) => a),
-    }));
+    const groups = classes
+      .map((c) => ({
+        campus: c.campus,
+        campusName: c.campusName,
+        standardLevelId: c.standardLevelId,
+        levelName: c.levelName,
+        studentCount: c.studentCount,
+        marked: markedKeys.has(key(c)),
+        absentees: absentees
+          .filter((a) => a.classKey === key(c))
+          .sort((a, b) => a.studentName.localeCompare(b.studentName))
+          .map(({ classKey: _k, ...a }) => a),
+      }))
+      .filter((g) => g.studentCount > 0 || g.absentees.length > 0);
+    const countable = groups.filter((g) => g.studentCount > 0);
 
     return {
       date: args.date,
-      classesMarked: groups.filter((g) => g.marked).length,
-      classesTotal: groups.length,
+      classesMarked: countable.filter((g) => g.marked).length,
+      classesTotal: countable.length,
       groups,
     };
   },

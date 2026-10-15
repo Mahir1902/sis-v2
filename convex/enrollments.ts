@@ -278,7 +278,7 @@ export async function loadClassRoster(
 
 /**
  * The distinct (campus, standardLevel) classes with enrollments (any status)
- * in a year, with student counts. A class exists because students are enrolled in
+ * in a year; `studentCount` is distinct active students, with student counts. A class exists because students are enrolled in
  * it — there is no classes table. One range on `by_academic_year`
  * (~400 active rows per year), reduced in JS (attendance spec §7 A3).
  */
@@ -305,29 +305,32 @@ export async function loadClassesForYear(
     {
       campus: Id<"campuses">;
       standardLevelId: Id<"standardLevels">;
-      studentCount: number;
+      active: Set<Id<"students">>;
     }
   >();
   for (const e of enrollments) {
     const key = `${e.campus}|${e.standardLevelId}`;
-    const entry = counts.get(key);
-    if (entry) entry.studentCount += 1;
-    else
-      counts.set(key, {
+    let entry = counts.get(key);
+    if (!entry) {
+      entry = {
         campus: e.campus,
         standardLevelId: e.standardLevelId,
-        studentCount: 1,
-      });
+        active: new Set(),
+      };
+      counts.set(key, entry);
+    }
+    if (e.status === "active") entry.active.add(e.studentId);
   }
 
   const classes = await Promise.all(
-    [...counts.values()].map(async (c) => {
+    [...counts.values()].map(async ({ active, ...c }) => {
       const [campus, level] = await Promise.all([
         ctx.db.get(c.campus),
         ctx.db.get(c.standardLevelId),
       ]);
       return {
         ...c,
+        studentCount: active.size,
         campusName: campus?.name ?? "Unknown campus",
         levelName: level?.name ?? "Unknown level",
         levelOrder: LEVEL_CODE_ORDER.indexOf(level?.code ?? ""),
