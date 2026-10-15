@@ -268,10 +268,11 @@ function Register({ classKey, date }: { classKey: ClassKey; date: string }) {
         ))}
       </ul>
 
-      {/* Save bar — sticky to the bottom of the dashboard scroller, above the rows */}
+      {/* Save bar — sticky to the bottom of the dashboard scroller, above the rows.
+          -bottom-6 cancels the scroller's p-6, which insets the sticky area by 24px. */}
       <div
         className={cn(
-          "sticky bottom-0 z-10 flex flex-col gap-2 border-t p-3 sm:flex-row sm:items-center sm:justify-between",
+          "sticky -bottom-6 z-10 flex flex-col gap-2 border-t p-3 sm:flex-row sm:items-center sm:justify-between",
           alreadyMarked ? "bg-amber-50" : "bg-white",
         )}
       >
