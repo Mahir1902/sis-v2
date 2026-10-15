@@ -97,17 +97,11 @@ describe("dashboard bootstrap still works via internal references", () => {
     ).rejects.toThrow("Unauthenticated");
 
     const asAdmin = t.withIdentity({ subject: `${adminId}|s` });
-    const first = await asAdmin.mutation(
-      api.seed.backfillAcademicYears,
-      {},
-    );
+    const first = await asAdmin.mutation(api.seed.backfillAcademicYears, {});
     expect(first.inserted).toHaveLength(11);
     expect(first.skipped).toBe(1);
 
-    const second = await asAdmin.mutation(
-      api.seed.backfillAcademicYears,
-      {},
-    );
+    const second = await asAdmin.mutation(api.seed.backfillAcademicYears, {});
     expect(second).toEqual({ inserted: [], skipped: 12 });
   });
 
