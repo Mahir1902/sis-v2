@@ -70,8 +70,9 @@ export const insertAdminRecords = internalMutation({
  * Seeds all reference data (academic years, campuses, standard levels,
  * grade mapping, subjects, discount rules).
  * Idempotent — safe to run multiple times.
+ * Internal: dashboard-only bootstrap, not callable by public clients.
  */
-export const seedReferenceData = mutation({
+export const seedReferenceData = internalMutation({
   args: {},
   handler: async (ctx) => {
     // Guard: skip if already seeded
