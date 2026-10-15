@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery } from "convex/react";
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -15,6 +14,7 @@ import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { api } from "@/convex/_generated/api";
 import {
   type ClassKey,
@@ -41,6 +41,15 @@ const pillStyles: Record<AttendanceStatus, string> = {
   absent: "bg-red-400/40 text-red-700",
   late: "bg-yellow-400/40 text-yellow-700",
 };
+
+/** Same palette as the pills, applied only to the selected segment. */
+const segmentStyles: Record<AttendanceStatus, string> = {
+  present: "data-[state=on]:bg-green-400/40 data-[state=on]:text-green-700",
+  late: "data-[state=on]:bg-yellow-400/40 data-[state=on]:text-yellow-700",
+  absent: "data-[state=on]:bg-red-400/40 data-[state=on]:text-red-700",
+};
+
+const statusOrder: AttendanceStatus[] = ["present", "late", "absent"];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -234,35 +243,36 @@ function Register({ classKey, date }: { classKey: ClassKey; date: string }) {
         </ul>
       )}
 
-      {/* Roster: the whole row is the tap target */}
+      {/* Roster: one segmented control per row, one tap to choose */}
       <ul className="divide-y">
         {reg.rows.map((r) => (
-          <li key={r.studentId}>
-            <button
-              type="button"
-              disabled={locked}
-              onClick={() => reg.cycle(r.studentId)}
-              aria-label={`${r.studentName}: ${r.status}. Tap to change`}
-              className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-gray-50 disabled:cursor-default disabled:hover:bg-transparent"
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-gray-900">
-                  {r.studentName}
-                </span>
-                <span className="block text-xs text-gray-500">
-                  {r.studentNumber}
-                </span>
+          <li
+            key={r.studentId}
+            className="flex items-center justify-between gap-3 p-3"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium text-gray-900">
+                {r.studentName}
               </span>
-              <StatusPill status={r.status} />
-            </button>
+              <span className="block text-xs text-gray-500">
+                {r.studentNumber}
+              </span>
+            </span>
+            <StatusControl
+              name={r.studentName}
+              status={r.status}
+              disabled={locked}
+              onChange={(status) => reg.setStatus(r.studentId, status)}
+            />
           </li>
         ))}
       </ul>
 
-      {/* Save bar — sticky inside the card, never fixed to the viewport */}
+      {/* Save bar — sticky to the bottom of the dashboard scroller, above the rows.
+          -bottom-6 cancels the scroller's p-6, which insets the sticky area by 24px. */}
       <div
         className={cn(
-          "sticky bottom-0 flex flex-col gap-2 border-t p-3 sm:flex-row sm:items-center sm:justify-between",
+          "sticky -bottom-6 z-10 flex flex-col gap-2 border-t p-3 sm:flex-row sm:items-center sm:justify-between",
           alreadyMarked ? "bg-amber-50" : "bg-white",
         )}
       >
@@ -289,17 +299,39 @@ function Register({ classKey, date }: { classKey: ClassKey; date: string }) {
 
 // ── Bits ──────────────────────────────────────────────────────────────────────
 
-function StatusPill({ status }: { status: AttendanceStatus }) {
+function StatusControl({
+  name,
+  status,
+  disabled,
+  onChange,
+}: {
+  name: string;
+  status: AttendanceStatus;
+  disabled: boolean;
+  onChange: (status: AttendanceStatus) => void;
+}) {
   return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium capitalize",
-        pillStyles[status],
-      )}
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      value={status}
+      disabled={disabled}
+      aria-label={`${name}: ${status}`}
+      className="shrink-0"
+      // Radix emits "" when the selected segment is tapped again; keep it on.
+      onValueChange={(v) => v && onChange(v as AttendanceStatus)}
     >
-      {status === "present" && <Check className="h-3 w-3" />}
-      {status}
-    </span>
+      {statusOrder.map((s) => (
+        <ToggleGroupItem
+          key={s}
+          value={s}
+          aria-label={`Mark ${name} ${s}`}
+          className={cn("px-2.5 text-xs capitalize", segmentStyles[s])}
+        >
+          {s}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 }
 

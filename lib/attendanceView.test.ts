@@ -4,19 +4,12 @@ import {
   closureVoidMessage,
   currentYear,
   formatDhakaTime,
-  nextStatus,
   percentLabel,
   saveButtonLabel,
   unmarkedDaysBanner,
 } from "./attendanceView";
 
 describe("attendanceView", () => {
-  it("cycles present → absent → late → present", () => {
-    expect(nextStatus("present")).toBe("absent");
-    expect(nextStatus("absent")).toBe("late");
-    expect(nextStatus("late")).toBe("present");
-  });
-
   it("save button carries the marked-yet signal", () => {
     const counts = { present: 27, late: 2, absent: 1 };
     expect(

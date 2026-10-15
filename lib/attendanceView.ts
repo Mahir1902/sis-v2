@@ -9,15 +9,6 @@ import { attendancePercentage } from "./attendancePercentage";
 
 export type AttendanceStatus = "present" | "absent" | "late";
 
-/** The row tap cycle: present → absent → late → present (spec §5.3). */
-export function nextStatus(status: AttendanceStatus): AttendanceStatus {
-  return status === "present"
-    ? "absent"
-    : status === "absent"
-      ? "late"
-      : "present";
-}
-
 export function tally(statuses: Iterable<AttendanceStatus>) {
   const t = { present: 0, absent: 0, late: 0 };
   for (const s of statuses) t[s] += 1;

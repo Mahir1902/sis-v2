@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   type AttendanceStatus,
-  nextStatus,
   saveButtonLabel,
   tally,
 } from "@/lib/attendanceView";
@@ -17,9 +16,10 @@ interface RegisterStudent {
 }
 
 /**
- * Local tap state for the daily register (spec §5.3). Everyone defaults to
- * present; a tap cycles the row. Overrides sit on top of the server's rows
- * and are dropped by `reset()` after a save or a class/date change.
+ * Local mark state for the daily register (spec §5.3). Everyone defaults to
+ * present; each row's segmented control sets its status directly. Overrides
+ * sit on top of the server's rows and are dropped by `reset()` after a save
+ * or a class/date change.
  */
 export function useAttendanceRegister(
   students: RegisterStudent[],
@@ -48,12 +48,6 @@ export function useAttendanceRegister(
     });
   }
 
-  function cycle(studentId: Id<"students">) {
-    const current =
-      rows.find((r) => r.studentId === studentId)?.status ?? "present";
-    setStatus(studentId, nextStatus(current));
-  }
-
   function reset() {
     setOverrides(new Map());
   }
@@ -64,7 +58,6 @@ export function useAttendanceRegister(
     touched,
     counts,
     buttonLabel: saveButtonLabel({ alreadyMarked, touched, counts }),
-    cycle,
     setStatus,
     reset,
   };
