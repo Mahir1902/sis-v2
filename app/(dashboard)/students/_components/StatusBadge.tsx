@@ -52,7 +52,8 @@ const allStatuses: Status[] = [
 
 interface StatusBadgeProps {
   studentId: Id<"students">;
-  status: Status;
+  /** Undefined for imported students whose status cell was blank (#93). */
+  status: Status | undefined;
   readonly?: boolean;
 }
 
@@ -80,10 +81,10 @@ export function StatusBadge({
     <span
       className={cn(
         "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium capitalize",
-        statusStyles[status] ?? "bg-gray-100 text-gray-600",
+        status ? statusStyles[status] : "bg-gray-100 text-gray-600",
       )}
     >
-      {status}
+      {status ?? "Unspecified"}
       {!readonly && <ChevronDown className="h-3 w-3" />}
     </span>
   );

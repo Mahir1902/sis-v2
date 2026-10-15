@@ -24,6 +24,58 @@ function maskSensitive(value: string | undefined): string {
   return `****${value.slice(-4)}`;
 }
 
+/**
+ * Formats a date that may never have been recorded. Since the `students`
+ * widening for the Excel import (#93), `dateOfBirth`, `admissionDate` and
+ * `classStartDate` are all optional — `new Date(undefined)` would render
+ * "Invalid Date", so return an em-dash instead of inventing a date.
+ */
+function formatDate(value: number | string | undefined | null): string {
+  if (value === undefined || value === null || value === "") return "—";
+  return format(new Date(value), "dd MMM yyyy");
+}
+
+/**
+ * Two-letter avatar initials for a name that may be absent. Returns an
+ * em-dash rather than crashing on `undefined.split(" ")`.
+ */
+function getInitials(name: string | undefined | null): string {
+  if (!name) return "—";
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+/** Muted "we have no value for this" label, used where a name would go. */
+function NotRecorded() {
+  return <span className="italic font-normal text-gray-400">Not recorded</span>;
+}
+
+/**
+ * Phone row that degrades to a plain em-dash when no number is on record —
+ * a `tel:undefined` link is worse than no link at all.
+ */
+function PhoneRow({ phone }: { phone: string | undefined }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-muted-foreground shrink-0">Phone</span>
+      {phone ? (
+        <a
+          href={`tel:${phone}`}
+          className="font-medium text-school-green hover:underline text-right truncate"
+        >
+          {phone}
+        </a>
+      ) : (
+        <span className="font-medium text-right">—</span>
+      )}
+    </div>
+  );
+}
+
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex justify-between gap-2">
@@ -143,7 +195,7 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
               <InfoRow label="Gender" value={student.gender} />
               <InfoRow
                 label="Date of Birth"
-                value={format(new Date(student.dateOfBirth), "dd MMM yyyy")}
+                value={formatDate(student.dateOfBirth)}
               />
               <InfoRow label="Birthplace" value={student.placeOfBirth} />
               <InfoRow label="Citizenship" value={student.citizenship} />
@@ -183,11 +235,11 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
               <InfoRow label="Type" value={currentEnrollment?.enrollmentType} />
               <InfoRow
                 label="Admitted"
-                value={format(new Date(student.admissionDate), "dd MMM yyyy")}
+                value={formatDate(student.admissionDate)}
               />
               <InfoRow
                 label="Class Start"
-                value={format(new Date(student.classStartDate), "dd MMM yyyy")}
+                value={formatDate(student.classStartDate)}
               />
               <InfoRow label="Consultant" value={student.consultantName} />
             </div>
@@ -208,16 +260,11 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
               <div className="bg-slate-50 rounded-md p-2.5">
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-7 h-7 rounded-md bg-slate-200 flex items-center justify-center text-[10px] font-semibold shrink-0">
-                    {student.fatherName
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase()}
+                    {getInitials(student.fatherName)}
                   </div>
                   <div>
                     <div className="font-semibold text-xs">
-                      {student.fatherName}
+                      {student.fatherName ?? <NotRecorded />}
                     </div>
                     <div className="text-school-green text-[10px]">Father</div>
                   </div>
@@ -227,17 +274,7 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
                     label="Occupation"
                     value={student.fatherOccupation}
                   />
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground shrink-0">
-                      Phone
-                    </span>
-                    <a
-                      href={`tel:${student.fatherPhoneNumber}`}
-                      className="font-medium text-school-green hover:underline text-right truncate"
-                    >
-                      {student.fatherPhoneNumber}
-                    </a>
-                  </div>
+                  <PhoneRow phone={student.fatherPhoneNumber} />
                   {"fatherNidNumber" in student && (
                     <InfoRow
                       label="NID"
@@ -259,16 +296,11 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
               <div className="bg-slate-50 rounded-md p-2.5">
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-7 h-7 rounded-md bg-pink-100 flex items-center justify-center text-[10px] font-semibold shrink-0">
-                    {student.motherName
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase()}
+                    {getInitials(student.motherName)}
                   </div>
                   <div>
                     <div className="font-semibold text-xs">
-                      {student.motherName}
+                      {student.motherName ?? <NotRecorded />}
                     </div>
                     <div className="text-school-green text-[10px]">Mother</div>
                   </div>
@@ -278,17 +310,7 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
                     label="Occupation"
                     value={student.motherOccupation}
                   />
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground shrink-0">
-                      Phone
-                    </span>
-                    <a
-                      href={`tel:${student.motherPhoneNumber}`}
-                      className="font-medium text-school-green hover:underline text-right truncate"
-                    >
-                      {student.motherPhoneNumber}
-                    </a>
-                  </div>
+                  <PhoneRow phone={student.motherPhoneNumber} />
                   {"motherNidNumber" in student && (
                     <InfoRow
                       label="NID"
@@ -310,34 +332,21 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
               <div className="bg-slate-50 rounded-md p-2.5">
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-7 h-7 rounded-md bg-blue-100 flex items-center justify-center text-[10px] font-semibold shrink-0">
-                    {student.guardianName
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase()}
+                    {getInitials(student.guardianName)}
                   </div>
                   <div>
                     <div className="font-semibold text-xs">
-                      {student.guardianName}
+                      {student.guardianName ?? <NotRecorded />}
                     </div>
                     <div className="text-school-green text-[10px]">
-                      Guardian · {student.guardianRelation}
+                      {student.guardianRelation
+                        ? `Guardian · ${student.guardianRelation}`
+                        : "Guardian"}
                     </div>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1 pl-9">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground shrink-0">
-                      Phone
-                    </span>
-                    <a
-                      href={`tel:${student.guardianPhoneNumber}`}
-                      className="font-medium text-school-green hover:underline text-right truncate"
-                    >
-                      {student.guardianPhoneNumber}
-                    </a>
-                  </div>
+                  <PhoneRow phone={student.guardianPhoneNumber} />
                   {"guardianNidNumber" in student && (
                     <InfoRow
                       label="NID"
@@ -383,7 +392,9 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
                 <div className="text-muted-foreground text-[10px] mb-0.5">
                   Present
                 </div>
-                <div className="font-medium">{student.presentAddress}</div>
+                <div className="font-medium">
+                  {student.presentAddress ?? "—"}
+                </div>
               </div>
               {student.permanentAddress && (
                 <div className="border-t pt-2">
@@ -466,17 +477,24 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Health
               </span>
+              {/* `healthIssue` is optional since #93. "No issues" is a
+                  positive medical claim — never assert it from an absent
+                  record; say the record is silent instead. */}
               <span
                 className={cn(
                   "text-[9px] font-medium",
-                  student.healthIssue.hasHealthIssues
-                    ? "text-red-600"
-                    : "text-green-600",
+                  student.healthIssue === undefined
+                    ? "text-muted-foreground"
+                    : student.healthIssue.hasHealthIssues
+                      ? "text-red-600"
+                      : "text-green-600",
                 )}
               >
-                {student.healthIssue.hasHealthIssues
-                  ? "Has issues"
-                  : "No issues"}
+                {student.healthIssue === undefined
+                  ? "Not recorded"
+                  : student.healthIssue.hasHealthIssues
+                    ? "Has issues"
+                    : "No issues"}
               </span>
             </div>
           </AccordionTrigger>
@@ -484,9 +502,15 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
             <div className="flex flex-col gap-1.5">
               <InfoRow
                 label="Has Issues"
-                value={student.healthIssue.hasHealthIssues ? "Yes" : "No"}
+                value={
+                  student.healthIssue === undefined
+                    ? undefined
+                    : student.healthIssue.hasHealthIssues
+                      ? "Yes"
+                      : "No"
+                }
               />
-              {student.healthIssue.issueDescription && (
+              {student.healthIssue?.issueDescription && (
                 <div>
                   <span className="text-muted-foreground text-xs">
                     Description
@@ -555,19 +579,18 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
                         className="flex items-center gap-2 p-2 bg-slate-50 rounded-md hover:bg-green-50 hover:border-school-green transition-colors border border-transparent"
                       >
                         <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-semibold shrink-0">
-                          {s.studentFullName
-                            .split(" ")
-                            .map((n: string) => n[0])
-                            .slice(0, 2)
-                            .join("")
-                            .toUpperCase()}
+                          {getInitials(s.studentFullName)}
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium text-xs truncate">
-                            {s.studentFullName}
+                            {s.studentFullName ?? s.studentNumber}
                           </div>
+                          {/* Level and campus are each optional (#93) — join
+                              only what is actually on record. */}
                           <div className="text-[9px] text-muted-foreground">
-                            {s.standardLevelName} · {s.campusName}
+                            {[s.standardLevelName, s.campusName]
+                              .filter(Boolean)
+                              .join(" · ") || "—"}
                           </div>
                         </div>
                       </Link>
@@ -581,10 +604,7 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
 
       {/* Footer: Created date */}
       <div className="text-[9px] text-muted-foreground text-center pt-1">
-        Created{" "}
-        {student.createdAt
-          ? format(new Date(student.createdAt), "dd MMM yyyy")
-          : "—"}
+        Created {formatDate(student.createdAt)}
       </div>
     </div>
   );

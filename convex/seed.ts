@@ -1,8 +1,32 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { requireRole } from "./lib/permissions";
 
 const ADMIN_EMAIL = "admin@school.edu";
+
+/**
+ * The full academic-year range the app supports: 2015-2016 through 2026-2027.
+ *
+ * Shared by `seedReferenceData` (fresh deployments) and `backfillAcademicYears`
+ * (already-seeded deployments) so the two can never drift apart. The Excel
+ * student import resolves a student's admission year by name against this list
+ * and rejects any row whose year has no row — it never creates reference data.
+ */
+const ACADEMIC_YEAR_DEFS = [
+  { name: "2015-2016", start: 2015, end: 2016 },
+  { name: "2016-2017", start: 2016, end: 2017 },
+  { name: "2017-2018", start: 2017, end: 2018 },
+  { name: "2018-2019", start: 2018, end: 2019 },
+  { name: "2019-2020", start: 2019, end: 2020 },
+  { name: "2020-2021", start: 2020, end: 2021 },
+  { name: "2021-2022", start: 2021, end: 2022 },
+  { name: "2022-2023", start: 2022, end: 2023 },
+  { name: "2023-2024", start: 2023, end: 2024 },
+  { name: "2024-2025", start: 2024, end: 2025 },
+  { name: "2025-2026", start: 2025, end: 2026 },
+  { name: "2026-2027", start: 2026, end: 2027 },
+] as const;
 
 export const checkAdminExists = internalQuery({
   args: {},
@@ -56,17 +80,8 @@ export const seedReferenceData = mutation({
       return { status: "already_seeded" };
     }
 
-    // ── Academic Years (2019-2020 through 2025-2026) ──────────────────────
-    const yearDefs = [
-      { name: "2019-2020", start: 2019, end: 2020 },
-      { name: "2020-2021", start: 2020, end: 2021 },
-      { name: "2021-2022", start: 2021, end: 2022 },
-      { name: "2022-2023", start: 2022, end: 2023 },
-      { name: "2023-2024", start: 2023, end: 2024 },
-      { name: "2024-2025", start: 2024, end: 2025 },
-      { name: "2025-2026", start: 2025, end: 2026 },
-    ];
-    for (const y of yearDefs) {
+    // ── Academic Years (2015-2016 through 2026-2027) ──────────────────────
+    for (const y of ACADEMIC_YEAR_DEFS) {
       await ctx.db.insert("academicYears", {
         name: y.name,
         startDate: new Date(`${y.start}-06-01`).getTime(),
@@ -229,5 +244,40 @@ export const seedReferenceData = mutation({
     }
 
     return { status: "seeded" };
+  },
+});
+
+/**
+ * Inserts any `ACADEMIC_YEAR_DEFS` entry that has no `academicYears` row yet,
+ * leaving existing rows untouched. Idempotent — running it twice is a no-op.
+ *
+ * `seedReferenceData` early-returns on any existing `academicYears` row, so a
+ * deployment that was seeded before the range was extended never picks up the
+ * new years. This mutation is that path, and must be run on every already-seeded
+ * deployment before the first Excel student import.
+ *
+ * Requires admin role.
+ */
+export const backfillAcademicYears = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireRole(ctx, ["admin"]);
+
+    // Bounded reference table — one row per academic year, a few dozen at most.
+    const existing = await ctx.db.query("academicYears").collect();
+    const existingNames = new Set(existing.map((y) => y.name));
+
+    const inserted: string[] = [];
+    for (const y of ACADEMIC_YEAR_DEFS) {
+      if (existingNames.has(y.name)) continue;
+      await ctx.db.insert("academicYears", {
+        name: y.name,
+        startDate: new Date(`${y.start}-06-01`).getTime(),
+        endDate: new Date(`${y.end}-07-31`).getTime(),
+      });
+      inserted.push(y.name);
+    }
+
+    return { inserted, skipped: ACADEMIC_YEAR_DEFS.length - inserted.length };
   },
 });

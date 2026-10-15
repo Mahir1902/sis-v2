@@ -102,30 +102,30 @@ export default defineSchema({
   students: defineTable({
     // Identity
     studentNumber: v.string(),
-    studentFullName: v.string(),
-    gender: v.union(v.literal("Male"), v.literal("Female")),
-    dateOfBirth: v.float64(),
-    placeOfBirth: v.string(),
-    citizenship: v.string(),
-    religion: v.string(),
-    bloodGroup: v.string(),
+    studentFullName: v.optional(v.string()),
+    gender: v.optional(v.union(v.literal("Male"), v.literal("Female"))),
+    dateOfBirth: v.optional(v.float64()),
+    placeOfBirth: v.optional(v.string()),
+    citizenship: v.optional(v.string()),
+    religion: v.optional(v.string()),
+    bloodGroup: v.optional(v.string()),
 
     // Documents
-    birthCertificateNumber: v.string(),
+    birthCertificateNumber: v.optional(v.string()),
     passportNumber: v.optional(v.string()),
     passportValidTill: v.optional(v.float64()),
 
     // Academic placement (current)
     standardLevel: v.id("standardLevels"),
     academicYear: v.id("academicYears"),
-    campus: v.id("campuses"),
+    campus: v.optional(v.id("campuses")),
 
     // Dates
-    admissionDate: v.float64(),
-    classStartDate: v.float64(),
+    admissionDate: v.optional(v.float64()),
+    classStartDate: v.optional(v.float64()),
 
     // Address
-    presentAddress: v.string(),
+    presentAddress: v.optional(v.string()),
     permanentAddress: v.optional(v.string()),
 
     // Previous school
@@ -133,10 +133,12 @@ export default defineSchema({
     previousSchoolAddress: v.optional(v.string()),
 
     // Health
-    healthIssue: v.object({
-      hasHealthIssues: v.boolean(),
-      issueDescription: v.optional(v.string()),
-    }),
+    healthIssue: v.optional(
+      v.object({
+        hasHealthIssues: v.boolean(),
+        issueDescription: v.optional(v.string()),
+      }),
+    ),
 
     // Photos (Convex storage IDs)
     studentPhotoUrl: v.optional(v.id("_storage")),
@@ -144,22 +146,22 @@ export default defineSchema({
     motherPhotoUrl: v.optional(v.id("_storage")),
 
     // Father
-    fatherName: v.string(),
-    fatherOccupation: v.string(),
-    fatherNidNumber: v.string(),
-    fatherPhoneNumber: v.string(),
+    fatherName: v.optional(v.string()),
+    fatherOccupation: v.optional(v.string()),
+    fatherNidNumber: v.optional(v.string()),
+    fatherPhoneNumber: v.optional(v.string()),
 
     // Mother
-    motherName: v.string(),
-    motherOccupation: v.string(),
-    motherNidNumber: v.string(),
-    motherPhoneNumber: v.string(),
+    motherName: v.optional(v.string()),
+    motherOccupation: v.optional(v.string()),
+    motherNidNumber: v.optional(v.string()),
+    motherPhoneNumber: v.optional(v.string()),
 
     // Guardian
-    guardianName: v.string(),
-    guardianRelation: v.string(),
-    guardianNidNumber: v.string(),
-    guardianPhoneNumber: v.string(),
+    guardianName: v.optional(v.string()),
+    guardianRelation: v.optional(v.string()),
+    guardianNidNumber: v.optional(v.string()),
+    guardianPhoneNumber: v.optional(v.string()),
 
     // Billing contact emails — used by the Receipt Compose Email launcher
     // (ADR-0002). All three are optional because the school does not always
@@ -172,41 +174,48 @@ export default defineSchema({
     // Billing Contact (CONTEXT.md domain term) — designates which parent/
     // guardian is financially responsible. Required after the issue #33
     // backfill migration; default for backfilled records was "father".
-    primaryBillingContact: v.union(
-      v.literal("father"),
-      v.literal("mother"),
-      v.literal("guardian"),
+    primaryBillingContact: v.optional(
+      v.union(v.literal("father"), v.literal("mother"), v.literal("guardian")),
     ),
 
     // Financial
-    familyAnnualIncome: v.string(),
+    familyAnnualIncome: v.optional(v.string()),
 
     // Siblings
     siblingIds: v.optional(v.array(v.id("students"))),
 
     // Status
-    status: v.union(
-      v.literal("active"),
-      v.literal("graduated"),
-      v.literal("transferred"),
-      v.literal("withdrawn"),
-      v.literal("suspended"),
-      v.literal("expelled"),
+    status: v.optional(
+      v.union(
+        v.literal("active"),
+        v.literal("graduated"),
+        v.literal("transferred"),
+        v.literal("withdrawn"),
+        v.literal("suspended"),
+        v.literal("expelled"),
+      ),
     ),
 
     // Admin
-    consultantName: v.string(),
+    consultantName: v.optional(v.string()),
+
+    // Admission facts (import-only labels, not enrollment history — map #80)
+    admittedLevel: v.optional(v.id("standardLevels")),
+    admissionAcademicYear: v.optional(v.id("academicYears")),
+    admissionSemester: v.optional(v.string()),
+
     createdAt: v.string(), // ISO string
   })
     .index("by_standard_level", ["standardLevel"])
     .index("by_status", ["status"])
-    .index("by_academic_year", ["academicYear"]),
+    .index("by_academic_year", ["academicYear"])
+    .index("by_student_number", ["studentNumber"]),
 
   enrollments: defineTable({
     studentId: v.id("students"),
     academicYear: v.id("academicYears"),
     standardLevelId: v.id("standardLevels"),
-    campus: v.id("campuses"),
+    campus: v.optional(v.id("campuses")),
     section: v.optional(v.string()),
     rollNumber: v.optional(v.string()),
     enrollmentType: v.string(), // "new_admission" | "promotion"

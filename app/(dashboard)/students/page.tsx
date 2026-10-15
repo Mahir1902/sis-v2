@@ -11,7 +11,7 @@ import {
   type StudentsFilters,
   StudentsFilterToolbar,
 } from "./_components/StudentsFilterToolbar";
-import { columns, type StudentRow } from "./columns";
+import { columns } from "./columns";
 
 function StudentsTableSkeleton() {
   return (
@@ -105,7 +105,7 @@ export default function StudentsPage() {
         <div className="flex-1 min-h-0">
           <DataTable
             columns={columns}
-            data={students as unknown as StudentRow[]}
+            data={students}
             searchPlaceholder="Search students…"
             onRowClick={(row) => router.push(`/students/${row._id}`)}
             toolbar={

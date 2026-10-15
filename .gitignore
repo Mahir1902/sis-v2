@@ -78,6 +78,16 @@ docs/handoffs/HANDOFF_*.md
 **/skills/to-tickets
 **/skills/wayfinder
 
+# real student PII — this repo is public, so none of this may ever be committed.
+# The Excel import fixture is 30 real children: names, DOBs, birth-registration
+# numbers and parents' phone numbers. Its tests assert on those literal values,
+# so the test file is local-only too and does not run in CI.
+assets/
+lib/fixtures/
+lib/studentImportMapping.test.ts
+scripts/build_import_fixture.py
+scripts/transform_student_import.py
+
 # grading analytics seeds + test — kept local per request
 convex/_seedGradingAnalytics.ts
 convex/_seedLongitudinalHistory.ts

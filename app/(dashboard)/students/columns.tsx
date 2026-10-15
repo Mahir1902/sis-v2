@@ -1,57 +1,41 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import type { FunctionReturnType } from "convex/server";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { api } from "@/convex/_generated/api";
+import { getStudentInitials, studentSearchText } from "@/lib/studentRowDisplay";
 import { StatusBadge } from "./_components/StatusBadge";
 
-export type StudentRow = {
-  _id: Id<"students">;
-  studentNumber: string;
-  studentFullName: string;
-  studentPhotoUrl: string | null;
-  academicYearName: string;
-  standardLevelName: string;
-  gender: "Male" | "Female";
-  classStartDate: number;
-  status:
-    | "active"
-    | "graduated"
-    | "transferred"
-    | "withdrawn"
-    | "suspended"
-    | "expelled";
-};
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
+/** Derived from the query so the table can't drift from what the server sends. */
+type StudentRow = FunctionReturnType<
+  typeof api.students.getAllStudents
+>[number];
 
 export const columns: ColumnDef<StudentRow>[] = [
   {
     id: "studentInfo",
     header: "Student",
-    accessorFn: (row) => `${row.studentFullName} ${row.studentNumber}`,
+    accessorFn: studentSearchText,
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10 shrink-0">
           <AvatarImage
             src={row.original.studentPhotoUrl ?? undefined}
-            alt={row.original.studentFullName}
+            alt={row.original.studentFullName ?? "Student photo"}
           />
           <AvatarFallback className="bg-school-green/10 text-school-green font-semibold text-sm">
-            {getInitials(row.original.studentFullName)}
+            {getStudentInitials(row.original.studentFullName)}
           </AvatarFallback>
         </Avatar>
         <div>
           <p className="font-semibold text-gray-900">
-            {row.original.studentFullName}
+            {row.original.studentFullName ?? (
+              <span className="italic font-medium text-gray-400">
+                Name not recorded
+              </span>
+            )}
           </p>
           <p className="text-xs text-gray-500">{row.original.studentNumber}</p>
         </div>
@@ -80,7 +64,9 @@ export const columns: ColumnDef<StudentRow>[] = [
     accessorKey: "gender",
     header: "Gender",
     cell: ({ row }) => (
-      <span className="text-sm text-gray-700">{row.original.gender}</span>
+      <span className="text-sm text-gray-700">
+        {row.original.gender ?? "—"}
+      </span>
     ),
   },
   {

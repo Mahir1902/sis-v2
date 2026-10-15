@@ -82,6 +82,23 @@ export const collectFees = mutation({
       throw new Error("Cannot collect fees for a non-active student");
     }
 
+    // A receipt is a legal document whose payer and student names are frozen
+    // at issue time (ADR-0002). Since the import widening (#93) those fields
+    // can be unset, so refuse to issue the receipt rather than snapshot a
+    // stand-in value. Checked before any write so the mutation fails fast.
+    const studentFullName = student.studentFullName;
+    const primaryBillingContact = student.primaryBillingContact;
+    if (!studentFullName) {
+      throw new Error(
+        "This student has no recorded name. Complete the student record before collecting fees.",
+      );
+    }
+    if (!primaryBillingContact) {
+      throw new Error(
+        "This student has no billing contact set. Set one before collecting fees.",
+      );
+    }
+
     const fees = await Promise.all(
       args.feeIds.map(async (feeId) => {
         const fee = await ctx.db.get(feeId);
@@ -196,15 +213,24 @@ export const collectFees = mutation({
       paidAmount: fee.balance,
     }));
 
-    const billing = resolveBillingContact(student);
+    const billing = resolveBillingContact({
+      ...student,
+      primaryBillingContact,
+    });
+    const payerName = billing.name;
+    if (!payerName) {
+      throw new Error(
+        "The billing contact for this student has no recorded name. Complete the student record before collecting fees.",
+      );
+    }
 
     const snapshot = buildReceiptSnapshot({
       student: {
-        studentFullName: student.studentFullName,
+        studentFullName,
         studentNumber: student.studentNumber,
       },
       billingContact: {
-        name: billing.name,
+        name: payerName,
         contactType: billing.contactType,
       },
       issuer: { name: user.name },
