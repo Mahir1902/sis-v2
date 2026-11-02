@@ -536,6 +536,61 @@ describe("getClassReport — the denominator", () => {
     expect(day.groups[0].absentees.map((a) => a.studentName)).toEqual(["Rafi"]);
   });
 
+  it("getDay lists a class marked under a year where the call list's year has no such class, and follows updates", async () => {
+    // The school's Grade 4 roster still sits in last year's record; this
+    // year's record only has a Grade 3. The register is saved under last
+    // year, the call list opens on this year: the class must still appear,
+    // and each Update (present -> absent -> late) must show on it.
+    const rafi = await seedStudent("Rafi");
+    const mina = await seedStudent("Mina");
+    await t.run((ctx) =>
+      ctx.db.insert("enrollments", {
+        studentId: rafi,
+        academicYear: yearNoSplit,
+        standardLevelId: grade4,
+        campus: campusA,
+        enrollmentType: "new_admission",
+        enrollmentDate: Date.now(),
+        status: "active",
+      }),
+    );
+    await enrol(mina, grade3, campusA);
+    const saveRafi = (status: "present" | "absent" | "late") =>
+      asAdmin().mutation(api.attendance.saveRegister, {
+        campus: campusA,
+        standardLevelId: grade4,
+        academicYear: yearNoSplit,
+        date: today,
+        marks: [{ studentId: rafi, status }],
+      });
+    const callList = async () => {
+      const day = await asAdmin().query(api.attendance.getDay, {
+        date: today,
+        academicYear: yearId,
+      });
+      const grade4Group = day.groups.find((g) => g.levelName === "Grade 4");
+      return {
+        classesMarked: day.classesMarked,
+        classesTotal: day.classesTotal,
+        marked: grade4Group?.marked ?? null,
+        absentees:
+          grade4Group?.absentees.map((a) => [a.studentName, a.status]) ?? null,
+      };
+    };
+
+    await saveRafi("present");
+    expect(await callList()).toEqual({
+      classesMarked: 1,
+      classesTotal: 2,
+      marked: true,
+      absentees: [],
+    });
+    await saveRafi("absent");
+    expect((await callList()).absentees).toEqual([["Rafi", "absent"]]);
+    await saveRafi("late");
+    expect((await callList()).absentees).toEqual([["Rafi", "late"]]);
+  });
+
   it("returns no figure for a year without a semester split", async () => {
     const report = await asAdmin().query(api.attendance.getClassReport, {
       campus: campusA,

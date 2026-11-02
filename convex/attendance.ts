@@ -356,7 +356,10 @@ export const saveRegister = mutation({
  * (campus, level) across every year, because the register's year is the
  * teacher's pick while the call list defaults to the year containing today —
  * a school whose enrollments still sit in last year's record saves under
- * that year, and its marks must still count for this date.
+ * that year, and its marks must still count for this date. A class with
+ * marks on the date but no enrollment in the selected year is still listed
+ * (its roster is the rows themselves); otherwise its register, and every
+ * update to it, is invisible here.
  */
 export const getDay = query({
   args: { date: v.string(), academicYear: v.id("academicYears") },
@@ -374,6 +377,31 @@ export const getDay = query({
     const key = (c: { campus: string; standardLevelId: string }) =>
       `${c.campus}|${c.standardLevelId}`;
     const markedKeys = new Set(rows.map(key));
+
+    const expected = new Set(classes.map(key));
+    const unlisted = [
+      ...new Map(
+        rows.filter((r) => !expected.has(key(r))).map((r) => [key(r), r]),
+      ),
+    ].map(([k, r]) => ({
+      ...r,
+      studentCount: rows.filter((x) => key(x) === k).length,
+    }));
+    const markedOnly = await Promise.all(
+      unlisted.map(async (r) => {
+        const [campus, level] = await Promise.all([
+          ctx.db.get(r.campus),
+          ctx.db.get(r.standardLevelId),
+        ]);
+        return {
+          campus: r.campus,
+          campusName: campus?.name ?? "Unknown campus",
+          standardLevelId: r.standardLevelId,
+          levelName: level?.name ?? "Unknown level",
+          studentCount: r.studentCount,
+        };
+      }),
+    );
 
     const absentRows = rows.filter((r) => r.status !== "present");
     const students = await Promise.all(
@@ -400,7 +428,7 @@ export const getDay = query({
       };
     });
 
-    const groups = classes
+    const groups = [...classes, ...markedOnly]
       .map((c) => ({
         campus: c.campus,
         campusName: c.campusName,
