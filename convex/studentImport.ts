@@ -8,6 +8,7 @@ import {
 } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
+import { getCurrentPlacement, placeFromImport } from "./lib/placement";
 
 /**
  * The write path for the Excel student import
@@ -85,9 +86,19 @@ export const importRowValidator = v.object({
 
 export type ImportRow = Infer<typeof importRowValidator>;
 
-type StudentFields = Partial<Omit<Doc<"students">, "_id" | "_creationTime">> & {
+type StudentFields = Partial<
+  Omit<
+    Doc<"students">,
+    "_id" | "_creationTime" | "standardLevel" | "academicYear" | "campus"
+  >
+> & {
   studentNumber: string;
-  standardLevel: Id<"standardLevels">;
+};
+
+/** The row's class — written to the enrollment, never the student record. */
+type RowPlacement = {
+  standardLevelId: Id<"standardLevels">;
+  campus?: Id<"campuses">;
 };
 
 type Reference = {
@@ -166,10 +177,13 @@ function resolveRow(row: ImportRow, ref: Reference, label: string) {
   );
   if (!standardLevel) throw new Error(`${label}: missing class`);
 
+  const placement: RowPlacement = {
+    standardLevelId: standardLevel,
+    campus: lookup(ref.campuses, cleanText(row.campus, label), "campus", label),
+  };
+
   const draft: StudentFields = {
     studentNumber,
-    standardLevel,
-    campus: lookup(ref.campuses, cleanText(row.campus, label), "campus", label),
     admittedLevel: lookup(
       ref.levels,
       cleanText(row.admittedLevel, label),
@@ -203,9 +217,10 @@ function resolveRow(row: ImportRow, ref: Reference, label: string) {
   };
 
   // The strip is the whole point — see the doc comment above.
-  return Object.fromEntries(
+  const fields = Object.fromEntries(
     Object.entries(draft).filter(([, value]) => value !== undefined),
   ) as StudentFields;
+  return { fields, placement };
 }
 
 /**
@@ -213,6 +228,9 @@ function resolveRow(row: ImportRow, ref: Reference, label: string) {
  * another row's documents, which is what makes an arbitrary batch boundary
  * safe. If sibling linking is ever revived it runs as a separate pass after
  * all batches commit, never inside one.
+ *
+ * The row's class goes to the enrollment through the Placement module, which
+ * never leaves two open enrollments (`placeFromImport`).
  */
 async function upsertRow(
   ctx: MutationCtx,
@@ -221,8 +239,13 @@ async function upsertRow(
   academicYear: Id<"academicYears">,
   now: number,
   label: string,
-): Promise<{ studentNumber: string; action: "inserted" | "updated" }> {
-  const fields = resolveRow(row, ref, label);
+): Promise<{
+  studentNumber: string;
+  action: "inserted" | "updated";
+  reactivated: boolean;
+}> {
+  const { fields, placement } = resolveRow(row, ref, label);
+  const place = { ...placement, academicYear };
 
   const existing = await ctx.db
     .query("students")
@@ -232,63 +255,30 @@ async function upsertRow(
     .first();
 
   if (existing) {
-    await ctx.db.patch(existing._id, { ...fields, academicYear });
-    const enrollment = await ctx.db
-      .query("enrollments")
-      .withIndex("by_student_academic_year", (q) =>
-        q.eq("studentId", existing._id).eq("academicYear", academicYear),
-      )
-      .first();
-    if (enrollment) {
-      // enrollmentDate is a record-creation stamp — preserved, never re-stamped.
-      // The exit block is cleared: a student the sheet still lists is enrolled,
-      // and "active" alongside an exitDate would be two answers to the question
-      // of who is current (current enrollment = exitDate === undefined).
-      await ctx.db.patch(enrollment._id, {
-        standardLevelId: fields.standardLevel,
-        ...(fields.campus ? { campus: fields.campus } : {}),
-        status: "active",
-        exitDate: undefined,
-        exitReason: undefined,
-        exitDestination: undefined,
-        exitNotes: undefined,
-      });
-    } else {
-      await insertEnrollment(ctx, existing._id, fields, academicYear, now);
-    }
-    return { studentNumber: fields.studentNumber, action: "updated" };
+    // Placement first, from the pre-patch doc: the row's own
+    // `status: "active"` must not hide that the student had left.
+    // enrollmentDate is a record-creation stamp — an amended enrollment keeps it.
+    const reactivated = await placeFromImport(ctx, existing, place, now, label);
+    await ctx.db.patch(existing._id, fields);
+    return {
+      studentNumber: fields.studentNumber,
+      action: "updated",
+      reactivated,
+    };
   }
 
   const studentId = await ctx.db.insert("students", {
     ...fields,
-    academicYear,
     createdAt: new Date(now).toISOString(),
   });
-  // Brand-new student: no enrollment can exist, so skip the lookup.
-  await insertEnrollment(ctx, studentId, fields, academicYear, now);
-  return { studentNumber: fields.studentNumber, action: "inserted" };
-}
-
-/** The current enrollment row, ground zero (D1, §5.6). */
-function insertEnrollment(
-  ctx: MutationCtx,
-  studentId: Id<"students">,
-  fields: StudentFields,
-  academicYear: Id<"academicYears">,
-  now: number,
-) {
-  return ctx.db.insert("enrollments", {
-    studentId,
-    academicYear,
-    standardLevelId: fields.standardLevel,
-    campus: fields.campus,
-    // No previous enrollment exists — "promotion" would assert a history the
-    // import does not track. Active with no exitDate is what makes this row
-    // the current enrollment.
-    enrollmentType: "new_admission",
-    enrollmentDate: now,
-    status: "active",
-  });
+  // Brand-new student: no enrollment exists, so this just opens one.
+  const student = await ctx.db.get(studentId);
+  if (student) await placeFromImport(ctx, student, place, now, label);
+  return {
+    studentNumber: fields.studentNumber,
+    action: "inserted",
+    reactivated: false,
+  };
 }
 
 /**
@@ -346,16 +336,23 @@ export const commitImportBatch = mutation({
     const updated = results
       .filter((r) => r.action === "updated")
       .map((r) => r.studentNumber);
+    // Leavers the sheet lists, set back to active with a new enrollment.
+    const reactivated = results
+      .filter((r) => r.reactivated)
+      .map((r) => r.studentNumber);
     await logAudit(ctx, {
       user,
       action: "upload",
       entityType: "students",
       entityId: runId,
       description: `Student import: ${inserted.length} added, ${updated.length} updated`,
-      metadata: { runId, batch: args.batch, inserted, updated },
+      metadata: { runId, batch: args.batch, inserted, updated, reactivated },
     });
 
-    return results;
+    return results.map(({ studentNumber, action }) => ({
+      studentNumber,
+      action,
+    }));
   },
 });
 
@@ -412,10 +409,22 @@ export const getExistingStudents = query({
       loadNames(ctx),
     ]);
 
-    return found
-      .filter((s) => s !== null)
-      .map((s) => ({
+    const students = found.filter((s) => s !== null);
+    const placements = await Promise.all(
+      students.map((s) => getCurrentPlacement(ctx, s._id)),
+    );
+
+    const importYear = [...names.years].find(
+      ([, name]) => name === IMPORT_ACADEMIC_YEAR,
+    )?.[0];
+
+    return students.map((s, i) => {
+      const placement = placements[i];
+      return {
         studentNumber: s.studentNumber,
+        // In a class in another year: the commit would refuse the row (no
+        // second open enrollment), so the preview rejects it up front.
+        placedInOtherYear: !!placement && placement.academicYear !== importYear,
         fields: {
           studentFullName: s.studentFullName ?? null,
           gender: s.gender ?? null,
@@ -424,8 +433,12 @@ export const getExistingStudents = query({
           religion: s.religion ?? null,
           birthCertificateNumber: s.birthCertificateNumber ?? null,
           passportNumber: s.passportNumber ?? null,
-          standardLevel: names.levels.get(s.standardLevel) ?? null,
-          campus: s.campus ? (names.campuses.get(s.campus) ?? null) : null,
+          standardLevel: placement
+            ? (names.levels.get(placement.standardLevelId) ?? null)
+            : null,
+          campus: placement?.campus
+            ? (names.campuses.get(placement.campus) ?? null)
+            : null,
           admittedLevel: s.admittedLevel
             ? (names.levels.get(s.admittedLevel) ?? null)
             : null,
@@ -444,6 +457,7 @@ export const getExistingStudents = query({
           fatherEmail: s.fatherEmail ?? null,
           status: s.status ?? null,
         },
-      }));
+      };
+    });
   },
 });

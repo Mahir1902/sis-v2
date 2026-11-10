@@ -47,7 +47,7 @@ export const columns: ColumnDef<StudentRow>[] = [
     header: "Academic Year",
     cell: ({ row }) => (
       <span className="text-sm text-gray-700">
-        {row.original.academicYearName}
+        {row.original.academicYearName ?? "—"}
       </span>
     ),
   },
@@ -56,7 +56,7 @@ export const columns: ColumnDef<StudentRow>[] = [
     header: "Standard Level",
     cell: ({ row }) => (
       <span className="text-sm text-gray-700">
-        {row.original.standardLevelName}
+        {row.original.standardLevelName ?? "—"}
       </span>
     ),
   },

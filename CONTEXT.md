@@ -104,6 +104,14 @@ _Avoid_: "GPA" — the school works in percentages and letter grades, not grade 
 All **active enrollments sharing one standard level + academic year**. This is the unit assessments are defined for, marks are entered for, and grades are compared within. `section` is a cosmetic sub-label and does **not** subdivide a Class for grading or analytics — the whole level+year is one Class.
 _Avoid_: "class" meaning a section, a room, or one teacher's group. For grading, Class = level + year.
 
+**Enrollment**:
+One student's placement in one standard level, campus and academic year. An Enrollment is **open** until the student leaves it (by promotion, hold-back, graduation, withdrawal, transfer or expulsion), at which point it is **closed** with an exit date and reason. A student has **at most one open Enrollment** at any time — never two classes at once. A mid-year change of campus, section or level (including correcting a mistaken placement) **amends the open Enrollment**; it does not close it and open a new one, so the year's grades, attendance and report cards stay on one Enrollment. New Enrollments are opened only by admission, promotion/hold-back, and re-admission.
+_Avoid_: treating a suspension as leaving — a suspended student keeps their open Enrollment.
+
+**Current Placement**:
+The student's **open Enrollment**, or **none**. A student who has left the school (withdrawn, transferred, expelled, graduated) has no Current Placement — they are not in any class. "Which class were they last in?" is a different question (**Last Placement**: the most recent Enrollment, open or closed) and must be asked explicitly, never as a silent fallback for Current Placement.
+_Avoid_: answering "current class" with a leaver's last class.
+
 **Class Average**:
 For one subject + semester, the mean of the **renormalized weighted averages** of every student in the Class who has a Computed Grade for it. It is the **difficulty-adjusted baseline** a student is measured against — comparing a student to the classmates who sat the same papers cancels difficulty out, which raw cross-level scores cannot. Shown only when **at least 5 students** in the Class have a grade for that subject+semester; below that the sample is too small to be a meaningful average and the comparison is suppressed ("not enough class data yet"). The per-CA baseline used in the within-term view is the mean of *present* students' percentages for that specific CA.
 _Avoid_: presenting a 1–4 student "average" as a class baseline — it identifies a specific peer rather than a cohort.

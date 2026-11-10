@@ -2,7 +2,6 @@
 import { convexTest, type TestConvex } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 /**
@@ -17,22 +16,11 @@ type TC = TestConvex<typeof schema>;
 
 let t: TC;
 let asAdmin: TC;
-let levelId: Id<"standardLevels">;
-let yearId: Id<"academicYears">;
 
 beforeEach(async () => {
   t = convexTest(schema, modules);
 
   const adminId = await t.run(async (ctx) => {
-    levelId = await ctx.db.insert("standardLevels", {
-      name: "Grade 1",
-      code: "01",
-    });
-    yearId = await ctx.db.insert("academicYears", {
-      name: "2024-2025",
-      startDate: 0,
-      endDate: 1,
-    });
     return ctx.db.insert("users", {
       name: "Admin",
       email: "admin@school.edu",
@@ -47,24 +35,18 @@ beforeEach(async () => {
     await ctx.db.insert("students", {
       studentNumber: "S-ACTIVE",
       studentFullName: "Active Student",
-      standardLevel: levelId,
-      academicYear: yearId,
       status: "active",
       createdAt: "2024-01-01T00:00:00.000Z",
     });
     await ctx.db.insert("students", {
       studentNumber: "S-GRAD",
       studentFullName: "Graduated Student",
-      standardLevel: levelId,
-      academicYear: yearId,
       status: "graduated",
       createdAt: "2024-01-01T00:00:00.000Z",
     });
     // Imported row: no status, no name.
     await ctx.db.insert("students", {
       studentNumber: "S-IMPORTED",
-      standardLevel: levelId,
-      academicYear: yearId,
       createdAt: "2024-01-01T00:00:00.000Z",
     });
   });

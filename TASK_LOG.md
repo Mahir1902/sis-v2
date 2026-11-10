@@ -2,6 +2,63 @@
 
 ---
 
+## Current Feature: Placement module — one copy of "which class", one "has left" (architecture review candidates 1 + 2, 2026-11-10)
+**Status**: Review — PR open; narrow PR stacked, merges after the migrations run
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidates 1 and 2 only. Rules enforced: CONTEXT.md
+"Enrollment" and "Current Placement" (added to CONTEXT.md on this branch). Out of scope:
+current academic year (3), dead tables (4), fee ledger (5), grade recompute (6), class roster (7),
+transactionLog caps (8).
+
+### Plan
+- `exitDate === undefined` is the only open/closed signal. `enrollments.status` is dropped.
+- `students.standardLevel / academicYear / campus` are dropped; the open enrollment is the only copy.
+  `admittedLevel` / `admissionAcademicYear` stay (import-only admission labels).
+- `convex/lib/placement.ts` owns every enrollment write and the one read `getCurrentPlacement`
+  (open enrollment or null, never a fallback to the last placement).
+- Rollout = widen → migrate → narrow. This PR is deploy 1 (widen + code + migrations); the narrow
+  (drop fields/indexes, union-literal `exitReason`/`enrollmentType`) is a stacked PR merged only after
+  the migrations have run on each deployment.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: re-admission / import into the year the student left collides with the promotion guard ("any enrollment in the target year") → Mitigation: two guards. Promotion blocks on any target-year enrollment; re-admit and import block only on an OPEN one. A year can hold closed + open rows for one student; per-year readers (`getStudentAttendance`) already pick open-else-latest.
+- Concern: amending the year orphans fees (`studentFees` / sessions are keyed by year) → Mitigation: amend changes level + campus only (CONTEXT.md: "campus, section or level"); a year change is promotion/hold-back. Edit dialog shows the year read-only.
+- Concern: withdrawn → suspended would open the re-admit dialog, though the admin wanted a label → Mitigation: rejected with a plain "has left — re-admit first" toast; the re-admit dialog opens only for → active.
+- Concern: import silently re-activates a leaver the sheet lists → Mitigation: kept (sheet = enrolled, same as today's reopen), but the re-activated student numbers go into the batch audit metadata.
+- Concern: promotion closes the source before the guard → Mitigation: guard first (`moveToNextYear`); test for the skip.
+- Concern: `enrollments.status` has hidden readers (rosters, classes-for-year, promotion candidates, mark entry) → Mitigation: every reader moves to `exitDate` in THIS PR, and nothing writes `status` any more, so rows without it are never invisible.
+- Concern: narrow fails on stale fields / unknown literals (`_seedGradingFixture` writes `"regular"`) → Mitigation: narrow PR gated on the strip migration finishing and the report showing zero unknown values; strip maps `"regular"` → `"new_admission"`; fixture fixed.
+- Concern: migration closes leavers' enrollments with the run time as exit date, falsifying history → Mitigation: no better date exists on the student; closed rows carry `exitNotes: "Closed by placement migration"` so they are distinguishable.
+- Concern: backfill must not reopen students whose enrollments are all closed (e.g. closed as "suspended") → Mitigation: backfill only for non-leavers with ZERO enrollments; the rest are reported.
+- Concern: two open enrollments pre-migration → Mitigation: `getCurrentPlacement` and the list map pick the newest; report lists them.
+- Concern: admission fees remain separate client calls after `createStudent` → Accepted, out of scope (fee ledger, candidate 5).
+- Concern: `getAllStudents` `.take(2000)` truncation → pre-existing, unchanged.
+
+### Sub-tasks
+- [x] 1. CONTEXT.md — Enrollment + Current Placement entries.
+- [x] 2. Schema widen — student class fields + `enrollments.status` optional (deprecated); `enrollments.by_exit_date` index — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 3. `convex/lib/placement.ts` — `getCurrentPlacement`, `admit`, `amend` (level + campus only), `changeStatus`, `readmit`, `moveToNextYear` (guard first), `placeFromImport` — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. Writers — `createStudent` admits atomically; `updateStudent({ placement })` amends; `updateStudentStatus` → `changeStatus`; new `readmitStudent`; `bulkPromote` + `commitImportBatch` via the module; `enrollments.createEnrollment` / `updateEnrollmentExit` deleted — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 5. Readers — `getAllStudents`, `getStudentById` (+ `placement`), `getSiblingsByStudent`, `getCurrentEnrollment`, `assignFee`, `collectFees`, import preview, promotion candidates; enrollment `status` checks → `exitDate` — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 6. Migrations — `placementReport`, `runPlacementMigrations` (close leavers → backfill → strip student copy → strip `enrollments.status` + `"regular"`→`"new_admission"`); `backfillEnrollments.ts` deleted — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 7. Frontend — admission single call; EditStudentDialog amends level/campus (year read-only, leaver note); StatusBadge → ReadmitDialog; promotions page drops `alreadyPromoted`; list "—" for leavers; import preview rejects "placed in another year" rows — APPROVED by Frontend Review Agent (2026-11-10; the import-preview/hook change was reviewed in the backend re-review)
+- [x] 8. Tests — `convex/placement.test.ts` (12), import tests rewritten/added, preview rejection test — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 9. tsc (only the 2 pre-existing attendance.test.ts errors) · `npm run lint` · `npm run build` · vitest 396/396 · `graphify update .` — 2026-11-10
+- [ ] 10. Narrow (stacked PR, merge after migrations run).
+
+### Review Notes
+**Backend Review (round 1, REJECTED):** (1) import decided re-admission from the row-merged doc, so a leaver listed as OPEN was re-admitted but not audited and typed `new_admission`; (2) "open in another year" threw a plain Error that aborted the whole batch, redacted in prod, with no preview reject. Non-blocking: bulkPromote didn't check the enrollment's source year/level; backfill should carry `student.campus` onto a campus-less open enrollment.
+**Backend Review (round 2, APPROVED 2026-11-10):** placement decided from the pre-patch doc, `"readmission"` type, audit `reactivated`; ConvexError `PLACED_IN_OTHER_YEAR` backstop + `placedInOtherYear` preview reject + specific toast; non-blocking items taken. Follow-ups (pre-existing): `getCurrentEnrollment` / `getEnrollmentHistory` lack the student-role own-only check; no tests for the migration component runs.
+**Frontend Review (round 1, REJECTED):** ReadmitDialog loading state, form reset on close, leaver confirm copy. **Round 2 APPROVED 2026-11-10** (also took `sm:max-w-md`, badge aria-label + focus ring).
+
+### Deployment runbook (between deploy 1 and the narrow PR)
+1. `npx convex run migrations:placementReport` — keep the output; fix drift by hand (Edit Student for level/campus, promotion for year), review `closedAsSuspended` and `multipleOpen`.
+2. `npx convex run migrations:runPlacementMigrations '{"dryRun":true}'`, then without `dryRun`.
+3. `npx convex run migrations:placementReport` again — `leaversWithOpen`, `unknownEnrollmentTypes`, `unknownExitReasons` must be empty before merging the narrow PR.
+
+---
+
 ## Current Feature: Attendance — call list ignores a register saved under another year (bug after PR #127, 2026-10-15)
 **Status**: Review — fix + regression test; review via the no-mistakes pipeline
 **Active Agent**: CODING AGENT (Firstmate crewmate; implementation inline)
@@ -53,6 +110,9 @@ Server side (schema, `convex/attendance.ts`, `convex/closures.ts`, roster querie
 - [x] 9. tsc / build / lint / vitest green — 2026-10-15. no-mistakes pipeline review: pending.
 
 ## Decisions Made
+- 2026-11-10 Placement: amend changes level + campus only; a year change is promotion/hold-back (fees are keyed by year).
+- 2026-11-10 Placement: re-admission opens a new enrollment even in the year the student left (closed + open rows in one year); only an OPEN enrollment blocks re-admit/import, any target-year enrollment blocks promotion.
+- 2026-11-10 Placement: rollout split into deploy 1 (widen + code + migrations) and a stacked narrow PR, because the narrowed schema can't be pushed until the migrations have run on each deployment.
 - 2026-10-15 Native `<input type="date">` for the date stepper and calendar form instead of the react-day-picker Calendar — ponytail rung 3, and `max=today` is the only bound the register needs.
 - 2026-10-15 The report's "note" column carries the computed flags in words (first/last appearance, "never appears in this period's register") rather than a non-persisted text box — it is what the typist transcribes from, and an input nobody saves would mislead.
 - 2026-10-15 Appearance warnings count days server-side (`markedBeforeFirst` / `markedAfterLast`) because the screen has no access to the class's marked-date set.

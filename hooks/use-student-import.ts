@@ -2,6 +2,7 @@
 
 import { useConvex } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import { ConvexError } from "convex/values";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -160,12 +161,20 @@ export function useStudentImport() {
       toast.success(
         `${created} created · ${updated} updated · ${skipped} skipped`,
       );
-    } catch {
+    } catch (err) {
       // Back to the preview: the rows that landed are already correct, and the
       // fix is the same file again rather than anything the admin must undo.
       setPhase({ kind: "preview", fileName, preview });
+      // Backstop for a student moved to another year since the preview ran
+      // (the preview rejects such rows itself): re-uploading won't help.
+      const data =
+        err instanceof ConvexError
+          ? (err.data as { code?: string; studentNumber?: string })
+          : undefined;
       toast.error(
-        `Import stopped after ${written} of ${rows.length} rows. Upload the same file again to finish it.`,
+        data?.code === "PLACED_IN_OTHER_YEAR"
+          ? `Import stopped after ${written} of ${rows.length} rows: student ${data.studentNumber} is in a class in another academic year. Promote or hold them back, then upload again.`
+          : `Import stopped after ${written} of ${rows.length} rows. Upload the same file again to finish it.`,
       );
     }
   }, [convex, phase]);
@@ -224,6 +233,9 @@ async function buildPreview(
     existingFieldValues: new Map(
       existing.map((e) => [e.studentNumber, e.fields]),
     ),
+    placedInOtherYear: existing
+      .filter((e) => e.placedInOtherYear)
+      .map((e) => e.studentNumber),
   });
 }
 

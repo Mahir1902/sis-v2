@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { placementErrorMessage } from "@/lib/placementErrors";
 
 const editStudentSchema = z.object({
   studentFullName: z.string().min(2, "Full name is required"),
@@ -48,9 +49,10 @@ const editStudentSchema = z.object({
     .min(1, "Birth certificate number is required"),
   passportNumber: z.string().optional(),
   passportValidTill: z.string().optional(),
-  standardLevel: z.string().min(1, "Standard level is required"),
-  academicYear: z.string().min(1, "Academic year is required"),
-  campus: z.string().min(1, "Campus is required"),
+  // Current Placement (amends the open enrollment). Empty for a leaver, who
+  // has no class to edit; required at submit when a placement exists.
+  standardLevel: z.string(),
+  campus: z.string(),
   presentAddress: z.string().min(1, "Present address is required"),
   permanentAddress: z.string().optional(),
   previousSchoolName: z.string().optional(),
@@ -103,7 +105,6 @@ export function EditStudentDialog({
 }: EditStudentDialogProps) {
   const student = useQuery(api.students.getStudentById, { studentId });
   const levels = useQuery(api.standardLevels.list);
-  const years = useQuery(api.academicYears.list);
   const campuses = useQuery(api.campus.list);
   const updateStudent = useMutation(api.students.updateStudent);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -122,7 +123,6 @@ export function EditStudentDialog({
       passportNumber: "",
       passportValidTill: "",
       standardLevel: "",
-      academicYear: "",
       campus: "",
       presentAddress: "",
       permanentAddress: "",
@@ -169,9 +169,8 @@ export function EditStudentDialog({
           typeof data.passportValidTill === "number"
             ? formatTimestampToDateString(data.passportValidTill)
             : "",
-        standardLevel: student.standardLevel,
-        academicYear: student.academicYear,
-        campus: student.campus,
+        standardLevel: student.placement?.standardLevelId ?? "",
+        campus: student.placement?.campus ?? "",
         presentAddress: student.presentAddress,
         permanentAddress: student.permanentAddress ?? "",
         previousSchoolName: student.previousSchoolName ?? "",
@@ -201,6 +200,15 @@ export function EditStudentDialog({
   }, [student, open, form]);
 
   async function onSubmit(values: EditStudentValues) {
+    const placed = !!student?.placement;
+    if (placed && !values.standardLevel) {
+      form.setError("standardLevel", { message: "Standard level is required" });
+      return;
+    }
+    if (placed && !values.campus) {
+      form.setError("campus", { message: "Campus is required" });
+      return;
+    }
     setIsSubmitting(true);
     try {
       await updateStudent({
@@ -217,9 +225,13 @@ export function EditStudentDialog({
         passportValidTill: values.passportValidTill
           ? new Date(values.passportValidTill).getTime()
           : undefined,
-        standardLevel: values.standardLevel as Id<"standardLevels">,
-        academicYear: values.academicYear as Id<"academicYears">,
-        campus: values.campus as Id<"campuses">,
+        // Amends the open enrollment in the same transaction.
+        placement: placed
+          ? {
+              standardLevelId: values.standardLevel as Id<"standardLevels">,
+              campus: values.campus as Id<"campuses">,
+            }
+          : undefined,
         presentAddress: values.presentAddress,
         permanentAddress: values.permanentAddress || undefined,
         previousSchoolName: values.previousSchoolName || undefined,
@@ -245,8 +257,8 @@ export function EditStudentDialog({
       });
       toast.success("Student updated successfully");
       onOpenChange(false);
-    } catch {
-      toast.error("Failed to update student");
+    } catch (err) {
+      toast.error(placementErrorMessage(err, "Failed to update student"));
     } finally {
       setIsSubmitting(false);
     }
@@ -457,89 +469,78 @@ export function EditStudentDialog({
                   <h4 className="text-xs font-semibold text-slate-700 mb-3">
                     Academic Placement
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <FormField
-                      control={form.control}
-                      name="standardLevel"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Standard Level *</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select level" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {(levels ?? []).map((l) => (
-                                <SelectItem key={l._id} value={l._id}>
-                                  {l.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="academicYear"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Academic Year *</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select year" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {(years ?? []).map((y) => (
-                                <SelectItem key={y._id} value={y._id}>
-                                  {y.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="campus"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Campus *</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select campus" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {(campuses ?? []).map((c) => (
-                                <SelectItem key={c._id} value={c._id}>
-                                  {c.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  {student?.placement ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="standardLevel"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Standard Level *</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select level" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {(levels ?? []).map((l) => (
+                                  <SelectItem key={l._id} value={l._id}>
+                                    {l.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Academic Year</p>
+                        <p className="text-sm text-gray-700">
+                          {student?.academicYearDoc?.name ?? "—"}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Changes by promotion, not here.
+                        </p>
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name="campus"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Campus *</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select campus" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {(campuses ?? []).map((c) => (
+                                  <SelectItem key={c._id} value={c._id}>
+                                    {c.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      Not in a class — this student has left. Use the status
+                      badge to re-admit them into a class.
+                    </p>
+                  )}
                 </div>
 
                 {/* Address */}

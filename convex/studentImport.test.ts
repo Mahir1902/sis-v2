@@ -171,14 +171,15 @@ describe("commitImportBatch — insert", () => {
     const student = await existingStudent(NUMBER);
     expect(student).toMatchObject({
       studentFullName: "Amina Rahman",
-      standardLevel: grade2,
-      academicYear: currentYear,
-      campus: campus1,
       gender: "Female",
       dateOfBirth: 1_000_000,
       admittedLevel: grade1,
       status: "active",
     });
+    // The class lives on the enrollment only (Placement module).
+    expect(student.standardLevel).toBeUndefined();
+    expect(student.academicYear).toBeUndefined();
+    expect(student.campus).toBeUndefined();
 
     const enrollments = await enrollmentsOf(student._id);
     expect(enrollments).toHaveLength(1);
@@ -187,7 +188,6 @@ describe("commitImportBatch — insert", () => {
       standardLevelId: grade2,
       campus: campus1,
       enrollmentType: "new_admission",
-      status: "active",
     });
     expect(enrollments[0].exitDate).toBeUndefined();
     expect(enrollments[0].previousEnrollmentId).toBeUndefined();
@@ -242,8 +242,6 @@ describe("commitImportBatch — re-commit (upsert)", () => {
     const sibling = await t.run((ctx) =>
       ctx.db.insert("students", {
         studentNumber: "S0724-1400",
-        standardLevel: grade1,
-        academicYear: currentYear,
         createdAt: "2026-01-01T00:00:00.000Z",
       }),
     );
@@ -266,28 +264,85 @@ describe("commitImportBatch — re-commit (upsert)", () => {
     expect(after?.studentFullName).toBe("Amina Rahman");
   });
 
-  it("clears the exit block — a student on the sheet is enrolled", async () => {
+  it("re-admits a listed leaver with a new enrollment, never reopening the old one", async () => {
     await commit([row()]);
     const student = await existingStudent(NUMBER);
-    const enrollment = (await enrollmentsOf(student._id))[0];
+    const first = (await enrollmentsOf(student._id))[0];
 
     // The student was withdrawn in-app, then turns up on the next sheet.
-    await t.run((ctx) =>
-      ctx.db.patch(enrollment._id, {
-        status: "completed",
+    await t.run(async (ctx) => {
+      await ctx.db.patch(first._id, {
         exitDate: 1_700_000_000_000,
         exitReason: "withdrawn",
-      }),
-    );
+      });
+      await ctx.db.patch(student._id, { status: "withdrawn" });
+    });
 
     await commit([row()], "run-2");
 
-    const after = (await enrollmentsOf(student._id))[0];
-    expect(after.status).toBe("active");
-    // Current enrollment is detected via exitDate === undefined; active with an
-    // exit date would be two answers to the same question.
-    expect(after.exitDate).toBeUndefined();
-    expect(after.exitReason).toBeUndefined();
+    const after = await enrollmentsOf(student._id);
+    // Closed history kept; exactly one open enrollment.
+    expect(after).toHaveLength(2);
+    expect(after.find((e) => e._id === first._id)?.exitReason).toBe(
+      "withdrawn",
+    );
+    expect(after.filter((e) => e.exitDate === undefined)).toHaveLength(1);
+    expect((await existingStudent(NUMBER)).status).toBe("active");
+  });
+
+  it("rejects a student whose open enrollment is in another year", async () => {
+    await commit([row()]);
+    const student = await existingStudent(NUMBER);
+    const lastYear = await t.run((ctx) =>
+      ctx.db.insert("academicYears", {
+        name: "2025-2026",
+        startDate: 0,
+        endDate: 1,
+      }),
+    );
+    const [enrollment] = await enrollmentsOf(student._id);
+    await t.run((ctx) =>
+      ctx.db.patch(enrollment._id, { academicYear: lastYear }),
+    );
+
+    await expect(commit([row()], "run-2")).rejects.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ code: "PLACED_IN_OTHER_YEAR" }),
+      }),
+    );
+    expect(await enrollmentsOf(student._id)).toHaveLength(1);
+
+    // ...and the preview flags the row so it never reaches the commit.
+    const [flagged] = await asAdmin.query(
+      api.studentImport.getExistingStudents,
+      { studentNumbers: [NUMBER] },
+    );
+    expect(flagged.placedInOtherYear).toBe(true);
+  });
+
+  it("a leaver listed as OPEN is re-admitted and recorded as re-activated", async () => {
+    await commit([row()]);
+    const student = await existingStudent(NUMBER);
+    const [first] = await enrollmentsOf(student._id);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(first._id, { exitDate: 1, exitReason: "withdrawn" });
+      await ctx.db.patch(student._id, { status: "withdrawn" });
+    });
+
+    await commit([row({ status: "active" })], "run-2");
+
+    const open = (await enrollmentsOf(student._id)).filter(
+      (e) => e.exitDate === undefined,
+    );
+    expect(open).toHaveLength(1);
+    expect(open[0].enrollmentType).toBe("readmission");
+    const audits = await t.run((ctx) => ctx.db.query("auditLogs").collect());
+    const run2 = audits.find(
+      (a) => (a.metadata as { runId?: string })?.runId === "run-2",
+    );
+    expect((run2?.metadata as { reactivated: string[] }).reactivated).toEqual([
+      NUMBER,
+    ]);
   });
 
   it("preserves the original enrollment date, never re-stamping it", async () => {

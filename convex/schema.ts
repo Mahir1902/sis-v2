@@ -120,9 +120,12 @@ export default defineSchema({
     passportNumber: v.optional(v.string()),
     passportValidTill: v.optional(v.float64()),
 
-    // Academic placement (current)
-    standardLevel: v.id("standardLevels"),
-    academicYear: v.id("academicYears"),
+    // DEPRECATED — a stale copy of the open enrollment's class. Nothing reads
+    // or writes these; the `stripStudentPlacement` migration unsets them and
+    // the narrow PR deletes them. The class lives on `enrollments` only
+    // (convex/lib/placement.ts, CONTEXT.md "Current Placement").
+    standardLevel: v.optional(v.id("standardLevels")),
+    academicYear: v.optional(v.id("academicYears")),
     campus: v.optional(v.id("campuses")),
 
     // Dates
@@ -223,9 +226,13 @@ export default defineSchema({
     campus: v.optional(v.id("campuses")),
     section: v.optional(v.string()),
     rollNumber: v.optional(v.string()),
-    enrollmentType: v.string(), // "new_admission" | "promotion"
+    // `EnrollmentType` / `ExitReason` in convex/lib/placement.ts. Still
+    // v.string() until the narrow PR — stored rows may hold legacy values.
+    enrollmentType: v.string(),
     enrollmentDate: v.float64(),
-    status: v.string(), // "active" | "completed"
+    // DEPRECATED — open/closed is `exitDate === undefined` and nothing else.
+    // Never written; unset by the `stripEnrollmentStatus` migration.
+    status: v.optional(v.string()),
 
     exitDate: v.optional(v.float64()),
     exitReason: v.optional(v.string()),
@@ -240,7 +247,10 @@ export default defineSchema({
     // Which classes exist in a year, for the day view's "N of M classes
     // marked" and the report's completeness banner. No existing index can
     // range on academicYear alone. (attendance spec §7 A3)
-    .index("by_academic_year", ["academicYear"]),
+    .index("by_academic_year", ["academicYear"])
+    // Open enrollments (`exitDate` undefined) in one range — the students
+    // list resolves every student's Current Placement from it.
+    .index("by_exit_date", ["exitDate"]),
 
   // ─── Attendance ───────────────────────────────────────────────────────────
 

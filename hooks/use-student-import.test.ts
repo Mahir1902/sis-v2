@@ -211,3 +211,27 @@ describe("toCommitRow — the payload contract", () => {
     }
   });
 });
+
+describe("buildImportPreview — placement", () => {
+  it("rejects an existing student whose class is in another academic year", () => {
+    const build = (placedInOtherYear: string[]) =>
+      buildImportPreview({
+        sheets: [INVENTED_SHEET],
+        reference: {
+          levelNamesByCode: new Map([
+            ["01", "Grade 1"],
+            ["PG", "Play Group"],
+          ]),
+          campusNames: new Set(["Campus 01"]),
+          academicYearNames: new Set(["2021-2022"]),
+        },
+        existingStudentNumbers: ["S0122-1000"],
+        placedInOtherYear,
+      }).rows[0];
+
+    expect(build([]).outcome).toBe("update");
+    const row = build(["S0122-1000"]);
+    expect(row.outcome).toBe("reject");
+    expect(row.errors[0].reason).toMatch(/another academic year/);
+  });
+});
