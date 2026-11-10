@@ -86,12 +86,7 @@ export const importRowValidator = v.object({
 
 export type ImportRow = Infer<typeof importRowValidator>;
 
-type StudentFields = Partial<
-  Omit<
-    Doc<"students">,
-    "_id" | "_creationTime" | "standardLevel" | "academicYear" | "campus"
-  >
-> & {
+type StudentFields = Partial<Omit<Doc<"students">, "_id" | "_creationTime">> & {
   studentNumber: string;
 };
 
