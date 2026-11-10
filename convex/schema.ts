@@ -407,19 +407,6 @@ export default defineSchema({
         amount: v.float64(),
       }),
     ),
-    // DEPRECATED (fee ledger, 2026-11-10): duplicated `feeTransactions.by_fee`.
-    // No longer written; `migrations:runFeeLedgerMigrations` strips it. The
-    // stacked narrow PR removes the field.
-    paymentDetails: v.optional(
-      v.array(
-        v.object({
-          paymentId: v.id("feeTransactions"),
-          date: v.string(),
-          amount: v.float64(),
-          mode: v.string(),
-        }),
-      ),
-    ),
     lateFeeAmount: v.optional(v.float64()),
   })
     .index("by_student_year", ["studentId", "academicYear"])
@@ -452,21 +439,6 @@ export default defineSchema({
     .index("by_student_year", ["studentId", "academicYear"])
     .index("by_fee", ["feeId"])
     .index("by_session", ["sessionId"]),
-
-  // DEPRECATED (fee ledger, 2026-11-10): write-only and not linked to a fee;
-  // `studentFees.appliedDiscounts` + `auditLogs` carry the same facts. No
-  // longer written; `migrations:runFeeLedgerMigrations` empties it and the
-  // stacked narrow PR drops the table.
-  studentDiscounts: defineTable({
-    studentId: v.id("students"),
-    discountRuleId: v.id("discountRules"),
-    academicYear: v.id("academicYears"),
-    reason: v.string(),
-    startDate: v.string(),
-    endDate: v.optional(v.string()),
-    status: v.string(), // "active" | "inactive"
-    relatedEntityId: v.optional(v.string()),
-  }).index("by_student_year", ["studentId", "academicYear"]),
 
   advancePayments: defineTable({
     studentId: v.id("students"),

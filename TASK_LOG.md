@@ -62,7 +62,7 @@ Verdict: APPROVE WITH CAUTION — proceed with the mitigations above.
 - [x] 6. Tests — `convex/feeLedger.test.ts` (16): collect→void→re-issue round trip incl. audit link, duplicate ids, stale total, invalid date, leaver re-issue, float discount void, void→delete fee, ৳0 settle, paid⇒live txn, sequential numbers, delete refused, attendance cascade, teacher rejected, migration — APPROVED by Backend Review Agent (2026-11-10)
 - [x] 7. Frontend — `VoidReceiptDialog`, `ReissueReceiptDialog` (RHF + Zod, `receiptCorrectionSchema`), receipt page buttons, `ReceiptDocument` cross-link lines, FeeDetailDialog (no `paymentDetails`, Live/Voided badges, ৳0 toast), CollectFeesDialog `expectedTotal`, slim assign/admission args, StudentHeader refusal toast — APPROVED by Frontend Review Agent (2026-11-10)
 - [x] 8. tsc clean · `npm run lint` clean · `npm run build` · vitest 412/412 (unit 316 + convex 96) · `graphify update .` — 2026-11-10
-- [ ] 9. Narrow (stacked PR): drop `paymentDetails`, drop `studentDiscounts` table + cascade line — PENDING
+- [ ] 9. Narrow (stacked PR `fm/sis-fee-ledger-narrow`): drop `paymentDetails`, drop `studentDiscounts` table + cascade line, remove the widen migrations — merge only after `feeLedgerReport` is all zeros on every deployment
 
 ### Review Notes
 **Backend Review (round 1, REJECTED):** (1) the `void` audit row of a re-issue never carried `supersededBy` (logged before collect) and the arg was dead; (2) `expectedTotal` compared floats exactly; (3) `paymentDate` unvalidated (NaN / negative / far future). Non-blocking taken: `feeLedgerReport` `truncated` + live-transaction probe.
