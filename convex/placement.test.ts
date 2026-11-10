@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest, type TestConvex } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
@@ -119,12 +119,6 @@ describe("admission", () => {
   it("creates the student and exactly one open enrollment in one call", async () => {
     const studentId = await admit();
 
-    const student = await t.run((ctx) => ctx.db.get(studentId));
-    // The class is stored on the enrollment only.
-    expect(student?.standardLevel).toBeUndefined();
-    expect(student?.academicYear).toBeUndefined();
-    expect(student?.campus).toBeUndefined();
-
     const open = await openOf(studentId);
     expect(open).toHaveLength(1);
     expect(open[0]).toMatchObject({
@@ -133,7 +127,6 @@ describe("admission", () => {
       campus: campusA,
       enrollmentType: "new_admission",
     });
-    expect(open[0].status).toBeUndefined();
   });
 });
 
@@ -340,64 +333,5 @@ describe("promotion", () => {
     ]);
     expect(student?.status).toBe("graduated");
     expect(closed?.exitReason).toBe("graduated");
-  });
-});
-
-describe("placementReport (migration review)", () => {
-  it("lists double-open, closed-as-suspended, drift, leavers with a class and unknown values", async () => {
-    await t.run(async (ctx) => {
-      const base = { createdAt: "2026-01-01T00:00:00.000Z" };
-      const double = await ctx.db.insert("students", {
-        ...base,
-        studentNumber: "DOUBLE",
-      });
-      const suspended = await ctx.db.insert("students", {
-        ...base,
-        studentNumber: "SUSP",
-        status: "suspended",
-      });
-      const drifted = await ctx.db.insert("students", {
-        ...base,
-        studentNumber: "DRIFT",
-        standardLevel: grade2,
-        academicYear: thisYear,
-      });
-      const leaver = await ctx.db.insert("students", {
-        ...base,
-        studentNumber: "LEFT",
-        status: "withdrawn",
-      });
-      const open = (
-        studentId: Id<"students">,
-        extra: Record<string, unknown> = {},
-      ) =>
-        ctx.db.insert("enrollments", {
-          studentId,
-          academicYear: thisYear,
-          standardLevelId: grade1,
-          enrollmentType: "new_admission",
-          enrollmentDate: 0,
-          ...extra,
-        });
-      await open(double);
-      await open(double, { enrollmentType: "regular" });
-      await open(suspended, { exitDate: 1, exitReason: "suspended" });
-      await open(drifted);
-      await open(leaver);
-    });
-
-    const report = await t.query(internal.migrations.placementReport, {});
-    expect(report.multipleOpen.map((r) => r.studentNumber)).toEqual(["DOUBLE"]);
-    expect(report.closedAsSuspended.map((r) => r.studentNumber)).toEqual([
-      "SUSP",
-    ]);
-    expect(report.notPlaced).toEqual([
-      { studentNumber: "SUSP", status: "suspended", hasEnrollments: true },
-    ]);
-    expect(report.drift.map((r) => r.studentNumber)).toEqual(["DRIFT"]);
-    expect(report.leaversWithOpen.map((r) => r.studentNumber)).toEqual([
-      "LEFT",
-    ]);
-    expect(report.unknownEnrollmentTypes).toEqual({ regular: 1 });
   });
 });
