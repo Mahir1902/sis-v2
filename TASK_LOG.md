@@ -2,6 +2,59 @@
 
 ---
 
+## Current Feature: Drop the dead tables (architecture review candidate 4, 2026-11-10)
+**Status**: Review — stage 1 PR open; stage 2 stacked, merges only after the migrations ran on every deployment (runbook under sub-task 2)
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 4 only. Out of scope: `studentDiscounts`
+(write-only, but belongs to the fee ledger, candidate 5), the current academic year (candidate 3,
+parallel branch), and the students/enrollments placement fields (narrow pending on
+`fm/sis-placement-narrow-v2`).
+
+### Usage re-verified (2026-11-10, dev `hushed-bass-123`)
+| Candidate | Runtime readers/writers | Dev rows |
+|---|---|---|
+| `staff` | none (CLAUDE.md "Schema improvements" #4 only) | 0 |
+| `gradeMapping` | seed insert + seed test only; letter grades come from `lib/gradeComputation` | 6 (seeded) |
+| `grades` | `deleteStudent` cascade only | 0 |
+| `advancePayments` | `deleteStudent` cascade only | 0 |
+| `discountRules.discription` | none (a dead optional field on `FeeDetailDialog`'s local type) | 4 of 4 rules, all with empty `description` |
+| `convex/backfillEnrollments.ts` | already deleted by the placement PR (#131); not in `api.d.ts` or `scripts/` | n/a |
+
+Prod could not be read from this session; `deadTables:report` is the gate there.
+
+### Plan (revised after Devil's Advocate)
+- Stage 1 (PR against main): `convex/deadTables.ts` = `report` query + two migrations chained in
+  `run`: delete the seeded `gradeMapping` rows (throws on any row that is not an exact seed band),
+  and move `discountRules.discription` into an empty `description`. `staff` / `grades` /
+  `advancePayments` get NO delete migration: they are empty on dev, and a non-zero count anywhere is
+  real data, so the rollout stops there. Stop the last writer: the `gradeMapping` seed and its test
+  expectation. CLAUDE.md "Schema improvements" #4 / #5 rewritten.
+- Stage 2 (stacked PR): schema drops the 4 tables + `discountRules.discription`; the `deleteStudent`
+  cascade lines for `grades` / `advancePayments` go here (the only atomic point with the table drop);
+  `deadTables.ts` + test deleted; `FeeDetailDialog` type field dropped. Merges only after the
+  migrations ran everywhere and a fresh `report` is all zeros.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern (blocking): `run` deleted every row unconditionally, so real prod data would be destroyed and the report was only advisory → Mitigation: no delete migration for `staff` / `grades` / `advancePayments`; the `gradeMapping` delete throws on any row that isn't an exact seed band (6 rows fit one batch, so it's all-or-nothing).
+- Concern (blocking): removing the `deleteStudent` cascade in stage 1 orphans rows if a student is deleted before the data question is answered → Mitigation: cascade removal moved to stage 2.
+- Concern (blocking): an old-code reseed or preview deployment can recreate `gradeMapping` rows after the migration → Mitigation: runbook says re-run `report` immediately before merging stage 2. A dropped table does NOT fail the schema push (Convex only validates listed tables; the rows are silently orphaned), so that fresh `report` is the only gate for the four tables; only `discountRules.discription` fails the push.
+- Concern: the migrations component reports "done" even when it skipped a conflicting discount rule → Mitigation: `report` (not migration status) is the gate; one shared `discriptionAction` helper drives both the report and the migration, unit-tested on every case.
+- Concern: report counts must be bounded → Mitigation: `take(1000)` per table; any non-zero count stops the rollout anyway.
+- Concern: stage 2 and the placement narrow both push schema → Mitigation: noted in the stage 2 PR; land one, then rebase the other.
+- Concern: CLAUDE.md #4/#5 deleted silently would let agents re-add them from v1 → Mitigation: rewritten as "removed — don't reintroduce".
+
+### Sub-tasks
+- [x] 1. Stage 1 (PR against main, `fm/sis-drop-dead-tables`): `convex/deadTables.ts` (`report`, `deleteSeedGradeMapping`, `moveDiscription`, `run`) + test, `gradeMapping` seed and its test expectation removed, CLAUDE.md #4/#5 — APPROVED by Backend Review Agent (2026-11-10, after the runbook fixes below)
+- [ ] 2. Stage 2 — schema narrow + runbook line — PENDING
+- [x] 3. Stage 1: tsc · `npm run lint` · `npm run build` · vitest 407/407 · `graphify update .` — 2026-11-10
+
+### Review Notes
+**Backend Review (round 1, REJECTED — rollout text only, code endorsed):** (1) a finished `run` never runs again; the conflict-fix / reseed path needs `deadTables:run '{"reset":true}'`; (2) "Convex rejects the push while rows remain" is false for tables — a dropped table deploys and silently orphans its rows; only the `discription` field fails the push, so the fresh pre-merge `report` is the only gate for the four tables. Non-blocking: pin that a `gradeMapping` throw stops the series before `moveDiscription` (test added); regenerate `api.d.ts` with real codegen on the next `npx convex dev` and expect no diff.
+**Backend Review (round 2, APPROVED 2026-11-10):** reset command and table-drop-is-no-backstop wording fixed in `deadTables.ts`, the Devil's Advocate line and the stage 2 runbook; series-stop assertion added.
+
+---
+
 ## Current Feature: Transaction log — read paths that silently drop rows (architecture review candidate 8, 2026-11-10)
 **Status**: Review — PR open
 **Active Agent**: CODING AGENT
