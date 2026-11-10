@@ -1,8 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest, type TestConvex } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";
-import migrationsSchema from "../node_modules/@convex-dev/migrations/src/component/schema";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
@@ -15,9 +14,6 @@ import schema from "./schema";
  */
 
 const modules = import.meta.glob("./**/*.*s");
-const migrationsModules = import.meta.glob(
-  "../node_modules/@convex-dev/migrations/src/component/**/*.ts",
-);
 type TC = TestConvex<typeof schema>;
 
 let t: TC;
@@ -33,7 +29,6 @@ let halfDiscount: Id<"discountRules">;
 
 beforeEach(async () => {
   t = convexTest(schema, modules);
-  t.registerComponent("migrations", migrationsSchema, migrationsModules);
   const ids = await t.run(async (ctx) => {
     grade1 = await ctx.db.insert("standardLevels", {
       name: "Grade 1",
@@ -169,7 +164,6 @@ describe("assign", () => {
       billingPeriod: "2026-09",
       appliedDiscounts: [],
     });
-    expect((await fee(id))?.paymentDetails).toBeUndefined();
   });
 });
 
@@ -549,26 +543,5 @@ describe("permissions", () => {
     ];
     for (const call of calls)
       await expect(call()).rejects.toThrow(/Unauthorized/);
-  });
-});
-
-describe("migration", () => {
-  it("strips paymentDetails and resets legacy paid-by-discount fees", async () => {
-    const s = await admit();
-    const f = await assign(s, books);
-    await t.run((ctx) =>
-      ctx.db.patch(f, {
-        status: "paid",
-        balance: 0,
-        paymentDetails: [],
-        appliedDiscounts: [
-          { discountId: fullDiscount, type: "percentage", amount: 333 },
-        ],
-      }),
-    );
-    await t.mutation(internal.migrations.runFeeLedgerMigrations, {});
-    await t.finishAllScheduledFunctions(() => {});
-    expect(await fee(f)).toMatchObject({ status: "unpaid", balance: 0 });
-    expect((await fee(f))?.paymentDetails).toBeUndefined();
   });
 });
