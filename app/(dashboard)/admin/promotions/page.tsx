@@ -185,7 +185,7 @@ function PromotionsPageContent() {
       });
 
       toast.success(
-        `${result.promoted} promoted, ${result.heldBack} held back, ${result.graduated} graduated. ${result.feesAssigned} fee records created.`,
+        `${result.promoted} promoted, ${result.heldBack} held back, ${result.graduated} graduated. ${result.feesAssigned} fee records created.${result.skipped ? ` ${result.skipped} skipped (already enrolled in the target year).` : ""}`,
       );
       setSelectedLevelId("");
       setActions({});
