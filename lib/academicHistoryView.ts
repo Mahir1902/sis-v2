@@ -6,6 +6,8 @@ export type OverallSuppressedReason =
   | "not_graded"
   | "provisional"
   | "insufficient_peers"
+  // The enrollment has no campus, so it is in no Class (ADR-0007).
+  | "no_campus"
   | null;
 
 /**
@@ -102,6 +104,11 @@ export function overallPositionCopy(
       };
     case "not_graded":
       return { headline: "Not yet graded this term", detail: null };
+    case "no_campus":
+      return {
+        headline: "No class to compare with",
+        detail: "This enrollment has no campus — set it in Edit Student",
+      };
     default:
       return { headline: "Class position pending", detail: null };
   }

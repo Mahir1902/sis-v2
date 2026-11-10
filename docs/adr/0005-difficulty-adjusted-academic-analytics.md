@@ -5,6 +5,9 @@ date: 2026-06-30
 
 # Difficulty-adjusted academic analytics: measure students against their own class
 
+> **Amended by [ADR-0007](0007-class-is-per-campus.md) (2026-11-10):** the Class is
+> campus + standard level + academic year, not level + year. Everything else here stands.
+
 ## Context and decision
 
 "How is this student doing?" cannot be answered honestly with raw percentages. A subject's

@@ -43,6 +43,7 @@ export default function ClassAnalyticsPage() {
 // ── Content ───────────────────────────────────────────────────────────────────
 
 function ClassAnalyticsContent() {
+  const [selectedCampusId, setSelectedCampusId] = useState<string>("");
   const [selectedLevelId, setSelectedLevelId] = useState<string>("");
   const [selectedYearId, setSelectedYearId] = useState<string>("");
   // Term ALWAYS has a value — default Semester 1 (DA #2): never send an
@@ -52,10 +53,15 @@ function ClassAnalyticsContent() {
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
 
   // ── Selector data sources (NOT the cohort fan-out — these are fine) ──────
+  const campuses = useQuery(api.campus.list);
   const levels = useQuery(api.standardLevels.list);
   const years = useQuery(api.academicYears.list);
   const subjects = useQuery(api.subjects.list);
 
+  // A Class is campus + level + year (ADR-0007).
+  const campusId = selectedCampusId
+    ? (selectedCampusId as Id<"campuses">)
+    : undefined;
   const levelId = selectedLevelId
     ? (selectedLevelId as Id<"standardLevels">)
     : undefined;
@@ -71,7 +77,8 @@ function ClassAnalyticsContent() {
 
   // Both cohort queries skip until level + year resolve. Semester always has a
   // default, so it never blocks the skip gate (DA #3).
-  const ready = levelId !== undefined && yearId !== undefined;
+  const ready =
+    campusId !== undefined && levelId !== undefined && yearId !== undefined;
 
   // ── Exactly TWO cohort useQuery calls on this page (DA #7). No per-subject
   // query in a .map — the subject list above feeds the selector only. ────────
@@ -79,6 +86,7 @@ function ClassAnalyticsContent() {
     api.computedGrades.getGradeSpread,
     ready
       ? {
+          campus: campusId,
           standardLevelId: levelId,
           academicYear: yearId,
           semester, // always passed (DA #2)
@@ -90,6 +98,7 @@ function ClassAnalyticsContent() {
     api.computedGrades.getStudentsNeedingHelp,
     ready
       ? {
+          campus: campusId,
           standardLevelId: levelId,
           academicYear: yearId,
           semester, // required arg; always passed (DA #2)
@@ -118,6 +127,31 @@ function ClassAnalyticsContent() {
       {/* Selector bar */}
       <div className="rounded-lg border bg-white p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          {/* Campus (required) */}
+          <div className="flex-1 space-y-1.5">
+            <label
+              className="text-sm font-medium text-gray-700"
+              htmlFor="ca-campus"
+            >
+              Campus
+            </label>
+            <Select
+              value={selectedCampusId}
+              onValueChange={setSelectedCampusId}
+            >
+              <SelectTrigger id="ca-campus" aria-label="Select campus">
+                <SelectValue placeholder="Select campus" />
+              </SelectTrigger>
+              <SelectContent>
+                {campuses?.map((c) => (
+                  <SelectItem key={c._id} value={c._id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Standard level (required) */}
           <div className="flex-1 space-y-1.5">
             <label
@@ -305,7 +339,8 @@ function PromptState() {
     <div className="flex flex-col items-center justify-center rounded-lg border bg-white py-20 text-center">
       <BarChart3 className="mb-3 h-10 w-10 text-gray-300" />
       <p className="font-medium text-gray-500">
-        Select a standard level and academic year to view class analytics
+        Select a campus, standard level and academic year to view class
+        analytics
       </p>
     </div>
   );

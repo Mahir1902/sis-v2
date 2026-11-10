@@ -7,6 +7,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -50,10 +57,20 @@ export function MarkEntryGrid({
   assessmentId,
   assessment,
 }: MarkEntryGridProps) {
-  const enrollments = useQuery(api.enrollments.getEnrollmentsByLevelYear, {
-    standardLevelId: assessment.standardLevelId,
-    academicYearId: assessment.academicYearId,
-  });
+  // A Class is per campus (ADR-0007, #120): the paper is shared across
+  // campuses, so marks are entered one campus at a time.
+  const campuses = useQuery(api.campus.list);
+  const [campus, setCampus] = useState<Id<"campuses"> | "">("");
+  const enrollments = useQuery(
+    api.enrollments.getClassRoster,
+    campus
+      ? {
+          campus,
+          standardLevelId: assessment.standardLevelId,
+          academicYear: assessment.academicYearId,
+        }
+      : "skip",
+  );
 
   const existingAnswers = useQuery(
     api.studentAssessmentAnswers.getAnswersByAssessment,
@@ -223,10 +240,60 @@ export function MarkEntryGrid({
     [assessmentId, markAbsent],
   );
 
+  const campusPicker = (
+    <div className="flex flex-col gap-1.5 sm:max-w-xs">
+      <label
+        className="text-sm font-medium text-gray-700"
+        htmlFor="mark-entry-campus"
+      >
+        Campus
+      </label>
+      <Select
+        value={campus}
+        onValueChange={(v) => {
+          // A different campus is a different mark sheet: drop unsaved edits
+          // so one save never mixes two classes.
+          changesRef.current.clear();
+          setChangeCount(0);
+          setTotalsByStudent(new Map());
+          setCampus(v as Id<"campuses">);
+        }}
+      >
+        <SelectTrigger id="mark-entry-campus" aria-label="Select campus">
+          <SelectValue placeholder="Select campus" />
+        </SelectTrigger>
+        <SelectContent>
+          {campuses?.map((c) => (
+            <SelectItem key={c._id} value={c._id}>
+              {c.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+  const campusName = campuses?.find((c) => c._id === campus)?.name;
+
+  // No campus chosen yet — the roster cannot be read without one.
+  if (!campus) {
+    return (
+      <div className="bg-white rounded-lg border p-6 space-y-4">
+        {campusPicker}
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Users className="h-10 w-10 text-gray-300 mb-3" />
+          <p className="text-gray-500 font-medium">
+            Select a campus to open its mark sheet
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Loading state
   if (enrollments === undefined || existingAnswers === undefined) {
     return (
       <div className="bg-white rounded-lg border p-6 space-y-4">
+        {campusPicker}
         <Skeleton className="h-6 w-48" />
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -241,33 +308,37 @@ export function MarkEntryGrid({
   // Empty state — no students enrolled
   if (enrollments.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-lg border">
-        <Users className="h-10 w-10 text-gray-300 mb-3" />
-        <p className="text-gray-500 font-medium">
-          No students enrolled in this class
-        </p>
-        <p className="text-sm text-gray-400 mt-1">
-          Students must be enrolled in the matching level and academic year.
-        </p>
+      <div className="bg-white rounded-lg border p-6 space-y-4">
+        {campusPicker}
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Users className="h-10 w-10 text-gray-300 mb-3" />
+          <p className="text-gray-500 font-medium">
+            No students enrolled in this class
+          </p>
+          <p className="text-sm text-gray-400 mt-1">
+            Students must be enrolled at this campus in the matching level and
+            academic year.
+          </p>
+        </div>
       </div>
     );
   }
 
-  // Sort enrollments by student name
-  const sortedEnrollments = [...enrollments].sort((a, b) =>
-    a.studentName.localeCompare(b.studentName),
-  );
-
   return (
     <div className="bg-white rounded-lg border">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-b">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Mark Entry</h2>
-          <p className="text-sm text-gray-500">
-            {sortedEnrollments.length} student
-            {sortedEnrollments.length !== 1 ? "s" : ""} enrolled
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 p-4 border-b">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          {campusPicker}
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Mark Entry{campusName ? ` · ${campusName}` : ""}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {enrollments.length} student
+              {enrollments.length !== 1 ? "s" : ""} enrolled
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {changeCount > 0 && (
@@ -317,7 +388,7 @@ export function MarkEntryGrid({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedEnrollments.map((enrollment) => {
+            {enrollments.map((enrollment) => {
               const studentId = enrollment.studentId;
               const isAbsent = absentMap.get(studentId) ?? false;
               const displayTotal =
@@ -325,7 +396,7 @@ export function MarkEntryGrid({
 
               return (
                 <TableRow
-                  key={enrollment._id}
+                  key={enrollment.enrollmentId}
                   className={cn(isAbsent && "bg-red-50/50")}
                 >
                   <TableCell className="sticky left-0 z-10 bg-white font-medium text-sm text-gray-900">
@@ -361,7 +432,7 @@ export function MarkEntryGrid({
                           onBlur={(e) =>
                             handleBlur(
                               studentId,
-                              enrollment._id,
+                              enrollment.enrollmentId,
                               q._id,
                               q.marksAllocated,
                               e.target,
@@ -398,7 +469,7 @@ export function MarkEntryGrid({
                       onClick={() =>
                         handleMarkAbsent(
                           studentId,
-                          enrollment._id,
+                          enrollment.enrollmentId,
                           enrollment.studentName,
                         )
                       }

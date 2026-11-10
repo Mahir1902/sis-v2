@@ -2,6 +2,71 @@
 
 ---
 
+## Current Feature: Class is per campus — one roster, per-campus analytics (architecture review candidate 7, issue #120, 2026-11-10)
+**Status**: Review — PR open
+**Active Agent**: CODING AGENT
+
+User decision (2026-11-10): a **Class = campus + standard level + academic year**. CONTEXT.md said
+level + year (campus-blind); attendance already used campus; the school compares within a campus.
+Assessments (the CA papers) stay per level + year, shared across campuses.
+
+### Plan
+- Glossary: CONTEXT.md Class / Class Average / Class Position / Enrollment / Assessment updated; ADR-0007
+  records the change (ADR-0005's "Class = level + year" is superseded on that point only).
+- One roster: `getClassRoster(ctx, {campus, standardLevelId, academicYear})` in `convex/lib/placement.ts`
+  — open enrollments only, de-duplicated per student, no silent cap (throws `CLASS_TOO_LARGE` above
+  1000 rows). New `enrollments.by_class` index (campus, level, year) replaces `by_campus_standard`.
+  Callers: mark entry (`enrollments.getClassRoster`), attendance (`loadClassRoster`), promotion
+  candidates, class analytics. `getEnrollmentsByLevelYear` is deleted.
+- Analytics per campus: `computedGrades.campus` copied from the enrollment at compute time (widen,
+  optional); `by_class_subject_semester` index (campus, level, year, subject, semester) replaces
+  `by_level_year_subject_semester`; every ADR-0005 query takes `campus`. Backfill migration
+  `backfillComputedGradeCampus`; narrow (required) later with level/year/expectedCaCount.
+  ≥5-peer floor unchanged — smaller per-campus classes suppress more often (intended).
+- No-campus enrollments are in no Class: excluded from every roster and analytics read; listed in
+  `migrations:placementReport.noCampus` for the admin to fix via Edit Student.
+- Screens: mark entry and promotion choose a campus; class analytics chooses a campus; the student's
+  Academic History uses the enrollment's campus (no campus → comparisons marked unavailable).
+- Tests (vitest + convex-test): roster exact per campus and de-duplicated; a 250-student class is
+  not truncated; Class Average and Position computed per campus; no-campus rows excluded + reported.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: copying `campus` onto `computedGrades` is redundant — `activeRows` already loads every row's enrollment, so a live campus filter costs no extra reads → Taken as a note, not adopted: the user asked for the denormalised copy + index (one indexed read per Class, same shape as level/year). Recorded in ADR-0007 "Considered options".
+- Concern: the copy goes stale when `amend` changes campus (and, pre-existing, level) → Mitigation: `amend` now patches the open enrollment's `computedGrades` (`by_enrollment_semester` range on enrollmentId, ~20 rows) with the new campus + level in the same transaction; "immutable" comments corrected.
+- Concern: `includeInactive` must survive for `attendance.getClassReport` → Already kept (`includeClosed`).
+- Concern: 1000-row ceiling unreachable; a thrown `CLASS_TOO_LARGE` reaches the page's error boundary → Mitigation: ceiling 500; a throw is right (silent truncation is how #120 hid). Inline per-page error states deferred — the ceiling is only hit by corrupt data.
+- Concern: no-campus students vanish from mark entry, promotion and analytics with nothing telling the admin → Mitigation: runbook gate: `placementReport.noCampus` must be empty after deploy. A UI banner with a count is deferred (noted in "Deferred").
+- Concern: `bulkMarkEntry` never checks the enrollment belongs to the assessment's level/year (pre-existing) → Deferred, out of scope; campus pick is UI-scoped as the brief intends.
+- Concern: promoting campus A and forgetting campus B leaves half a level open with no signal → Accepted; the promotion screen's year/level picker still lists the other campus's class when selected. A "still open at other campuses" count is deferred.
+- Concern: any teacher can read any campus's roster/grades (no teacher→class assignment exists) → Pre-existing, accepted until Phase 5; `getGradeSpread` / needs-help carry no ≥5 floor by design (ADR-0005).
+- Concern: dropping two indexes in the same deploy as their readers → Verified: `by_campus_standard` read only by the replaced roster; `by_level_year_subject_semester` only by the three analytics paths; all change in this PR.
+- Concern: a mid-year campus move re-ranks both campuses with no history → Accepted: Class membership is the Current Placement (CONTEXT.md); report-card positions would be snapshotted at report-card time, not on grades.
+
+### Sub-tasks
+- [x] 1. CONTEXT.md (Class, Assessment, Enrollment, Class Average, Class Position, relationships, two flagged ambiguities) + ADR-0007 + ADR-0005 amendment note — 2026-11-10
+- [x] 2. Schema widen: `computedGrades.campus` (optional), `enrollments.by_class` replaces `by_campus_standard`, `computedGrades.by_class_subject_semester` replaces `by_level_year_subject_semester` — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 3. `lib/placement.getClassRoster` (de-dup, `CLASS_TOO_LARGE` above 500); `enrollments.loadClassRoster` / `getClassRoster` on it; `getEnrollmentsByLevelYear` deleted; `getPromotionCandidates` + all five ADR-0005 queries take `campus`; `recomputeGrade` copies campus; `placement.amend` moves the enrollment's grades; `backfillComputedGradeCampus`; `placementReport.noCampus` — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. Frontend: campus Select on MarkEntryGrid (header shows the campus), promotions and class analytics; AcademicHistoryTab passes the enrollment's campus, `no_campus` headline when it has none — APPROVED by Frontend Review Agent (2026-11-10)
+- [x] 5. Tests — `convex/classRoster.test.ts` (7): exact per campus + de-dup + closed excluded; 250-student class not truncated; no-campus excluded + reported; promotion candidates per campus; Class Average/Position per campus; 4-pupil campus class suppressed; amend moves grades; `no_campus` copy test — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 6. tsc (only the pre-existing attendance.test.ts errors) · `npm run lint` · `npm run build` · vitest 404/404 · `graphify update .` — 2026-11-10; PR closing #120 open
+
+### Review Notes
+**Backend Review (APPROVED 2026-11-10):** role check on every public function; `campus: v.id` validated everywhere; both new indexes declared, every range an equality prefix; roster `.take(501)` + throw; no stale readers of the dropped indexes or `getEnrollmentsByLevelYear`; no codegen needed. Non-blocking taken: comment on `amend`'s 100-row bound, `Id` types in `noCampus`. Deferred: a `CLASS_TOO_LARGE` test + toast mapping; a test pinning "older open row beats newer closed row".
+**Frontend Review (APPROVED 2026-11-10):** four mark-entry states each render the campus picker; labels + aria on every Select; stacks at 375px; `no_campus` renders through `OverallPositionHeadline`. Non-blocking taken: unsaved edits cleared on campus switch, alias removed, `no_campus` copy test. Deferred: shared `CampusSelect`, campus list loading/empty copy.
+
+### Deferred (not in this PR)
+- UI banner "N students have no campus and are not listed" on mark entry / promotions / analytics (DA); the runbook gate covers it.
+- `bulkMarkEntry` server check that the enrollment matches the assessment's level + year (pre-existing hole).
+- "Still open at other campuses" count on the promotion screen.
+- Narrow `computedGrades.campus` / `standardLevelId` / `academicYear` / `expectedCaCount` to required (after backfills on every deployment).
+
+### Deployment runbook
+1. Deploy. 2. `npx convex run migrations:runBackfillComputedGradeCampus '{"dryRun":true}'`, then without.
+3. `npx convex run migrations:placementReport` — fix every `noCampus` enrollment via Edit Student (campus).
+4. Narrow `computedGrades.campus` to required together with level / year / expectedCaCount.
+
+---
+
 ## Current Feature: Placement module — one copy of "which class", one "has left" (architecture review candidates 1 + 2, 2026-11-10)
 **Status**: Review — PR open; narrow PR stacked, merges after the migrations run
 **Active Agent**: CODING AGENT
@@ -110,6 +175,7 @@ Server side (schema, `convex/attendance.ts`, `convex/closures.ts`, roster querie
 - [x] 9. tsc / build / lint / vitest green — 2026-10-15. no-mistakes pipeline review: pending.
 
 ## Decisions Made
+- 2026-11-10 Class = campus + level + year (ADR-0007); assessments stay per level + year; ≥5 floor kept; `campus` denormalised onto `computedGrades` as the user asked (the DA's live-filter alternative is recorded in the ADR); `amend` moves grades with the enrollment.
 - 2026-11-10 Placement: amend changes level + campus only; a year change is promotion/hold-back (fees are keyed by year).
 - 2026-11-10 Placement: re-admission opens a new enrollment even in the year the student left (closed + open rows in one year); only an OPEN enrollment blocks re-admit/import, any target-year enrollment blocks promotion.
 - 2026-11-10 Placement: rollout split into deploy 1 (widen + code + migrations) and a stacked narrow PR, because the narrowed schema can't be pushed until the migrations have run on each deployment.

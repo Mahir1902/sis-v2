@@ -61,6 +61,9 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
   // recent past one (history is newest-first) so a graduated/withdrawn student
   // still gets their last term's comparison view.
   const analyzeEnrollment = currentEnrollment ?? enrollmentHistory?.[0] ?? null;
+  // A Class is campus + level + year (ADR-0007). An enrollment with no campus
+  // is in no Class, so the class comparisons stay skipped (shown as no data).
+  const campus = analyzeEnrollment?.campus;
   const standardLevelId = analyzeEnrollment?.standardLevelId;
   // NOTE: an Id<"academicYears">, passed verbatim — never a name string.
   const academicYear = analyzeEnrollment?.academicYear;
@@ -68,8 +71,8 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
 
   const positions = useQuery(
     api.computedGrades.getClassPositions,
-    analyzeEnrollment && standardLevelId && academicYear
-      ? { standardLevelId, academicYear, semester, studentId }
+    analyzeEnrollment && campus && standardLevelId && academicYear
+      ? { campus, standardLevelId, academicYear, semester, studentId }
       : "skip",
   );
 
@@ -86,8 +89,13 @@ export function AcademicHistoryTab({ studentId }: AcademicHistoryTabProps) {
 
   const baseline = useQuery(
     api.computedGrades.getPerCaClassBaseline,
-    analyzeEnrollment && standardLevelId && academicYear && effectiveSubjectId
+    analyzeEnrollment &&
+      campus &&
+      standardLevelId &&
+      academicYear &&
+      effectiveSubjectId
       ? {
+          campus,
           standardLevelId,
           academicYear,
           subjectId: effectiveSubjectId as Id<"subjects">,
@@ -228,9 +236,13 @@ function AcademicHistoryContent({
       ? buildPerCaChartData(baseline, selectedGradeRow)
       : EMPTY_PER_CA_CHART;
 
+  // No campus ⇒ no Class: the class queries stay skipped, so say so instead
+  // of loading forever.
+  const noClass = analyzeEnrollment != null && analyzeEnrollment.campus == null;
   const comparisonQueryArgs =
-    analyzeEnrollment != null
+    analyzeEnrollment?.campus != null
       ? {
+          campus: analyzeEnrollment.campus,
           standardLevelId: analyzeEnrollment.standardLevelId,
           academicYear: analyzeEnrollment.academicYear,
           semester,
@@ -271,8 +283,10 @@ function AcademicHistoryContent({
       {/* C.4 — overall class position headline */}
       <OverallPositionHeadline
         overall={positions?.overall ?? null}
-        reason={positions?.overallSuppressedReason ?? null}
-        loading={positions === undefined}
+        reason={
+          noClass ? "no_campus" : (positions?.overallSuppressedReason ?? null)
+        }
+        loading={!noClass && positions === undefined}
       />
 
       {/* C.1 + C.2 — you vs class per subject */}
@@ -307,7 +321,9 @@ function AcademicHistoryContent({
       <PerCaClassChart
         data={chartData}
         subjectName={selectedSubjectName}
-        loading={semesterGrades === undefined || baseline === undefined}
+        loading={
+          semesterGrades === undefined || (!noClass && baseline === undefined)
+        }
       />
 
       {/* Enrollment accordion (raw history) */}

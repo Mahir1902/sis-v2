@@ -69,6 +69,13 @@ describe("overallPositionCopy", () => {
     });
   });
 
+  it("says there is no class when the enrollment has no campus", () => {
+    expect(overallPositionCopy(null, "no_campus")).toEqual({
+      headline: "No class to compare with",
+      detail: "This enrollment has no campus — set it in Edit Student",
+    });
+  });
+
   it("uses the not-yet-graded headline when the term is ungraded", () => {
     expect(overallPositionCopy(null, "not_graded")).toEqual({
       headline: "Not yet graded this term",

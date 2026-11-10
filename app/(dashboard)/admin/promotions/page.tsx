@@ -104,6 +104,7 @@ function PromotionsPageContent() {
   const [selectedSourceYearId, setSelectedSourceYearId] = useState("");
   const [selectedTargetYearId, setSelectedTargetYearId] = useState("");
   const [selectedLevelId, setSelectedLevelId] = useState("");
+  const [selectedCampusId, setSelectedCampusId] = useState("");
   const [actions, setActions] = useState<Record<string, PromotionAction>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [autoAssignFees, setAutoAssignFees] = useState(true);
@@ -113,10 +114,13 @@ function PromotionsPageContent() {
   // ── Queries ─────────────────────────────────────────────────────────────
   const levels = useQuery(api.standardLevels.list);
   const years = useQuery(api.academicYears.list);
+  const campuses = useQuery(api.campus.list);
+  // A Class is per campus (ADR-0007): candidates are one campus's class.
   const candidates = useQuery(
     api.promotions.getPromotionCandidates,
-    selectedSourceYearId && selectedLevelId
+    selectedSourceYearId && selectedLevelId && selectedCampusId
       ? {
+          campus: selectedCampusId as Id<"campuses">,
           standardLevelId: selectedLevelId as Id<"standardLevels">,
           academicYearId: selectedSourceYearId as Id<"academicYears">,
         }
@@ -217,7 +221,8 @@ function PromotionsPageContent() {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
-  const filtersSelected = selectedSourceYearId && selectedLevelId;
+  const filtersSelected =
+    selectedSourceYearId && selectedLevelId && selectedCampusId;
 
   function getLevelName(id: string): string {
     return levels?.find((l) => l._id === id)?.name ?? "";
@@ -343,6 +348,31 @@ function PromotionsPageContent() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Campus */}
+          <div className="flex-1 space-y-1.5">
+            <label
+              className="text-sm font-medium text-gray-700"
+              htmlFor="promotion-campus"
+            >
+              Campus
+            </label>
+            <Select
+              value={selectedCampusId}
+              onValueChange={setSelectedCampusId}
+            >
+              <SelectTrigger id="promotion-campus" aria-label="Select campus">
+                <SelectValue placeholder="Select campus" />
+              </SelectTrigger>
+              <SelectContent>
+                {campuses?.map((c) => (
+                  <SelectItem key={c._id} value={c._id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -369,7 +399,7 @@ function PromotionsPageContent() {
         <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-lg border">
           <ArrowUpCircle className="h-10 w-10 text-gray-300 mb-3" />
           <p className="text-gray-500 font-medium">
-            Select a source year and grade level to view students
+            Select a source year, grade level and campus to view students
           </p>
         </div>
       ) : candidates === undefined ? (

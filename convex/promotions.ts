@@ -2,16 +2,17 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
-import { changeStatus, moveToNextYear } from "./lib/placement";
+import { changeStatus, getClassRoster, moveToNextYear } from "./lib/placement";
 
 /**
- * Returns promotion-eligible students for a given standard level and academic year.
- * Fetches active enrollments, enriches each with student info and next-level metadata,
- * and flags graduation candidates (no nextLevelId on current level).
+ * Returns promotion-eligible students of one Class (campus + level + year,
+ * ADR-0007). Enriches each open enrollment with student info and next-level
+ * metadata, and flags graduation candidates (no nextLevelId on current level).
  * Requires admin role.
  */
 export const getPromotionCandidates = query({
   args: {
+    campus: v.id("campuses"),
     standardLevelId: v.id("standardLevels"),
     academicYearId: v.id("academicYears"),
   },
@@ -28,20 +29,11 @@ export const getPromotionCandidates = query({
       ? await ctx.db.get(currentLevel.nextLevelId)
       : null;
 
-    // Open enrollments for this level, filtered to the selected year.
-    // Uses existing by_standard_level index; year + open filtered in .filter().
-    const enrollments = await ctx.db
-      .query("enrollments")
-      .withIndex("by_standard_level", (q) =>
-        q.eq("standardLevelId", args.standardLevelId),
-      )
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("academicYear"), args.academicYearId),
-          q.eq(q.field("exitDate"), undefined),
-        ),
-      )
-      .take(200);
+    const enrollments = await getClassRoster(ctx, {
+      campus: args.campus,
+      standardLevelId: args.standardLevelId,
+      academicYear: args.academicYearId,
+    });
 
     // Batch-enrich each enrollment with student data (no N+1 — Promise.all)
     const candidates = await Promise.all(
