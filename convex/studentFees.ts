@@ -1,18 +1,21 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import {
+  assignFee,
+  applyDiscount as ledgerApplyDiscount,
+} from "./lib/feeLedger";
 import { requireRole } from "./lib/permissions";
 
-/** Create a student fee record (called during admission or mid-semester assignment). */
+/**
+ * Assigns one fee to a student (admission or mid-year). The amount comes from
+ * the fee structure on the server; the client only names the structure.
+ */
 export const createStudentFee = mutation({
   args: {
     studentId: v.id("students"),
     feeStructureId: v.id("feeStructure"),
     academicYear: v.id("academicYears"),
-    originalAmount: v.float64(),
-    paidAmount: v.float64(),
-    balance: v.float64(),
-    status: v.union(v.literal("unpaid"), v.literal("paid")),
     dueDate: v.optional(v.float64()),
     billingPeriod: v.optional(v.string()),
   },
@@ -20,28 +23,33 @@ export const createStudentFee = mutation({
     const user = await requireRole(ctx, ["admin"]);
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
-    const id = await ctx.db.insert("studentFees", {
-      ...args,
-      dueDate: args.dueDate ?? Date.now(),
-      appliedDiscounts: [],
-      paymentDetails: [],
-    });
-    await logAudit(ctx, {
-      user,
-      action: "create",
-      entityType: "studentFees",
-      entityId: id,
-      description: "Assigned fee to student",
-    });
-    return id;
+    return await assignFee(ctx, user, args);
   },
 });
 
-/** Get all fees for a student. */
+/**
+ * Applies a discount rule to an unpaid fee. The balance drops; the status
+ * never changes here — a fully discounted fee is settled by a ৳0 collect.
+ */
+export const applyDiscount = mutation({
+  args: {
+    feeId: v.id("studentFees"),
+    discountRuleId: v.id("discountRules"),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+    return await ledgerApplyDiscount(ctx, user, args);
+  },
+});
+
+/** Get all fees for a student. Admin, or the student's own linked account. */
 export const getByStudent = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher", "student"]);
+    const user = await requireRole(ctx, ["admin", "student"]);
+    if (user.role === "student" && user.studentId !== args.studentId) {
+      throw new Error("Unauthorized");
+    }
     const fees = await ctx.db
       .query("studentFees")
       .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
@@ -81,9 +89,9 @@ export const getById = query({
 });
 
 /**
- * Delete an unpaid student fee record.
- * Guarded: admin only, fee must exist, must have zero payments,
- * and no feeTransaction rows may reference this fee.
+ * Delete an unpaid student fee record. Admin only; the fee must be unpaid
+ * and have no live (un-voided) transaction. Voided transactions stay as
+ * history and do not block the delete.
  */
 export const deleteStudentFee = mutation({
   args: { feeId: v.id("studentFees") },
@@ -92,25 +100,16 @@ export const deleteStudentFee = mutation({
 
     const fee = await ctx.db.get(args.feeId);
     if (!fee) throw new Error("Fee record not found");
-
-    // Guard 1: no payments recorded on the fee itself
-    if (fee.paidAmount > 0) {
-      throw new Error(
-        "Cannot delete a fee that has received payments. Reverse the payment first.",
-      );
+    if (fee.status === "paid" || fee.paidAmount > 0) {
+      throw new Error("Cannot delete a paid fee. Void its receipt first.");
     }
 
-    // Guard 2: no transaction rows reference this fee
-    const transactions = await ctx.db
+    const txns = await ctx.db
       .query("feeTransactions")
-      .withIndex("by_student_year", (q) =>
-        q.eq("studentId", fee.studentId).eq("academicYear", fee.academicYear),
-      )
+      .withIndex("by_fee", (q) => q.eq("feeId", args.feeId))
       .take(100);
-
-    const hasTransaction = transactions.some((t) => t.feeId === args.feeId);
-    if (hasTransaction) {
-      throw new Error("Cannot delete a fee that has linked transactions.");
+    if (txns.some((t) => t.voidedAt === undefined)) {
+      throw new Error("Cannot delete a fee that has a live payment.");
     }
 
     await ctx.db.delete(args.feeId);

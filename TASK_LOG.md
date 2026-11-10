@@ -2,6 +2,75 @@
 
 ---
 
+## Current Feature: Fee ledger — one module owns every money write (architecture review candidate 5, 2026-11-10)
+**Status**: Review — PR open; narrow PR stacked, merges after the migrations run
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 5. Rules kept intact: ADR-0002 (no invoices,
+Session↔Receipt 1:1, receipts are snapshots, all-or-nothing payment) and ADR-0003 (edit / void /
+void-and-reissue). Parallel branches: `fm/sis-drop-dead-tables` (advancePayments/grades lines in
+`deleteStudent`), `fm/sis-placement-narrow-v2`.
+
+### Plan
+- `convex/lib/feeLedger.ts` owns every write to `studentFees` money fields, `feeCollectionSessions`,
+  `feeTransactions`, `receipts`, `receiptCounters`: `assignFee`, `applyDiscount`, `collect`,
+  `voidReceipt`, `voidAndReissue`. Domain files keep thin public mutations that call it
+  (`studentFees.createStudentFee` / `applyDiscount`, `feeCollectionSessions.collectFees` /
+  `createFutureMonthFees`, `receipts.voidReceipt` / `voidAndReissueReceipt`, `promotions.bulkPromote`).
+- One insert shape (`assignFee`); clients no longer send `paidAmount` / `balance` / `status`.
+- A discount changes `balance` only — never `status`. `paid` is written only by `collect`, which always
+  has a transaction + receipt behind it. A fully discounted fee (balance 0) is settled by a normal
+  collect of ৳0, producing a ৳0 receipt that documents the waiver to the parent.
+- `paymentDetails[]` and `studentDiscounts` are dropped by widen → migrate → narrow. This PR widens
+  (`paymentDetails` optional, nothing writes it, `studentDiscounts` deprecated and unwritten) and ships
+  `runFeeLedgerMigrations` (strip `paymentDetails`, empty `studentDiscounts`). The narrow is a stacked PR.
+- `voidReceipt` / `voidAndReissueReceipt` per ADR-0003: whole receipt; receipt + session → `voided`;
+  every covered fee → `unpaid` (paidAmount/balance restored); transactions are kept as ledger history and
+  read with a `voided` flag; re-issue = void + collect in one mutation with `supersedes` /
+  `supersededBy`; admin-only; audit-logged.
+- `deleteStudent` refuses a student with any receipt, session or transaction (clear message), and
+  cascades `attendance`. Unpaid fees are still removed.
+- Frontend: receipt page gains Void and Void & Re-issue; FeeDetailDialog drops `paymentDetails` and
+  badges voided payments; assign/admission send the slim args; delete toast shows the server reason.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: `collectFees` accepts duplicate `feeIds` → double transaction, double receipt line, double restore on void → Mitigation: `collect` rejects duplicates and caps at 100 fee ids; test `[A, A]` throws.
+- Concern: a 100% discount left `unpaid` with balance 0 shows as overdue (`dashboard.getSummaryStats`) and as a red unpaid row → Mitigation: overdue = `unpaid && balance > 0 && dueDate < now`; CONTEXT.md amended. The ৳0 collect still needs a payment mode (dialog already requires one). `waived` status deferred: a third literal every status reader must handle.
+- Concern: keeping transactions after a void makes `deleteStudentFee`'s "linked transactions" guard permanent, and the guard scans `by_student_year` `.take(100)` → Mitigation: `voidReceipt` stamps `voidedAt` on each transaction (new optional field, additive); the guard uses `by_fee` and blocks only on live (un-voided) transactions. Test void → delete.
+- Concern: voided transactions look live to readers that don't join the session; legacy rows have no `sessionId` → Mitigation: readers check `voidedAt` on the row, no join. `feeTransactions` reads bounded with `.take()`.
+- Concern: void arithmetic drifts on float discounts / breaks on a deleted fee / truncates a large session → Mitigation: after restoring `paidAmount` the balance is recomputed as `originalAmount − Σdiscounts − paidAmount`; a missing fee is skipped and listed in the audit metadata (void still proceeds, re-issue throws); already-voided receipt/session rejected; transactions read with `.take(200)` and checked against `session.feeCount`.
+- Concern: re-issue via `getCurrentPlacement` moves the session to the new year after a promotion, and `collectFees` requires an active student → Mitigation: re-issue copies `academicYear` / `campus` / `standardLevelId` from the voided session; the active-student check lives in the public `collectFees` wrapper only, so a leaver's receipt can be re-issued. Optional `paymentDate` applies to both session and receipt (ADR-0003 lists it as a correctable field); the number is minted in the year of re-issue by definition.
+- Concern: plain helpers over `MutationCtx` let a future caller skip auth; `studentFees.getByStudent` lets any student read any student's fees → Mitigation: every ledger function takes `actor` (the `requireRole` result). `getByStudent` → admin, or student whose `users.studentId` matches (teachers dropped per the permission matrix).
+- Concern: stale price — a discount lands between opening the dialog and clicking Pay → Mitigation: `collectFees` takes `expectedTotal`; the ledger throws "Amounts changed, review and retry" on mismatch.
+- Concern: three stacked narrows on `schema.ts`; PR #132 was reverted for deploying a narrow before its migration; `fm/sis-drop-dead-tables` edits the same `deleteStudent` block → Mitigation: migrations registered in `convex/migrations.ts` (idempotent, batched); the narrow PR carries a checklist (0 `paymentDetails`, 0 `studentDiscounts` rows on every deployment); expect a hand-merge in `deleteStudent`.
+- Concern: legacy fees `paid` by discount with no transaction can never be settled or corrected → Mitigation: `stripPaymentDetails` migration also resets `paid && paidAmount === 0 && no live transaction` fees to `unpaid` (balance stays 0) so the ৳0 collect documents them; count reported.
+- Concern: `deleteStudent` cascade is unbounded `.collect()` and misses receipts/sessions → Mitigation: indexed `.first()` probes on receipts, sessions and transactions run before any write; refusal message points to "withdrawn" (the archive we already have). A voided receipt still blocks.
+- Concern: re-issue chains — re-issuing a voided receipt, or voiding a re-issue → Mitigation: re-issue requires `status === "issued"`; a plain void of a re-issue is allowed (chain ends with no live receipt, the page shows the links). `reason` required on void and re-issue, stored in audit metadata.
+- Concern: nothing undoes a discount → Deferred: `removeDiscount` follow-up, noted in the PR.
+- Concern: audit action union → Mitigation: one `void` on the old receipt (metadata `supersededBy`, `reason`, restored fee ids) and one `collect_fees` on the new one (metadata `supersedes`). No schema change.
+- Concern: convex-test cannot prove OCC races → Mitigation: tests cover duplicate ids, ৳0 collect, double void, void → delete fee, non-admin calls, re-issue on a withdrawn student, sequential numbers; counter race relies on Convex serialising writes to the counter row (unchanged design).
+- Open questions for the team (not blocking): void from a closed academic year allowed? backdated payment dates allowed? legacy paid-by-discount fees reset (chosen) or left alone?
+
+Verdict: APPROVE WITH CAUTION — proceed with the mitigations above.
+
+### Sub-tasks
+- [x] 1. Schema widen — `paymentDetails` optional, `feeTransactions.voidedAt`, `studentDiscounts` deprecated — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 2. `convex/lib/feeLedger.ts` — assignFee, applyDiscount, collect (dedupe, cap 100, expectedTotal, paymentDate validation), voidReceipt, voidAndReissue — APPROVED by Backend Review Agent (2026-11-10, round 2)
+- [x] 3. Writers rewired — `studentFees.createStudentFee` (slim args) / `applyDiscount` / `getByStudent` own-only, `feeCollectionSessions.collectFees` / `createFutureMonthFees`, `promotions`, `receipts.voidReceipt` / `voidAndReissueReceipt` / `getReceipt` chain numbers; `studentDiscounts.ts` deleted; `feeTransactions` reads bounded, rows carry `voidedAt` — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. `deleteStudent` — indexed probes refuse any receipt / session / transaction; attendance cascaded — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 5. Migrations — `runFeeLedgerMigrations` (strip `paymentDetails` + reset legacy paid-without-transaction, clear `studentDiscounts`), `feeLedgerReport` narrow gate — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 6. Tests — `convex/feeLedger.test.ts` (16): collect→void→re-issue round trip incl. audit link, duplicate ids, stale total, invalid date, leaver re-issue, float discount void, void→delete fee, ৳0 settle, paid⇒live txn, sequential numbers, delete refused, attendance cascade, teacher rejected, migration — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 7. Frontend — `VoidReceiptDialog`, `ReissueReceiptDialog` (RHF + Zod, `receiptCorrectionSchema`), receipt page buttons, `ReceiptDocument` cross-link lines, FeeDetailDialog (no `paymentDetails`, Live/Voided badges, ৳0 toast), CollectFeesDialog `expectedTotal`, slim assign/admission args, StudentHeader refusal toast — APPROVED by Frontend Review Agent (2026-11-10)
+- [x] 8. tsc clean · `npm run lint` clean · `npm run build` · vitest 412/412 (unit 316 + convex 96) · `graphify update .` — 2026-11-10
+- [ ] 9. Narrow (stacked PR): drop `paymentDetails`, drop `studentDiscounts` table + cascade line — PENDING
+
+### Review Notes
+**Backend Review (round 1, REJECTED):** (1) the `void` audit row of a re-issue never carried `supersededBy` (logged before collect) and the arg was dead; (2) `expectedTotal` compared floats exactly; (3) `paymentDate` unvalidated (NaN / negative / far future). Non-blocking taken: `feeLedgerReport` `truncated` + live-transaction probe.
+**Frontend Review (APPROVED 2026-11-10):** checklist clean. Non-blocking taken: `text-gray-500` on voided rows, Cancel disabled while submitting. Deferred: shared `paymentModes` constant (6 copies, pre-existing), `ConvexError` code for the delete refusal, reset-on-open-only in the re-issue dialog.
+**Backend Review (round 2, APPROVED 2026-11-10):** `voidCore` + `logVoid` split, audit logged after collect with the new receipt id (tested); 0.005 tolerance; date validation + test; `getReceipt` chain lookup approved. Follow-ups noted: `feeLedgerReport` probes per legacy ৳0 fee (page it if it hits limits); `applyDiscount` still allows the same rule twice (pre-existing).
+
+---
+
 ## Current Feature: Placement module — one copy of "which class", one "has left" (architecture review candidates 1 + 2, 2026-11-10)
 **Status**: Review — PR open; narrow PR stacked, merges after the migrations run
 **Active Agent**: CODING AGENT
@@ -110,6 +179,10 @@ Server side (schema, `convex/attendance.ts`, `convex/closures.ts`, roster querie
 - [x] 9. tsc / build / lint / vitest green — 2026-10-15. no-mistakes pipeline review: pending.
 
 ## Decisions Made
+- 2026-11-10 Fee ledger: a discount never marks a fee `paid`. `paid` is written only by `collect`, so every paid fee has a live transaction + session + receipt. A 100% discount leaves the fee `unpaid` at balance 0; it is settled by a normal ৳0 collect that issues a ৳0 receipt documenting the waiver (chosen over a `waived` status, which would add a third literal to every status reader). Overdue therefore also requires `balance > 0`.
+- 2026-11-10 Fee ledger: voided transactions are kept as ledger history stamped `voidedAt` (never deleted); readers check the field, no session join.
+- 2026-11-10 Fee ledger: re-issue corrects payment method / date / remarks only, for the same fees, filed under the voided session's year and class. Line-item or student corrections = void, then collect from the right student (deferred). A leaver's receipt can be re-issued; a plain collect for a leaver stays refused.
+- 2026-11-10 Fee ledger: a student with any receipt, session or transaction cannot be hard-deleted — "withdrawn" is the archive. Unpaid-only students still cascade (now including attendance).
 - 2026-11-10 Placement: amend changes level + campus only; a year change is promotion/hold-back (fees are keyed by year).
 - 2026-11-10 Placement: re-admission opens a new enrollment even in the year the student left (closed + open rows in one year); only an OPEN enrollment blocks re-admit/import, any target-year enrollment blocks promotion.
 - 2026-11-10 Placement: rollout split into deploy 1 (widen + code + migrations) and a stacked narrow PR, because the narrowed schema can't be pushed until the migrations have run on each deployment.

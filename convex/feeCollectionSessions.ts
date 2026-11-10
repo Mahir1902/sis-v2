@@ -1,21 +1,11 @@
 import { v } from "convex/values";
 import {
-  computeNewFeeStatus,
   generateBillingPeriods,
-  generateTransactionReference,
   resolveFutureMonths,
 } from "../lib/feeCollectionUtils";
-import { currentBdYear, formatReceiptNumber } from "../lib/receiptNumber";
-import {
-  buildReceiptSnapshot,
-  type ReceiptSnapshotPaidLine,
-} from "../lib/receiptSnapshot";
-import { resolveBillingContact } from "../lib/resolveBillingContact";
-import type { Id } from "./_generated/dataModel";
-import { type MutationCtx, mutation, query } from "./_generated/server";
-import { logAudit } from "./auditLogs";
+import { mutation, query } from "./_generated/server";
+import { assignFee, collect } from "./lib/feeLedger";
 import { requireRole } from "./lib/permissions";
-import { getCurrentPlacement } from "./lib/placement";
 
 const paymentModeValidator = v.union(
   v.literal("Cash"),
@@ -26,42 +16,11 @@ const paymentModeValidator = v.union(
 );
 
 /**
- * Allocates the next Receipt number for the current Bangladesh calendar year
- * by reading-then-writing the `receiptCounters` doc for that year.
- *
- * Convex serialises overlapping reads/writes on the same row via OCC, so two
- * concurrent `collectFees` calls cannot mint the same number — the second
- * one is retried and observes the freshly-incremented counter (or the
- * just-inserted row for the very first receipt of a new year).
- */
-async function allocateReceiptNumber(
-  ctx: MutationCtx,
-  nowMs: number,
-): Promise<{ receiptNumber: string }> {
-  const year = currentBdYear(nowMs);
-  const counter = await ctx.db
-    .query("receiptCounters")
-    .withIndex("by_year", (q) => q.eq("year", year))
-    .first();
-
-  let sequence: number;
-  if (counter) {
-    sequence = counter.nextNumber;
-    await ctx.db.patch(counter._id, { nextNumber: sequence + 1 });
-  } else {
-    sequence = 1;
-    await ctx.db.insert("receiptCounters", { year, nextNumber: 2 });
-  }
-
-  return { receiptNumber: formatReceiptNumber(year, sequence) };
-}
-
-/**
- * Atomic multi-fee collection mutation.
- * Creates one session (transaction log), one transaction per fee, updates
- * each studentFee record, and issues a numbered Receipt (ADR-0002) with the
- * full snapshot of student / billing contact / line items frozen at issue
- * time. All-or-nothing within a single Convex transaction.
+ * Records a payment for an active student: one session, one transaction per
+ * fee, every fee → paid, one numbered Receipt. All-or-nothing. The money
+ * logic lives in `lib/feeLedger.collect`; this wrapper only authorises and
+ * applies the "active student" rule (re-issue of a leaver's receipt bypasses
+ * it on purpose).
  */
 export const collectFees = mutation({
   args: {
@@ -69,214 +28,16 @@ export const collectFees = mutation({
     feeIds: v.array(v.id("studentFees")),
     paymentMode: paymentModeValidator,
     remarks: v.optional(v.string()),
+    expectedTotal: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
-
-    if (args.feeIds.length === 0) {
-      throw new Error("No fees selected for collection");
-    }
-
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
     if (student.status !== "active") {
       throw new Error("Cannot collect fees for a non-active student");
     }
-
-    // A receipt is a legal document whose payer and student names are frozen
-    // at issue time (ADR-0002). Since the import widening (#93) those fields
-    // can be unset, so refuse to issue the receipt rather than snapshot a
-    // stand-in value. Checked before any write so the mutation fails fast.
-    const studentFullName = student.studentFullName;
-    const primaryBillingContact = student.primaryBillingContact;
-    if (!studentFullName) {
-      throw new Error(
-        "This student has no recorded name. Complete the student record before collecting fees.",
-      );
-    }
-    if (!primaryBillingContact) {
-      throw new Error(
-        "This student has no billing contact set. Set one before collecting fees.",
-      );
-    }
-
-    const fees = await Promise.all(
-      args.feeIds.map(async (feeId) => {
-        const fee = await ctx.db.get(feeId);
-        if (!fee) throw new Error("Fee record not found");
-        if (fee.studentId !== args.studentId) {
-          throw new Error("Fee does not belong to this student");
-        }
-        if (fee.status === "paid") {
-          throw new Error("Fee has already been paid");
-        }
-        if (fee.balance <= 0) {
-          throw new Error("Fee has no outstanding balance");
-        }
-        return fee;
-      }),
-    );
-
-    const feeStructures = await Promise.all(
-      fees.map((fee) => ctx.db.get(fee.feeStructureId)),
-    );
-    const feeStructureMap = new Map<string, { name: string }>();
-    for (let i = 0; i < fees.length; i++) {
-      const fs = feeStructures[i];
-      if (!fs) throw new Error("Fee structure not found");
-      feeStructureMap.set(fees[i].feeStructureId as string, { name: fs.name });
-    }
-
-    const now = Date.now();
-    const totalAmount = fees.reduce((sum, fee) => sum + fee.balance, 0);
-
-    // The session is filed under the student's Current Placement. No
-    // placement (legacy data) → the first fee's year, class left unset.
-    const placement = await getCurrentPlacement(ctx, args.studentId);
-
-    const sessionId = await ctx.db.insert("feeCollectionSessions", {
-      studentId: args.studentId,
-      academicYear: placement?.academicYear ?? fees[0].academicYear,
-      campus: placement?.campus,
-      totalAmount,
-      paymentMode: args.paymentMode,
-      remarks: args.remarks,
-      status: "completed",
-      collectedBy: user._id,
-      transactionDate: now,
-      feeCount: fees.length,
-      standardLevelId: placement?.standardLevelId,
-    });
-
-    const transactions: Array<{
-      txnId: string;
-      referenceNumber: string;
-      feeId: string;
-    }> = [];
-
-    for (let i = 0; i < fees.length; i++) {
-      const fee = fees[i];
-      const referenceNumber = generateTransactionReference(now, i);
-      const amount = fee.balance;
-
-      const txnId = await ctx.db.insert("feeTransactions", {
-        studentId: args.studentId,
-        feeId: fee._id,
-        academicYear: fee.academicYear,
-        amount,
-        paymentMode: args.paymentMode,
-        transactionDate: now,
-        referenceNumber,
-        sessionId,
-        collectedBy: user._id,
-        remarks: args.remarks,
-      });
-
-      const newPaidAmount = fee.paidAmount + amount;
-      const newBalance = fee.balance - amount;
-      const newStatus = computeNewFeeStatus(fee.balance, amount);
-
-      await ctx.db.patch(fee._id, {
-        paidAmount: newPaidAmount,
-        balance: newBalance,
-        status: newStatus,
-        paymentDetails: [
-          ...fee.paymentDetails,
-          {
-            paymentId: txnId,
-            date: new Date(now).toISOString(),
-            amount,
-            mode: args.paymentMode,
-          },
-        ],
-      });
-
-      transactions.push({
-        txnId: txnId as string,
-        referenceNumber,
-        feeId: fee._id as string,
-      });
-    }
-
-    const paidLines: ReceiptSnapshotPaidLine[] = fees.map((fee) => ({
-      feeStructureId: fee.feeStructureId as string,
-      billingPeriod: fee.billingPeriod,
-      originalAmount: fee.originalAmount,
-      discountAmount: fee.appliedDiscounts.reduce(
-        (sum, d) => sum + d.amount,
-        0,
-      ),
-      paidAmount: fee.balance,
-    }));
-
-    const billing = resolveBillingContact({
-      ...student,
-      primaryBillingContact,
-    });
-    const payerName = billing.name;
-    if (!payerName) {
-      throw new Error(
-        "The billing contact for this student has no recorded name. Complete the student record before collecting fees.",
-      );
-    }
-
-    const snapshot = buildReceiptSnapshot({
-      student: {
-        studentFullName,
-        studentNumber: student.studentNumber,
-      },
-      billingContact: {
-        name: payerName,
-        contactType: billing.contactType,
-      },
-      issuer: { name: user.name },
-      feeStructures: feeStructureMap,
-      paidLines,
-    });
-
-    const { receiptNumber } = await allocateReceiptNumber(ctx, now);
-
-    const receiptId: Id<"receipts"> = await ctx.db.insert("receipts", {
-      studentId: args.studentId,
-      sessionId,
-      collectedBy: user._id,
-      receiptNumber,
-      status: "issued",
-      totalAmount,
-      paymentMethod: args.paymentMode,
-      paymentDate: now,
-      issuedAt: now,
-      payerName: snapshot.payerName,
-      payerRole: snapshot.payerRole,
-      studentNameSnapshot: snapshot.studentNameSnapshot,
-      studentNumberSnapshot: snapshot.studentNumberSnapshot,
-      issuerName: snapshot.issuerName,
-      lineItems: snapshot.lineItems,
-      remarks: args.remarks,
-    });
-
-    await logAudit(ctx, {
-      user,
-      action: "collect_fees",
-      entityType: "feeCollectionSessions",
-      entityId: sessionId,
-      description: `Collected ${fees.length} fee(s) totaling ${totalAmount}; issued ${receiptNumber}`,
-      metadata: {
-        feeCount: fees.length,
-        totalAmount,
-        paymentMode: args.paymentMode,
-        receiptNumber,
-        receiptId: receiptId as string,
-      },
-    });
-
-    return {
-      sessionId,
-      receiptId,
-      receiptNumber,
-      totalAmount,
-      transactions,
-    };
+    return await collect(ctx, user, args);
   },
 });
 
@@ -405,30 +166,16 @@ export const createFutureMonthFees = mutation({
         }
       }
 
-      const feeId = await ctx.db.insert("studentFees", {
+      const feeId = await assignFee(ctx, user, {
         studentId: args.studentId,
         feeStructureId: args.feeStructureId,
         academicYear: args.academicYear,
         dueDate: Date.now(),
-        originalAmount: feeStructure.baseAmount,
-        paidAmount: 0,
-        balance: feeStructure.baseAmount,
-        status: "unpaid",
         billingPeriod: period,
-        appliedDiscounts: [],
-        paymentDetails: [],
+        description: `Created future month fee for ${period}`,
       });
 
       createdFeeIds.push(feeId as string);
-
-      await logAudit(ctx, {
-        user,
-        action: "create",
-        entityType: "studentFees",
-        entityId: feeId,
-        description: `Created future month fee for ${period}`,
-        metadata: { billingPeriod: period, amount: feeStructure.baseAmount },
-      });
     }
 
     return createdFeeIds;

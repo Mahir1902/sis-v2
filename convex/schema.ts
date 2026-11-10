@@ -407,13 +407,18 @@ export default defineSchema({
         amount: v.float64(),
       }),
     ),
-    paymentDetails: v.array(
-      v.object({
-        paymentId: v.id("feeTransactions"),
-        date: v.string(),
-        amount: v.float64(),
-        mode: v.string(),
-      }),
+    // DEPRECATED (fee ledger, 2026-11-10): duplicated `feeTransactions.by_fee`.
+    // No longer written; `migrations:runFeeLedgerMigrations` strips it. The
+    // stacked narrow PR removes the field.
+    paymentDetails: v.optional(
+      v.array(
+        v.object({
+          paymentId: v.id("feeTransactions"),
+          date: v.string(),
+          amount: v.float64(),
+          mode: v.string(),
+        }),
+      ),
     ),
     lateFeeAmount: v.optional(v.float64()),
   })
@@ -440,11 +445,18 @@ export default defineSchema({
     monthsPaid: v.optional(v.array(v.string())),
     remarks: v.optional(v.string()),
     collectedBy: v.optional(v.id("users")),
+    // Set by `voidReceipt`: the row stays as ledger history but no longer
+    // counts as a live payment. Readers check this field, never the session.
+    voidedAt: v.optional(v.float64()),
   })
     .index("by_student_year", ["studentId", "academicYear"])
     .index("by_fee", ["feeId"])
     .index("by_session", ["sessionId"]),
 
+  // DEPRECATED (fee ledger, 2026-11-10): write-only and not linked to a fee;
+  // `studentFees.appliedDiscounts` + `auditLogs` carry the same facts. No
+  // longer written; `migrations:runFeeLedgerMigrations` empties it and the
+  // stacked narrow PR drops the table.
   studentDiscounts: defineTable({
     studentId: v.id("students"),
     discountRuleId: v.id("discountRules"),

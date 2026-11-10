@@ -5,7 +5,11 @@ import { fmtDayMonthYear } from "@/lib/dateFormat";
 import { SCHOOL_NAME } from "@/lib/schoolBrand";
 
 interface ReceiptDocumentProps {
-  receipt: Doc<"receipts">;
+  receipt: Doc<"receipts"> & {
+    /** Receipt numbers of the correction chain, resolved by `getReceipt`. */
+    supersedesNumber?: string;
+    supersededByNumber?: string;
+  };
 }
 
 const PAYER_ROLE_LABEL: Record<Doc<"receipts">["payerRole"], string> = {
@@ -62,6 +66,16 @@ export function ReceiptDocument({ receipt }: ReceiptDocumentProps) {
             <output className="mt-2 inline-flex items-center rounded-full bg-red-400/40 px-2.5 py-0.5 text-xs font-semibold text-red-700">
               VOIDED
             </output>
+          )}
+          {receipt.supersededByNumber && (
+            <p className="mt-1 text-xs text-red-700">
+              VOIDED — superseded by {receipt.supersededByNumber}
+            </p>
+          )}
+          {receipt.supersedesNumber && (
+            <p className="mt-1 text-xs text-gray-600">
+              Re-issued in place of {receipt.supersedesNumber}
+            </p>
           )}
         </div>
       </header>

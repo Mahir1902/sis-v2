@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import { assignFee } from "./lib/feeLedger";
 import { requireRole } from "./lib/permissions";
 import { changeStatus, moveToNextYear } from "./lib/placement";
 
@@ -246,17 +247,11 @@ export const bulkPromote = mutation({
 
             for (const structure of nextLevelFees) {
               if (existingFeeStructureIds.has(structure._id)) continue;
-              await ctx.db.insert("studentFees", {
+              await assignFee(ctx, user, {
                 studentId: item.studentId,
                 feeStructureId: structure._id,
                 academicYear: args.targetAcademicYearId,
-                dueDate: structure.dueDate ?? Date.now(),
-                originalAmount: structure.baseAmount,
-                paidAmount: 0,
-                balance: structure.baseAmount,
-                status: "unpaid",
-                appliedDiscounts: [],
-                paymentDetails: [],
+                description: "Assigned fee on promotion",
               });
               feesAssigned++;
             }
@@ -322,17 +317,11 @@ export const bulkPromote = mutation({
 
             for (const structure of currentLevelFees) {
               if (existingHoldBackFeeIds.has(structure._id)) continue;
-              await ctx.db.insert("studentFees", {
+              await assignFee(ctx, user, {
                 studentId: item.studentId,
                 feeStructureId: structure._id,
                 academicYear: args.targetAcademicYearId,
-                dueDate: structure.dueDate ?? Date.now(),
-                originalAmount: structure.baseAmount,
-                paidAmount: 0,
-                balance: structure.baseAmount,
-                status: "unpaid",
-                appliedDiscounts: [],
-                paymentDetails: [],
+                description: "Assigned fee on promotion",
               });
               feesAssigned++;
             }

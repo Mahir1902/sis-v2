@@ -1,7 +1,15 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ArrowLeft, FileWarning, Mail, Pencil, Printer } from "lucide-react";
+import {
+  ArrowLeft,
+  Ban,
+  FileWarning,
+  Mail,
+  Pencil,
+  Printer,
+  RefreshCw,
+} from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ReceiptDocument } from "@/components/receipts/ReceiptDocument";
@@ -24,6 +32,8 @@ import { receiptEmailBody, receiptEmailSubject } from "@/lib/receiptTemplates";
 import { resolveBillingContact } from "@/lib/resolveBillingContact";
 import { SCHOOL_NAME } from "@/lib/schoolBrand";
 import { CosmeticEditDialog } from "./_components/CosmeticEditDialog";
+import { ReissueReceiptDialog } from "./_components/ReissueReceiptDialog";
+import { VoidReceiptDialog } from "./_components/VoidReceiptDialog";
 
 export default function ReceiptDetailPage() {
   return (
@@ -44,6 +54,9 @@ function ReceiptDetailContent() {
     receipt ? { studentId: receipt.studentId } : "skip",
   );
   const [editOpen, setEditOpen] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
+  const [reissueOpen, setReissueOpen] = useState(false);
+  const isIssued = receipt?.status === "issued";
 
   return (
     <div className="space-y-6 pb-12">
@@ -62,6 +75,28 @@ function ReceiptDetailContent() {
             receipt={receipt ?? null}
             onOpen={() => setEditOpen(true)}
           />
+          {isIssued && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReissueOpen(true)}
+                aria-label="Void and re-issue this receipt"
+              >
+                <RefreshCw className="mr-1 h-4 w-4" />
+                Void &amp; Re-issue
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setVoidOpen(true)}
+                aria-label="Void this receipt"
+              >
+                <Ban className="mr-1 h-4 w-4" />
+                Void
+              </Button>
+            </>
+          )}
           <EmailReceiptButton receipt={receipt ?? null} student={student} />
           <Button
             variant="outline"
@@ -84,11 +119,23 @@ function ReceiptDetailContent() {
       )}
 
       {receipt && receipt.status !== "voided" && (
-        <CosmeticEditDialog
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
-          receipt={receipt}
-        />
+        <>
+          <CosmeticEditDialog
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+            receipt={receipt}
+          />
+          <VoidReceiptDialog
+            open={voidOpen}
+            onClose={() => setVoidOpen(false)}
+            receipt={receipt}
+          />
+          <ReissueReceiptDialog
+            open={reissueOpen}
+            onClose={() => setReissueOpen(false)}
+            receipt={receipt}
+          />
+        </>
       )}
     </div>
   );

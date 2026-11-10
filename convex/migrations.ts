@@ -533,3 +533,92 @@ export const renameCampusesToNumberedDhaka = internalMutation({
     return { patched, skipped, total: campuses.length };
   },
 });
+
+// ─── Fee ledger (architecture review candidate 5, 2026-11-10): widen → migrate → narrow ──
+
+/**
+ * Strips the deprecated `studentFees.paymentDetails[]` (duplicate of
+ * `feeTransactions.by_fee`) and repairs legacy fees that an old discount
+ * flow marked `paid` with no payment behind them: `paid`, `paidAmount 0`,
+ * no live transaction → `unpaid` (balance unchanged, so a ৳0 collect can
+ * issue the receipt). Idempotent.
+ *
+ * Run via:
+ *   npx convex run migrations:runFeeLedgerMigrations '{"dryRun":true}'
+ *   npx convex run migrations:runFeeLedgerMigrations
+ */
+export const stripPaymentDetails = migrations.define({
+  table: "studentFees",
+  migrateOne: async (ctx, fee) => {
+    const patch: {
+      paymentDetails?: undefined;
+      status?: "unpaid";
+    } = {};
+    if (fee.paymentDetails !== undefined) patch.paymentDetails = undefined;
+    if (fee.status === "paid" && fee.paidAmount === 0) {
+      const live = await ctx.db
+        .query("feeTransactions")
+        .withIndex("by_fee", (q) => q.eq("feeId", fee._id))
+        .filter((q) => q.eq(q.field("voidedAt"), undefined))
+        .first();
+      if (!live) patch.status = "unpaid";
+    }
+    return Object.keys(patch).length > 0 ? patch : undefined;
+  },
+});
+
+/** Empties the deprecated `studentDiscounts` table so the narrow can drop it. */
+export const clearStudentDiscounts = migrations.define({
+  table: "studentDiscounts",
+  migrateOne: async (ctx, row) => {
+    await ctx.db.delete(row._id);
+  },
+});
+
+export const runFeeLedgerMigrations = migrations.runner([
+  internal.migrations.stripPaymentDetails,
+  internal.migrations.clearStudentDiscounts,
+]);
+
+/**
+ * Narrow gate for the fee ledger: both counts must be 0 on every deployment
+ * before the stacked narrow PR (drop `paymentDetails`, drop `studentDiscounts`)
+ * is merged. Also reports fees still `paid` without a live transaction.
+ *
+ *   npx convex run migrations:feeLedgerReport
+ */
+export const feeLedgerReport = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const fees = await ctx.db.query("studentFees").take(10000);
+    const withPaymentDetails = fees.filter(
+      (f) => f.paymentDetails !== undefined,
+    ).length;
+    // ৳0 collects are legitimate `paid` + `paidAmount 0`; only count fees
+    // with no live transaction behind them.
+    const paidNoLiveTransaction = (
+      await Promise.all(
+        fees
+          .filter((f) => f.status === "paid" && f.paidAmount === 0)
+          .map(async (f) => {
+            const live = await ctx.db
+              .query("feeTransactions")
+              .withIndex("by_fee", (q) => q.eq("feeId", f._id))
+              .filter((q) => q.eq(q.field("voidedAt"), undefined))
+              .first();
+            return live ? 0 : 1;
+          }),
+      )
+    ).reduce((a: number, b: number) => a + b, 0);
+    const studentDiscountRows = (
+      await ctx.db.query("studentDiscounts").take(10000)
+    ).length;
+    return {
+      feesScanned: fees.length,
+      truncated: fees.length === 10000,
+      withPaymentDetails,
+      paidNoLiveTransaction,
+      studentDiscountRows,
+    };
+  },
+});

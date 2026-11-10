@@ -303,6 +303,7 @@ export function CollectFeesDialog({
         feeIds: selectedFees.map((f) => f._id),
         paymentMode,
         remarks: remarks || undefined,
+        expectedTotal: grandTotal,
       });
       toast.success(`Receipt ${result.receiptNumber} issued`, {
         description: `Total: ৳${result.totalAmount.toLocaleString()}`,
