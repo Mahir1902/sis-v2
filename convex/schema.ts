@@ -583,6 +583,14 @@ export default defineSchema({
     createdAt: v.optional(v.float64()),
   })
     .index("by_subject_semester", ["subjectId", "semester"])
+    // The CAs one subject runs for one Class + term (≤3 docs). Every grade
+    // recompute and the provisional/final gate resolve through this.
+    .index("by_subject_semester_level_year", [
+      "subjectId",
+      "semester",
+      "standardLevelId",
+      "academicYearId",
+    ])
     .index("by_standard_year", ["standardLevelId", "academicYearId"])
     .index("by_active", ["isActive"]),
 
@@ -649,6 +657,14 @@ export default defineSchema({
     computedAt: v.optional(v.float64()),
   })
     .index("by_enrollment_semester", ["enrollmentId", "semester"])
+    // The one row a recompute replaces. Narrow on purpose: ranging on
+    // [enrollment, semester] alone would make two teachers saving different
+    // subjects' grids OCC-conflict on every shared student.
+    .index("by_enrollment_semester_subject", [
+      "enrollmentId",
+      "semester",
+      "subjectId",
+    ])
     .index("by_student", ["studentId"])
     .index("by_subject", ["subjectId"])
     // Class-level analytics: one indexed read returns an entire class for a subject + term.

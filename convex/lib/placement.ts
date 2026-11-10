@@ -154,7 +154,32 @@ export async function amend(
   const open = await getCurrentPlacement(ctx, studentId);
   if (!open) throw new ConvexError({ code: "NOT_PLACED" });
   await ctx.db.patch(open._id, placement);
+  await syncGradeLevel(ctx, open, placement.standardLevelId);
   return open._id;
+}
+
+/**
+ * `computedGrades` denormalises the enrollment's level for the class-analytics
+ * index, so a level change must move the enrollment's grade rows with it or
+ * they stay in the old Class's range. Patch-only: the grades themselves are
+ * not recomputed here. NOTE the marks behind them were earned on the OLD
+ * level's papers; the next recompute of that subject (new marks, or a CA /
+ * question change in the new Class) replaces the row with the new level's
+ * grade, or deletes it when the student has none there yet.
+ */
+async function syncGradeLevel(
+  ctx: MutationCtx,
+  enrollment: Doc<"enrollments">,
+  standardLevelId: Id<"standardLevels">,
+) {
+  if (enrollment.standardLevelId === standardLevelId) return;
+  const rows = await ctx.db
+    .query("computedGrades")
+    .withIndex("by_enrollment_semester", (q) =>
+      q.eq("enrollmentId", enrollment._id),
+    )
+    .take(100);
+  await Promise.all(rows.map((r) => ctx.db.patch(r._id, { standardLevelId })));
 }
 
 /**
@@ -260,6 +285,7 @@ export async function placeFromImport(
       standardLevelId: placement.standardLevelId,
       ...(placement.campus ? { campus: placement.campus } : {}),
     });
+    await syncGradeLevel(ctx, open, placement.standardLevelId);
     return false;
   }
   const wasLeaver = isLeaver(student.status);

@@ -8,14 +8,14 @@ import {
   type CaInput,
   computeRenormalizedGrade,
 } from "../lib/gradeComputation";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
+  internalMutation,
   type MutationCtx,
-  mutation,
   type QueryCtx,
   query,
 } from "./_generated/server";
-import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -23,6 +23,44 @@ import { requireRole } from "./lib/permissions";
  * specific classmate rather than a cohort, so it is suppressed (ADR-0005 / DA #5).
  */
 const MIN_CLASS_PEERS = 5;
+
+/** The Class (level + year) + subject + term that one set of CAs is defined for. */
+export type ClassSubjectKey = {
+  standardLevelId: Id<"standardLevels">;
+  academicYear: Id<"academicYears">;
+  subjectId: Id<"subjects">;
+  semester: 1 | 2;
+};
+
+export function classKeyOf(a: Doc<"assessments">): ClassSubjectKey {
+  return {
+    standardLevelId: a.standardLevelId,
+    academicYear: a.academicYearId,
+    subjectId: a.subjectId,
+    semester: a.semester,
+  };
+}
+
+/**
+ * The active CAs one subject runs for one Class + term (≤ 3). The single
+ * lookup behind every recompute and the final/provisional gate.
+ */
+export function activeAssessmentsFor(
+  ctx: QueryCtx | MutationCtx,
+  key: ClassSubjectKey,
+): Promise<Doc<"assessments">[]> {
+  return ctx.db
+    .query("assessments")
+    .withIndex("by_subject_semester_level_year", (q) =>
+      q
+        .eq("subjectId", key.subjectId)
+        .eq("semester", key.semester)
+        .eq("standardLevelId", key.standardLevelId)
+        .eq("academicYearId", key.academicYear),
+    )
+    .filter((q) => q.eq(q.field("isActive"), true))
+    .take(10);
+}
 
 /**
  * Recompute one student's grade for a (subject, semester) under the ADR-0004
@@ -35,13 +73,11 @@ const MIN_CLASS_PEERS = 5;
  * ungraded: no row is written, and any stale row is deleted so an old "0 / F"
  * from the previous math cannot linger.
  *
- * NOT auto-triggered by mark entry — the manual "Compute Grades" action is the
- * only trigger (unchanged from the previous design). Callers that need fresh
- * grades after entering marks must run compute.
- *
- * Shared by the public `computeGradesForStudent` mutation and the A.4 backfill
- * migration, so it takes a bare `MutationCtx` and does no permission check —
- * the public entry point is responsible for `requireRole`.
+ * Triggered by every write that can change the result: mark entry (inline, see
+ * `studentAssessmentAnswers.ts`), question and assessment changes (class-wide,
+ * via `scheduleClassRecompute`), and the repair migration. There is no manual
+ * trigger any more. Takes a bare `MutationCtx` and does no permission check —
+ * the calling mutation is responsible for `requireRole`.
  */
 export async function recomputeGrade(
   ctx: MutationCtx,
@@ -55,31 +91,24 @@ export async function recomputeGrade(
   const enrollment = await ctx.db.get(args.enrollmentId);
   if (!enrollment) throw new Error("Enrollment not found");
 
-  // Active assessments for this subject at this level + year + semester (≤ 3).
-  const assessments = await ctx.db
-    .query("assessments")
-    .withIndex("by_subject_semester", (q) =>
-      q.eq("subjectId", args.subjectId).eq("semester", args.semester),
-    )
-    .filter((q) =>
-      q.and(
-        q.eq(q.field("standardLevelId"), enrollment.standardLevelId),
-        q.eq(q.field("academicYearId"), enrollment.academicYear),
-        q.eq(q.field("isActive"), true),
-      ),
-    )
-    .collect();
-
+  const assessments = await activeAssessmentsFor(ctx, {
+    standardLevelId: enrollment.standardLevelId,
+    academicYear: enrollment.academicYear,
+    subjectId: args.subjectId,
+    semester: args.semester,
+  });
   // Any existing row for this (enrollment, subject, semester). We replace it
   // (never patch — Convex drops `undefined` keys, so patching would leave a
   // stale caN percentage when a CA goes present → unmarked), or delete it when
   // the subject is now ungraded.
   const existing = await ctx.db
     .query("computedGrades")
-    .withIndex("by_enrollment_semester", (q) =>
-      q.eq("enrollmentId", args.enrollmentId).eq("semester", args.semester),
+    .withIndex("by_enrollment_semester_subject", (q) =>
+      q
+        .eq("enrollmentId", args.enrollmentId)
+        .eq("semester", args.semester)
+        .eq("subjectId", args.subjectId),
     )
-    .filter((q) => q.eq(q.field("subjectId"), args.subjectId))
     .first();
 
   // One CaInput per assessment: denominator = Σ question `marksAllocated`,
@@ -123,7 +152,8 @@ export async function recomputeGrade(
     studentId: args.studentId,
     enrollmentId: args.enrollmentId,
     // Denormalised from the enrollment so class-level analytics can index by
-    // level + year + subject + semester (see schema). Immutable for this grade.
+    // level + year + subject + semester (see schema). `placement.amend` keeps
+    // `standardLevelId` in step when the enrollment's level changes.
     standardLevelId: enrollment.standardLevelId,
     academicYear: enrollment.academicYear,
     subjectId: args.subjectId,
@@ -141,12 +171,10 @@ export async function recomputeGrade(
     letterGrade: result.letterGrade,
     totalMarksObtained: result.totalMarksObtained,
     totalPossibleMarks: result.totalPossibleMarks,
-    // Provisional-grade signal (A.2): how many CAs the subject runs this term,
-    // snapshotted at compute time. present count (derived from which caX
-    // percentage fields are set) < expectedCaCount ⇒ provisional. NOTE: this is
-    // a snapshot — if assessments are added later it can go stale until the
-    // next recompute, so the authoritative final/provisional *gate* (Phase C)
-    // must reconcile against a live `assessments.length`, not this stored value.
+    // Provisional-grade signal (A.2): how many CAs the subject runs this term.
+    // present count (derived from which caX percentage fields are set) <
+    // expectedCaCount ⇒ provisional. Kept fresh: every CA add/remove schedules
+    // a class-wide recompute, which rewrites this on every row.
     expectedCaCount: assessments.length,
     computedAt: Date.now(),
   };
@@ -159,31 +187,160 @@ export async function recomputeGrade(
 }
 
 /**
- * Compute (or clear) one student's grade for a subject/semester. Thin wrapper
- * over `recomputeGrade` that enforces the role gate and writes the audit trail.
+ * Guard for the mark-entry mutations: the enrollment must belong to the
+ * student and sit in the Class the assessment is defined for, or the recompute
+ * would write (or delete) a grade row in the wrong class. Returns the
+ * `recomputeGrade` args for this student on this assessment's subject/term.
  */
-export const computeGradesForStudent = mutation({
+export async function assertEnrollmentForAssessment(
+  ctx: MutationCtx,
+  assessment: Doc<"assessments">,
+  studentId: Id<"students">,
+  enrollmentId: Id<"enrollments">,
+): Promise<GradeTarget & { subjectId: Id<"subjects">; semester: 1 | 2 }> {
+  const enrollment = await ctx.db.get(enrollmentId);
+  if (
+    !enrollment ||
+    enrollment.studentId !== studentId ||
+    enrollment.standardLevelId !== assessment.standardLevelId ||
+    enrollment.academicYear !== assessment.academicYearId
+  ) {
+    throw new Error("Enrollment does not match this assessment");
+  }
+  return {
+    studentId,
+    enrollmentId,
+    subjectId: assessment.subjectId,
+    semester: assessment.semester,
+  };
+}
+
+// ─── Class-wide recompute (scheduled, chunked) ─────────────────────────────────
+//
+// A change to the CA set or a paper's denominator (question added / removed /
+// re-marked, assessment created / deactivated / deleted) moves EVERY student's
+// grade for that subject + term. A whole class × 20-question papers can
+// approach Convex's per-transaction read ceiling, so the triggering mutation
+// only gathers the targets and schedules `recomputeGradesBatch`, which handles
+// RECOMPUTE_BATCH students per transaction and reschedules itself for the rest.
+// Grades are therefore fresh within milliseconds of the change, not in the same
+// transaction. Each target is isolated: a poison row (orphaned enrollment) is
+// skipped and logged, never stalls the chain. The repair path for anything the
+// chain missed is `migrations:runRecomputeAllGrades`.
+
+export type GradeTarget = {
+  studentId: Id<"students">;
+  enrollmentId: Id<"enrollments">;
+};
+
+const RECOMPUTE_BATCH = 25;
+
+/**
+ * Students whose grade for this Class + subject + term may have changed:
+ * everyone who already has a row, plus (when a paper changed) everyone with an
+ * answer on it — a CA whose denominator went 0 → positive becomes present for
+ * students who have no row yet.
+ */
+export async function gatherClassTargets(
+  ctx: MutationCtx,
+  key: ClassSubjectKey,
+  changedAssessmentId?: Id<"assessments">,
+): Promise<GradeTarget[]> {
+  const rows = await ctx.db
+    .query("computedGrades")
+    .withIndex("by_level_year_subject_semester", (q) =>
+      q
+        .eq("standardLevelId", key.standardLevelId)
+        .eq("academicYear", key.academicYear)
+        .eq("subjectId", key.subjectId)
+        .eq("semester", key.semester),
+    )
+    .collect();
+  const targets = new Map<Id<"enrollments">, GradeTarget>();
+  for (const r of rows) {
+    targets.set(r.enrollmentId, {
+      studentId: r.studentId,
+      enrollmentId: r.enrollmentId,
+    });
+  }
+  if (changedAssessmentId) {
+    const answers = await ctx.db
+      .query("studentAssessmentAnswers")
+      .withIndex("by_assessment", (q) =>
+        q.eq("assessmentId", changedAssessmentId),
+      )
+      .take(5000);
+    for (const a of answers) {
+      targets.set(a.enrollmentId, {
+        studentId: a.studentId,
+        enrollmentId: a.enrollmentId,
+      });
+    }
+  }
+  return [...targets.values()];
+}
+
+/** Schedule the chunked recompute for a list of students on one subject + term. */
+export function scheduleRecompute(
+  ctx: MutationCtx,
+  key: Pick<ClassSubjectKey, "subjectId" | "semester">,
+  targets: GradeTarget[],
+) {
+  if (targets.length === 0) return Promise.resolve();
+  return ctx.scheduler.runAfter(
+    0,
+    internal.computedGrades.recomputeGradesBatch,
+    { subjectId: key.subjectId, semester: key.semester, targets },
+  );
+}
+
+/**
+ * Gather + schedule for a whole Class after a CA-set or denominator change.
+ * Returns how many students were queued (for audit descriptions).
+ */
+export async function scheduleClassRecompute(
+  ctx: MutationCtx,
+  key: ClassSubjectKey,
+  changedAssessmentId?: Id<"assessments">,
+): Promise<number> {
+  const targets = await gatherClassTargets(ctx, key, changedAssessmentId);
+  await scheduleRecompute(ctx, key, targets);
+  return targets.length;
+}
+
+/** One chunk of a class-wide recompute; reschedules itself for the remainder. */
+export const recomputeGradesBatch = internalMutation({
   args: {
-    studentId: v.id("students"),
-    enrollmentId: v.id("enrollments"),
     subjectId: v.id("subjects"),
     semester: v.union(v.literal(1), v.literal(2)),
+    targets: v.array(
+      v.object({
+        studentId: v.id("students"),
+        enrollmentId: v.id("enrollments"),
+      }),
+    ),
   },
-  handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
-    const gradeId = await recomputeGrade(ctx, args);
-
-    await logAudit(ctx, {
-      user,
-      action: gradeId ? "create" : "delete",
-      entityType: "computedGrades",
-      entityId: gradeId ?? args.enrollmentId,
-      description: gradeId
-        ? "Computed grades for student"
-        : "Cleared grade — subject has no present CAs",
-    });
-
-    return gradeId;
+  handler: async (ctx, { subjectId, semester, targets }) => {
+    const chunk = targets.slice(0, RECOMPUTE_BATCH);
+    const rest = targets.slice(RECOMPUTE_BATCH);
+    await Promise.all(
+      chunk.map((t) =>
+        recomputeGrade(ctx, { ...t, subjectId, semester }).catch((err) => {
+          console.warn(
+            `recomputeGradesBatch: skipped enrollment ${t.enrollmentId}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }),
+      ),
+    );
+    if (rest.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.computedGrades.recomputeGradesBatch,
+        { subjectId, semester, targets: rest },
+      );
+    }
   },
 });
 
@@ -326,40 +483,6 @@ async function classTermRows(
 }
 
 /**
- * Live count of active assessments a subject runs this term — the authoritative
- * "how many CAs are expected" for final-vs-provisional gating. NOT the stored
- * `expectedCaCount`, which is a compute-time snapshot that goes stale when an
- * assessment is added later (DA B-5 / Backend Review carry-forward). Reuses the
- * `by_subject_semester` index + level/year/isActive filter, as `recomputeGrade`
- * already does; level/year/semester are fixed per call so callers batch this over
- * the unique subjects, never inside the ranking loop.
- */
-async function liveAssessmentCount(
-  ctx: QueryCtx,
-  args: {
-    subjectId: Id<"subjects">;
-    standardLevelId: Id<"standardLevels">;
-    academicYear: Id<"academicYears">;
-    semester: 1 | 2;
-  },
-): Promise<number> {
-  const assessments = await ctx.db
-    .query("assessments")
-    .withIndex("by_subject_semester", (q) =>
-      q.eq("subjectId", args.subjectId).eq("semester", args.semester),
-    )
-    .filter((q) =>
-      q.and(
-        q.eq(q.field("standardLevelId"), args.standardLevelId),
-        q.eq(q.field("academicYearId"), args.academicYear),
-        q.eq(q.field("isActive"), true),
-      ),
-    )
-    .collect();
-  return assessments.length;
-}
-
-/**
  * B.2 — Class Average for one subject + semester, and (if `studentId` given) that
  * student's value and signed delta from it. Suppressed below the ≥5-peer floor:
  * `sufficient: false` and `classAverage: null`, never a misleading small-sample
@@ -436,9 +559,8 @@ export const getPerCaClassBaseline = query({
 /**
  * B.3 — One student's Class Positions for a term: a rank per subject plus the
  * overall (across-subjects) rank. All final-gated and tie-shared:
- *  - A grade is FINAL iff its present-CA count == the LIVE active-assessment count
- *    for that subject (not the stale `expectedCaCount`). Provisional grades are
- *    never ranked.
+ *  - A grade is FINAL iff its present-CA count == its `expectedCaCount` (kept
+ *    fresh by the class-wide recompute). Provisional grades are never ranked.
  *  - A per-subject position shows only with ≥5 final peers; ties share a rank.
  *  - The OVERALL rank ranks students by their across-subjects term average and is
  *    suppressed unless this student's whole graded term is final AND ≥5 peers are
@@ -458,23 +580,32 @@ export const getClassPositions = query({
     await requireRole(ctx, ["admin", "teacher"]);
     const rows = await classTermRows(ctx, args);
 
-    // Live "expected CA" count per unique subject — batched, never in the loop.
-    const subjectIds = [...new Set(rows.map((r) => r.subjectId))];
+    // "Expected CA" count = the stored `expectedCaCount`, which every CA
+    // add/remove now refreshes class-wide. Rows written before the
+    // `runRecomputeAllGrades` migration may lack the field; for those subjects
+    // fall back to a live count (batched over the unique subjects). ponytail:
+    // drop the fallback once the migration has run on every deployment.
+    const legacySubjects = [
+      ...new Set(
+        rows
+          .filter((r) => r.expectedCaCount === undefined)
+          .map((r) => r.subjectId),
+      ),
+    ];
     const liveCounts = await Promise.all(
-      subjectIds.map((subjectId) =>
-        liveAssessmentCount(ctx, {
-          subjectId,
-          standardLevelId: args.standardLevelId,
-          academicYear: args.academicYear,
-          semester: args.semester,
-        }),
+      legacySubjects.map(
+        async (subjectId) =>
+          (await activeAssessmentsFor(ctx, { ...args, subjectId })).length,
       ),
     );
-    const expectedBySubject = new Map(
-      subjectIds.map((id, i) => [id, liveCounts[i]] as const),
+    const liveBySubject = new Map(
+      legacySubjects.map((id, i) => [id, liveCounts[i]] as const),
     );
+    const expectedOf = (row: Doc<"computedGrades">): number =>
+      row.expectedCaCount ?? liveBySubject.get(row.subjectId) ?? 0;
+    const subjectIds = [...new Set(rows.map((r) => r.subjectId))];
     const isFinal = (row: Doc<"computedGrades">): boolean => {
-      const expected = expectedBySubject.get(row.subjectId) ?? 0;
+      const expected = expectedOf(row);
       return expected > 0 && presentCaCount(row) === expected;
     };
 
@@ -540,8 +671,7 @@ export const getClassPositions = query({
       myRows.map((r) => ctx.db.get(r.subjectId)),
     );
     const bySubject = myRows.map((row, i) => {
-      const expected = expectedBySubject.get(row.subjectId) ?? 0;
-      const provisional = !(expected > 0 && presentCaCount(row) === expected);
+      const provisional = !isFinal(row);
       const subjectRanks = rankBySubject.get(row.subjectId);
       const rank = subjectRanks?.get(row.studentId);
       return {

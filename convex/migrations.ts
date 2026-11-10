@@ -81,9 +81,8 @@ export const runBackfillPrimaryBillingContact = migrations.runner(
  * the worst case well under it; raise only if the grades table is large and
  * papers are short.
  *
- * This only re-runs the math on rows that ALREADY exist — it does not compute
- * grades for subjects never computed before (those are created on demand by the
- * manual "Compute Grades" action). Safe to re-run; idempotent.
+ * This only re-runs the math on rows that ALREADY exist; `recomputeEnrollmentGrades`
+ * below creates the missing ones. Safe to re-run; idempotent.
  *
  * Orphaned rows whose `enrollmentId` no longer resolves (a Computed Grade
  * cannot exist without its enrollment — CONTEXT.md) are deleted as a repair;
@@ -114,9 +113,58 @@ export const recomputeAllGrades = migrations.define({
   },
 });
 
-export const runRecomputeAllGrades = migrations.runner(
+/**
+ * Second pass of the same repair, over `enrollments`: creates the rows the
+ * first pass cannot see — subjects a student was marked in but that were never
+ * computed (until this change, mark entry did not recompute; only the manual
+ * "Compute Grades" action did). For each enrollment the (subject, semester)
+ * pairs come from the student's OWN answers, so an unmarked subject costs
+ * nothing. Per enrollment this reads every answer row plus a full recompute
+ * per pair (≈ a few thousand docs for a 10-subject term), hence batchSize 3.
+ */
+export const recomputeEnrollmentGrades = migrations.define({
+  table: "enrollments",
+  batchSize: 3,
+  migrateOne: async (ctx, enrollment) => {
+    const answers = await ctx.db
+      .query("studentAssessmentAnswers")
+      .withIndex("by_enrollment", (q) => q.eq("enrollmentId", enrollment._id))
+      .take(5000);
+    const assessmentIds = [...new Set(answers.map((a) => a.assessmentId))];
+    const assessments = await Promise.all(
+      assessmentIds.map((id) => ctx.db.get(id)),
+    );
+    const pairs = new Map<
+      string,
+      { subjectId: Id<"subjects">; semester: 1 | 2 }
+    >();
+    for (const a of assessments) {
+      if (a) {
+        pairs.set(`${a.subjectId}|${a.semester}`, {
+          subjectId: a.subjectId,
+          semester: a.semester,
+        });
+      }
+    }
+    for (const pair of pairs.values()) {
+      await recomputeGrade(ctx, {
+        studentId: enrollment.studentId,
+        enrollmentId: enrollment._id,
+        ...pair,
+      });
+    }
+  },
+});
+
+/**
+ * The one grade repair / backfill: stale rows first, then missing rows.
+ *   npx convex run migrations:runRecomputeAllGrades
+ *   npx convex run migrations:runRecomputeAllGrades '{"dryRun":true}'
+ */
+export const runRecomputeAllGrades = migrations.runner([
   internal.migrations.recomputeAllGrades,
-);
+  internal.migrations.recomputeEnrollmentGrades,
+]);
 
 // ─── Placement module: widen → migrate → narrow (review candidates 1 + 2) ──
 //

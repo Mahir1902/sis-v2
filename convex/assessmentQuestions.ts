@@ -1,9 +1,14 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import { classKeyOf, scheduleClassRecompute } from "./computedGrades";
 import { requireRole } from "./lib/permissions";
+
+// Every change to a paper's questions moves the denominator of every student's
+// CA percentage, so each mutation below schedules a class-wide recompute
+// (chunked, see computedGrades.ts) for the assessment's subject + term.
 
 /** Create a single question for an assessment. */
 export const createQuestion = mutation({
@@ -18,12 +23,17 @@ export const createQuestion = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin", "teacher"]);
-    await validateQuestionTotal(ctx, args.assessmentId, args.marksAllocated);
+    const assessment = await validateQuestionTotal(
+      ctx,
+      args.assessmentId,
+      args.marksAllocated,
+    );
     const id = await ctx.db.insert("assessmentQuestions", {
       ...args,
       isActive: true,
       createdAt: Date.now(),
     });
+    await scheduleClassRecompute(ctx, classKeyOf(assessment), assessment._id);
 
     await logAudit(ctx, {
       user,
@@ -90,6 +100,7 @@ export const bulkCreateQuestions = mutation({
       });
       ids.push(id);
     }
+    await scheduleClassRecompute(ctx, classKeyOf(assessment), assessment._id);
 
     await logAudit(ctx, {
       user,
@@ -151,6 +162,19 @@ export const updateQuestion = mutation({
 
     const { questionId, ...updates } = args;
     await ctx.db.patch(questionId, updates);
+    if (
+      args.marksAllocated !== undefined &&
+      args.marksAllocated !== question.marksAllocated
+    ) {
+      const assessment = await ctx.db.get(question.assessmentId);
+      if (assessment) {
+        await scheduleClassRecompute(
+          ctx,
+          classKeyOf(assessment),
+          assessment._id,
+        );
+      }
+    }
 
     await logAudit(ctx, {
       user,
@@ -186,6 +210,11 @@ export const deleteQuestion = mutation({
 
     await ctx.db.delete(args.questionId);
 
+    const assessment = await ctx.db.get(question.assessmentId);
+    if (assessment) {
+      await scheduleClassRecompute(ctx, classKeyOf(assessment));
+    }
+
     await logAudit(ctx, {
       user,
       action: "delete",
@@ -201,7 +230,7 @@ async function validateQuestionTotal(
   ctx: MutationCtx,
   assessmentId: Id<"assessments">,
   newMarks: number,
-) {
+): Promise<Doc<"assessments">> {
   const assessment = await ctx.db.get(assessmentId);
   if (!assessment) throw new Error("Assessment not found");
   const existing = await ctx.db
@@ -214,4 +243,5 @@ async function validateQuestionTotal(
       `Adding ${newMarks} marks would exceed assessment total of ${assessment.totalMarks} (current: ${currentTotal})`,
     );
   }
+  return assessment;
 }

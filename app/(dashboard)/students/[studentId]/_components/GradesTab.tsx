@@ -1,17 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { Plus } from "lucide-react";
+import { useQuery } from "convex/react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -56,7 +47,6 @@ export function GradesTab({ studentId }: GradesTabProps) {
 
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string>("");
   const [selectedSemester, setSelectedSemester] = useState<"1" | "2">("1");
-  const [gradeDialogOpen, setGradeDialogOpen] = useState(false);
   const [detailDialog, setDetailDialog] = useState<DetailDialogState | null>(
     null,
   );
@@ -104,7 +94,6 @@ export function GradesTab({ studentId }: GradesTabProps) {
     );
   }
 
-  const resolvedEnrollmentId = activeEnrollmentId as Id<"enrollments">;
   const activeEnrollment = enrollments.find(
     (e) => e._id === activeEnrollmentId,
   );
@@ -150,17 +139,6 @@ export function GradesTab({ studentId }: GradesTabProps) {
             <SelectItem value="2">Semester 2</SelectItem>
           </SelectContent>
         </Select>
-
-        {resolvedEnrollmentId === currentEnrollment?._id && (
-          <Button
-            size="sm"
-            onClick={() => setGradeDialogOpen(true)}
-            className="bg-school-green hover:bg-school-green/90 text-white ml-auto"
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Compute Grades
-          </Button>
-        )}
       </div>
 
       {/* Summary banner */}
@@ -198,8 +176,8 @@ export function GradesTab({ studentId }: GradesTabProps) {
             No grades yet for this semester
           </p>
           <p className="text-sm text-gray-400 mt-1">
-            Grades will appear after assessments (CA-1/2/3) are configured and
-            marks are entered.
+            Grades update automatically as marks are entered for this
+            semester&apos;s assessments (CA-1/2/3).
           </p>
         </div>
       ) : (
@@ -285,19 +263,6 @@ export function GradesTab({ studentId }: GradesTabProps) {
         </div>
       )}
 
-      {/* Compute Grades dialog */}
-      <ComputeGradesDialog
-        open={gradeDialogOpen}
-        onClose={() => setGradeDialogOpen(false)}
-        studentId={studentId}
-        enrollmentId={resolvedEnrollmentId}
-        semester={parseInt(selectedSemester, 10) as 1 | 2}
-        standardLevelId={
-          activeEnrollment?.standardLevelId as Id<"standardLevels">
-        }
-        academicYearId={activeEnrollment?.academicYear as Id<"academicYears">}
-      />
-
       {/* CA score drill-down dialog */}
       {detailDialog && activeEnrollment && (
         <AssessmentDetailDialog
@@ -313,119 +278,5 @@ export function GradesTab({ studentId }: GradesTabProps) {
         />
       )}
     </div>
-  );
-}
-
-// ── Compute Grades Dialog ──────────────────────────────────────────────────────
-
-interface ComputeGradesDialogProps {
-  open: boolean;
-  onClose: () => void;
-  studentId: Id<"students">;
-  enrollmentId: Id<"enrollments">;
-  semester: 1 | 2;
-  standardLevelId: Id<"standardLevels"> | undefined;
-  academicYearId: Id<"academicYears"> | undefined;
-}
-
-function ComputeGradesDialog({
-  open,
-  onClose,
-  studentId,
-  enrollmentId,
-  semester,
-  standardLevelId,
-  academicYearId,
-}: ComputeGradesDialogProps) {
-  const [isComputing, setIsComputing] = useState(false);
-  const computeGrades = useMutation(api.computedGrades.computeGradesForStudent);
-
-  // Fetch only assessments scoped to this enrollment's level + year + semester
-  const assessments = useQuery(
-    api.assessments.getAssessmentsByLevelYear,
-    open && standardLevelId && academicYearId
-      ? { standardLevelId, academicYearId, semester }
-      : "skip",
-  );
-
-  // Derive unique subjects from assessments at this level
-  const subjectMap = new Map<string, string>();
-  if (assessments) {
-    for (const a of assessments) {
-      if (a.isActive && !subjectMap.has(a.subjectId)) {
-        subjectMap.set(a.subjectId, a.subjectDoc?.name ?? "Unknown");
-      }
-    }
-  }
-  const subjectCount = subjectMap.size;
-
-  async function handleCompute() {
-    if (subjectCount === 0) return;
-    setIsComputing(true);
-    try {
-      let computed = 0;
-      for (const subjectId of subjectMap.keys()) {
-        try {
-          await computeGrades({
-            studentId,
-            enrollmentId,
-            subjectId: subjectId as Id<"subjects">,
-            semester,
-          });
-          computed++;
-        } catch {
-          // Subject may have no student answers — skip silently
-        }
-      }
-      toast.success(
-        `Computed grades for ${computed} subject${computed !== 1 ? "s" : ""}`,
-      );
-      onClose();
-    } catch {
-      toast.error("Failed to compute grades");
-    } finally {
-      setIsComputing(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Compute Grades — Semester {semester}</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-gray-600">
-          This will compute weighted averages for{" "}
-          <strong>
-            {subjectCount > 0
-              ? `${subjectCount} subject${subjectCount !== 1 ? "s" : ""}`
-              : "subjects"}
-          </strong>{" "}
-          at this level using CA-1, CA-2, and CA-3 marks. Existing computed
-          grades will be updated.
-        </p>
-        {subjectCount > 0 && (
-          <ul className="text-sm text-gray-500 list-disc pl-5 space-y-0.5">
-            {[...subjectMap.values()].map((name) => (
-              <li key={name}>{name}</li>
-            ))}
-          </ul>
-        )}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCompute}
-            disabled={isComputing || subjectCount === 0}
-            className="bg-school-green hover:bg-school-green/90 text-white"
-          >
-            {isComputing
-              ? "Computing…"
-              : `Compute${subjectCount > 0 ? ` (${subjectCount})` : ""}`}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }

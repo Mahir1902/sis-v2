@@ -1,7 +1,17 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import {
+  activeAssessmentsFor,
+  classKeyOf,
+  scheduleClassRecompute,
+} from "./computedGrades";
 import { requireRole } from "./lib/permissions";
+
+// Adding or removing a CA changes every classmate's `expectedCaCount` (and,
+// for a removal with marks, the grade itself), so those mutations schedule a
+// class-wide recompute (computedGrades.ts). `updateAssessment` does not:
+// name / totalMarks / passingMarks / date play no part in the math (ADR-0004).
 
 /** Create a single assessment (CA-1, CA-2, or CA-3). */
 export const createAssessment = mutation({
@@ -41,6 +51,12 @@ export const createAssessment = mutation({
       ...args,
       isActive: true,
       createdAt: Date.now(),
+    });
+    await scheduleClassRecompute(ctx, {
+      standardLevelId: args.standardLevelId,
+      academicYear: args.academicYearId,
+      subjectId: args.subjectId,
+      semester: args.semester,
     });
 
     await logAudit(ctx, {
@@ -100,6 +116,12 @@ export const bulkCreateAssessments = mutation({
       });
       ids.push(id);
     }
+    await scheduleClassRecompute(ctx, {
+      standardLevelId: args.standardLevelId,
+      academicYear: args.academicYearId,
+      subjectId: args.subjectId,
+      semester: args.semester,
+    });
 
     await logAudit(ctx, {
       user,
@@ -184,19 +206,12 @@ export const getAssessmentsBySubjectSemester = query({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
-    const assessments = await ctx.db
-      .query("assessments")
-      .withIndex("by_subject_semester", (q) =>
-        q.eq("subjectId", args.subjectId).eq("semester", args.semester),
-      )
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("standardLevelId"), args.standardLevelId),
-          q.eq(q.field("academicYearId"), args.academicYearId),
-          q.eq(q.field("isActive"), true),
-        ),
-      )
-      .take(20);
+    const assessments = await activeAssessmentsFor(ctx, {
+      subjectId: args.subjectId,
+      semester: args.semester,
+      standardLevelId: args.standardLevelId,
+      academicYear: args.academicYearId,
+    });
     return assessments.sort((a, b) => a.assessmentNumber - b.assessmentNumber);
   },
 });
@@ -205,8 +220,19 @@ export const getAssessmentsBySubjectSemester = query({
 export const deactivateAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const assessment = await ctx.db.get(args.assessmentId);
+    if (!assessment) throw new Error("Assessment not found");
     await ctx.db.patch(args.assessmentId, { isActive: false });
+    const queued = await scheduleClassRecompute(ctx, classKeyOf(assessment));
+
+    await logAudit(ctx, {
+      user,
+      action: "update",
+      entityType: "assessments",
+      entityId: args.assessmentId,
+      description: `Deactivated assessment: ${assessment.name} (${queued} grades queued for recompute)`,
+    });
   },
 });
 
@@ -308,6 +334,10 @@ export const deleteAssessment = mutation({
 
     // 3. Delete the assessment itself
     await ctx.db.delete(args.assessmentId);
+
+    // 4. Every classmate's grade for this subject + term loses a CA. The batch
+    // runs after this transaction commits, so it sees the deletes above.
+    await scheduleClassRecompute(ctx, classKeyOf(assessment));
 
     await logAudit(ctx, {
       user,

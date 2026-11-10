@@ -2,6 +2,92 @@
 
 ---
 
+## Current Feature: `computedGrades` never go stale — recompute on every write (architecture review candidate 6, 2026-11-10)
+**Status**: Review — PR open
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 6. Rules: CONTEXT.md "Weighted Average /
+Computed Grade", "Present CA", "Absent vs Unmarked", "Provisional Grade"; ADR-0004 (math, unchanged)
+and ADR-0005 (class analytics read `computedGrades` by level+year). This work changes WHEN grades are
+recomputed, never HOW — `lib/gradeComputation.ts` is untouched. Out of scope: current academic year
+(3), dead tables incl. legacy `grades` (4), fee ledger (5), class roster/campus (#120).
+
+### Re-verified problem (post-#131 line numbers)
+- `recomputeGrade` (computedGrades.ts:46) is the only writer; its only trigger is the manual
+  "Compute Grades" dialog (GradesTab.tsx:331). Mark entry, question add/update/delete and
+  assessment update/deactivate/delete never recompute → class averages/positions/spread read
+  stale or missing rows.
+- `expectedCaCount` is a compute-time snapshot (computedGrades.ts:146); `getClassPositions` works
+  around it with `liveAssessmentCount` (:339), an extra read per subject.
+- `computedGrades.standardLevelId/academicYear` are copied from the enrollment and labelled
+  immutable, but `placement.amend` and `placeFromImport` patch `standardLevelId` in place and do
+  NOT refresh the rows → a moved student's grades stay in the old Class's index range.
+- The "active assessments for subject+level+year+semester" lookup is duplicated (:60 and :347) and
+  both scan `by_subject_semester` (every level × year of that subject) and post-filter.
+
+### Plan
+- One lookup helper `activeAssessmentsFor()` on a new `assessments` index
+  `by_subject_semester_level_year` (scans ≤3 docs instead of every level/year).
+- Per-student recompute **inline, same transaction**: `upsertAnswer`, `markStudentAbsent`,
+  `bulkMarkEntry` (distinct students in the payload = one class, bounded by what the grid sends).
+- Class-wide recompute (denominator / CA-set changes: question create/bulk/update/delete,
+  assessment create/bulk/deactivate/delete) is **scheduled + chunked** via `ctx.scheduler`:
+  the mutation gathers the target set (existing rows for the Class+subject+semester ∪ students with
+  answers on the changed assessment) and schedules `recomputeGradesBatch`, which recomputes 25 at a
+  time and reschedules itself. A whole class × 20-question papers can approach the 16k-docs-read
+  ceiling inline, so these are eventually consistent (ms). `expectedCaCount` is refreshed as a
+  by-product (it is written by every recompute).
+- `getClassPositions` uses the stored `expectedCaCount` (now never stale); `liveAssessmentCount`
+  deleted. Rows without the field (pre-backfill) count as provisional until the migration runs.
+- `placement.amend` / `placeFromImport` patch `standardLevelId` onto the enrollment's
+  `computedGrades` rows in the same transaction (year is not amendable). Done inside placement.ts.
+- Manual "Compute Grades" dialog and the public `computeGradesForStudent` mutation are removed; the
+  admin repair action is the migration (`npx convex run migrations:runRecomputeAllGrades`).
+- Migration: keep `recomputeAllGrades` (existing rows + orphans) and add `recomputeEnrollmentGrades`
+  over `enrollments` (creates rows for subjects that were marked but never computed). One runner
+  runs both in series.
+- Tests (`convex/computedGrades.test.ts`, convex-test): marks → grade + class average; adding a CA
+  makes a final grade provisional; deleting a CA with marks recomputes (and deletes the row when it
+  was the only present CA); Absent = present 0 vs Unmarked = excluded; amend refreshes level.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: patching `standardLevelId` on amend is undone by the next recompute — the moved student's answers belong to old-level assessments, so a recompute at the new level finds 0 present CAs and deletes the row → Mitigation: followed the task's explicit instruction (patch) and documented the consequence; the alternative (derive the row's class from the assessments the marks were earned on, so grades stay with the papers) is logged as an open question for the user. Rare in practice (amend = correcting a mistaken placement, usually before marks).
+- Concern: a public batch mutation lets anyone trigger class-wide recomputes; an `assessmentId` arg may be deleted before the job runs → Mitigation: `internalMutation` keyed by (subject, semester) + explicit target list; never an assessment id.
+- Concern: `bulkMarkEntry` inline recompute at 200 students ≈ 28k docs read, over the ~16k ceiling → Mitigation: inline when ≤ 50 distinct students (one class's grid save ≈ 5k reads), scheduled batch above that.
+- Concern: a throwing target (orphan row → "Enrollment not found") kills the scheduled chain silently → Mitigation: per-target try/catch (orphans skipped + logged), reschedule regardless; the migration is the documented repair.
+- Concern: enrollment-table migration at batch 25 ≈ 50–100k reads → Mitigation: batch 3; (subject, semester) pairs derived from the enrollment's own answers, not all subjects.
+- Concern: removing `liveAssessmentCount` before prod runs the migration leaves pre-backfill rows (no `expectedCaCount`) wrongly suppressed → Mitigation: stored count with a live fallback for rows missing the field; drop the fallback in a follow-up once the migration has run on prod.
+- Concern: `upsertAnswer` / `bulkMarkEntry` trust caller ids — a mismatched enrollment writes a row in the wrong class → Mitigation: enrollment must belong to the student and match the assessment's level + year, checked before any write.
+- Concern: `deleteAssessment` must gather targets before cascading → Mitigation: targets = existing rows (index) — unaffected by the delete; scheduled job runs after commit.
+- Concern: `deactivateAssessment` re-grades a whole class with no audit/existence check → Mitigation: null-check + `logAudit` added. Admin-only restriction deferred to Phase 5 (no ownership model yet).
+- Concern: `updateAssessment` → only name/totalMarks/passingMarks/date, none in the math (ADR-0004: totalMarks display-only) → Accepted: no recompute on update.
+- Concern: `bulkCreateAssessments` would schedule 3 jobs → Mitigation: one schedule after all inserts.
+- Concern: GradesTab empty state after the dialog goes → existing copy already says grades appear once marks are entered; no CTA change.
+- Accepted: OCC — per-student recomputes replace only that student's row; shared reads (assessments/questions) change only on edit. Double submit idempotent. Mid-chain `expectedCaCount` flicker for seconds is eventual consistency, documented.
+
+### Sub-tasks
+- [x] 1. Schema: `assessments.by_subject_semester_level_year` + `computedGrades.by_enrollment_semester_subject` indexes — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 2. Backend: `activeAssessmentsFor`, inline recompute in answer mutations (≤50 students, else scheduled), scheduled chunked class recompute in question/assessment mutations, stored `expectedCaCount` (+ live fallback for legacy rows) in positions, `computeGradesForStudent` deleted — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 3. Placement: `amend` / `placeFromImport` → `syncGradeLevel` patches `standardLevelId` on the enrollment's grade rows — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. Migration: `recomputeEnrollmentGrades` (batch 3, pairs from the student's answers); `runRecomputeAllGrades` runs stale-rows then missing-rows — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 5. Frontend: Compute Grades button + dialog removed from GradesTab; empty-state copy updated — APPROVED by Frontend Review Agent (2026-11-10)
+- [x] 6. Tests `convex/computedGrades.test.ts` (12) · tsc · `npm run lint` · `npm run build` · vitest 408/408 · `graphify update .` — 2026-11-10
+
+### Review Notes
+**Backend Review (round 1, REJECTED):** (1) `recomputeGrade` found the existing row by ranging `by_enrollment_semester` + in-memory subject filter, so two teachers saving different subjects' grids OCC-conflicted on every shared student → new `by_enrollment_semester_subject` index; (2) no test for the `getClassPositions` gate change → added (stored count, live fallback, provisional → final on CA delete). Non-blocking taken: `getAssessmentsBySubjectSemester` on the new index.
+**Backend Review (round 2, APPROVED 2026-11-10).** Follow-ups (non-blocking): `console.warn` when `gatherClassTargets` hits `.take(5000)`; per-assessment denominator precompute if the inline path needs headroom; `Promise.all` over pairs in the migration; tests for `deleteQuestion`, `bulkCreateQuestions`, `bulkCreateAssessments`, import-amend → `syncGradeLevel`; `ConvexError` for "Enrollment does not match this assessment" if the UI should show it; admin-only `deactivate/deleteAssessment` (Phase 5).
+**Frontend Review (APPROVED 2026-11-10):** no required changes. Pre-existing notes: no route error boundary check, `text-gray-400` contrast, selection logic in component body.
+
+### Deployment runbook
+1. Deploy. Positions for rows lacking `expectedCaCount` use the live count until step 2.
+2. `npx convex run migrations:runRecomputeAllGrades '{"dryRun":true}'`, then without `dryRun` (stale rows first, then rows for marks that were never computed).
+3. Follow-up PR: drop the live fallback in `getClassPositions`; narrow `expectedCaCount`, `standardLevelId`, `academicYear` to required.
+
+### Open question for the user
+- Mid-year level change with marks: this PR patches the row's `standardLevelId` (as specified), so the row moves to the new Class; the next recompute of that subject (new marks, or a CA/question change in the new Class) replaces it with the new level's grade — or deletes it when there are none yet, since the answers belong to the old level's papers. Alternative: derive the row's class from the assessments the marks were earned on, so grades stay with the papers (no patch needed, recompute stable). Decide before the migration runs on prod if any such student exists.
+
+---
+
 ## Current Feature: Placement module — one copy of "which class", one "has left" (architecture review candidates 1 + 2, 2026-11-10)
 **Status**: Review — PR open; narrow PR stacked, merges after the migrations run
 **Active Agent**: CODING AGENT
