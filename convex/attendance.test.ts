@@ -364,7 +364,10 @@ describe("getClassReport — the denominator", () => {
       asAdmin().mutation(api.attendance.saveRegister, {
         ...grade4A(),
         date,
-        marks: ids.map((studentId) => ({ studentId, status: "present" })),
+        marks: ids.map((studentId) => ({
+          studentId,
+          status: "present" as const,
+        })),
       });
     await mark(d(6), [rafi, lina]);
     await mark(d(5), [rafi, lina]);
@@ -419,7 +422,10 @@ describe("getClassReport — the denominator", () => {
       asAdmin().mutation(api.attendance.saveRegister, {
         ...grade4A(),
         date,
-        marks: ids.map((studentId) => ({ studentId, status: "present" })),
+        marks: ids.map((studentId) => ({
+          studentId,
+          status: "present" as const,
+        })),
       });
     await mark(d(5), [rafi, lina]);
     await mark(d(4), [rafi, lina]);
