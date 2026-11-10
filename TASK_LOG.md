@@ -2,6 +2,43 @@
 
 ---
 
+## Current Feature: Transaction log — read paths that silently drop rows (architecture review candidate 8, 2026-11-10)
+**Status**: Review — PR open
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 8 only. Scope: read paths + indexes. No write path or
+schema shape change (`fm/sis-fee-ledger` owns fee/session/receipt writes in parallel).
+
+### Plan
+- `getTransactionLog` / `getTransactionLogExport` took 500 sessions per year BEFORE filtering in JS, so
+  every total undercounts once a year passes 500 sessions.
+- Fix: push year + date range into `by_academic_year_date`, filter the rest (campus, mode, level,
+  students, voided) in JS over that range. Totals come from a separate streaming query over the whole
+  range (exact, never capped). The row list is paginated (`paginationOpts`, "Load more"). Export keeps a
+  LOUD cap (ConvexError past 2000 sessions, message shown in the toast) instead of a silent one.
+- `searchStudents`: `students.search_by_name` search index instead of `.take(2000)` + JS filter.
+- `dashboard.getSummaryStats`: fee figures via `by_status_and_due_date` (unpaid only); student count
+  stays a bounded scan with a `ponytail:` note (ceiling + upgrade path).
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: the totals query reads the whole filtered range on a live subscription → Mitigation: that is the only exact answer without a digest; range is year + date, bounded by the Convex per-query read limit which throws loudly rather than undercounting. `ponytail:` note names `@convex-dev/aggregate` as the upgrade path.
+- Concern: JS filtering after `.paginate()` can return short/empty pages while `isDone` is false → Mitigation: "Load more" keeps the cursor; the empty state only renders when the query is exhausted.
+- Concern: search index is word-prefix, not substring — "ohn" no longer matches "John" → Accepted; prefix-of-any-word is the expected behaviour of a name picker.
+- Concern: `dateTo` semantics (end of day) must survive the move into the index range → Mitigation: same `+ 86400000 - 1` math inside the range builder; covered by the test.
+- Concern: export of a whole year could exceed function limits → Mitigation: explicit 2000-session cap that throws a ConvexError the UI shows; never a silent truncation.
+
+### Sub-tasks
+- [x] 1. Backend — shared range/filter helpers, `getTransactionLogTotals`, paginated `getTransactionLog`, loud-capped export, `searchStudents` on a search index, dashboard unpaid-fee index — APPROVED by Backend Review Agent (2026-11-10, round 2)
+- [x] 2. Frontend — `usePaginatedQuery` + Load more on /admin/transactions, totals from the new query, export error message — reviewed in the backend round (page wiring only; no new component)
+- [x] 3. Test — `convex/transactionLog.test.ts` (6): 700 sessions in a year, filtered totals / row count / export exact, export cap throws, search index — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. `npm run build` · `npm run lint` · vitest 402/402 · `graphify update .` — 2026-11-10
+
+### Review Notes
+**Backend Review (round 1, REJECTED):** `allRows` in the test had an implicit `any` under `tsc -p convex` (TS7022), which would break `convex dev/deploy`. Runtime code passed every checklist item: dateTo end-of-day math identical, includeVoided default, requireRole first, indexes present, no unbounded collect, no N+1, error message leaks nothing; full-range streaming for totals judged acceptable (loud limit, not a silent drop).
+**Round 2 (APPROVED 2026-11-10):** `res`/`rows` typed via `FunctionReturnType`; `tsc -p convex` clean. Non-blocking, pre-existing: export `.take(50)` line items per session; search is word-prefix (not substring) now; short pages before `isDone` are handled by the page (empty state only when exhausted).
+
+---
+
 ## Current Feature: Placement module — one copy of "which class", one "has left" (architecture review candidates 1 + 2, 2026-11-10)
 **Status**: Review — PR open; narrow PR stacked, merges after the migrations run
 **Active Agent**: CODING AGENT

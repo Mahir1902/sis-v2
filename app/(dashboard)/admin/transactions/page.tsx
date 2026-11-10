@@ -1,10 +1,11 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { usePaginatedQuery, useQuery } from "convex/react";
 import { Receipt } from "lucide-react";
 import { useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { RoleGate } from "@/components/shared/RoleGate";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -42,13 +43,20 @@ function TransactionLogContent() {
   const [selectedSession, setSelectedSession] =
     useState<Id<"feeCollectionSessions"> | null>(null);
 
-  const data = useQuery(
+  const {
+    results: sessions,
+    status,
+    loadMore,
+  } = usePaginatedQuery(
     api.transactionLog.getTransactionLog,
     filters.queryArgs === "skip" ? "skip" : filters.queryArgs,
+    { initialNumItems: 100 },
   );
-
-  const sessions = data?.sessions;
-  const aggregates = data?.aggregates;
+  const totals = useQuery(
+    api.transactionLog.getTransactionLogTotals,
+    filters.queryArgs === "skip" ? "skip" : filters.queryArgs,
+  );
+  const aggregates = totals?.aggregates;
 
   return (
     <div className="space-y-6">
@@ -71,9 +79,9 @@ function TransactionLogContent() {
             academicYears?.find((y) => y._id === filters.effectiveYearId)
               ?.name ?? ""
           }
-          levelName={data?.standardLevelName ?? undefined}
+          levelName={totals?.standardLevelName ?? undefined}
           dateRangeLabel={filters.dateRangeLabel || undefined}
-          disabled={!sessions || sessions.length === 0}
+          disabled={aggregates === undefined || aggregates.sessionCount === 0}
         />
       </div>
 
@@ -123,19 +131,38 @@ function TransactionLogContent() {
       <SummaryCards aggregates={aggregates} />
 
       {/* Content: Skeleton → Empty → Table */}
-      {data === undefined ? (
+      {status === "LoadingFirstPage" ? (
         <TransactionLogSkeleton />
-      ) : sessions && sessions.length === 0 ? (
+      ) : sessions.length === 0 && status === "Exhausted" ? (
         <TransactionLogEmpty />
       ) : (
-        <DataTable<SessionRow, unknown>
-          columns={columns}
-          data={(sessions ?? []) as unknown as SessionRow[]}
-          searchPlaceholder="Search transactions..."
-          pageSize={25}
-          pageSizeOptions={[10, 25, 50]}
-          onRowClick={(row) => setSelectedSession(row._id)}
-        />
+        <>
+          <DataTable<SessionRow, unknown>
+            columns={columns}
+            data={sessions as unknown as SessionRow[]}
+            searchPlaceholder="Search transactions..."
+            pageSize={25}
+            pageSizeOptions={[10, 25, 50]}
+            onRowClick={(row) => setSelectedSession(row._id)}
+          />
+          {status !== "Exhausted" && (
+            <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+              <span>
+                Showing {sessions.length} of {aggregates?.sessionCount ?? "…"}{" "}
+                sessions
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadMore(200)}
+                disabled={status === "LoadingMore"}
+                aria-label="Load more sessions"
+              >
+                {status === "LoadingMore" ? "Loading…" : "Load more"}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Session Detail Sheet */}

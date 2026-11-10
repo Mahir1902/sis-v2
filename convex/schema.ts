@@ -217,7 +217,8 @@ export default defineSchema({
     .index("by_standard_level", ["standardLevel"])
     .index("by_status", ["status"])
     .index("by_academic_year", ["academicYear"])
-    .index("by_student_number", ["studentNumber"]),
+    .index("by_student_number", ["studentNumber"])
+    .searchIndex("search_by_name", { searchField: "studentFullName" }),
 
   enrollments: defineTable({
     studentId: v.id("students"),

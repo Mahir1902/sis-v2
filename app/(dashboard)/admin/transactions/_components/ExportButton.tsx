@@ -1,6 +1,7 @@
 "use client";
 
 import { useConvex } from "convex/react";
+import { ConvexError } from "convex/values";
 import { Download, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -68,8 +69,12 @@ export function ExportButton({
       );
       downloadCSV(content, filename);
       toast.success(`Exported ${data.rows.length} line items`);
-    } catch {
-      toast.error("Failed to export CSV");
+    } catch (err) {
+      toast.error(
+        err instanceof ConvexError && typeof err.data === "string"
+          ? err.data
+          : "Failed to export CSV",
+      );
     } finally {
       setIsExporting(false);
     }
