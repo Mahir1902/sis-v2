@@ -3,7 +3,7 @@
 ---
 
 ## Current Feature: Drop the dead tables (architecture review candidate 4, 2026-11-10)
-**Status**: Review — stage 1 PR open; stage 2 stacked, merges only after the migrations ran on every deployment (runbook under sub-task 2)
+**Status**: Review — stage 1 merged (#136, 2026-11-10); stage 2 (#137, now based on main) merges only after the migrations ran on every deployment (runbook under sub-task 2)
 **Active Agent**: CODING AGENT
 
 Source: architecture review 2026-11-10, candidate 4 only. Out of scope: `studentDiscounts`
