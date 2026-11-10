@@ -1,5 +1,7 @@
-import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
+import { ConvexError, v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
+import { type QueryCtx, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
 
 const paymentModeValidator = v.union(
@@ -10,69 +12,138 @@ const paymentModeValidator = v.union(
   v.literal("Online"),
 );
 
+/** Filters shared by the list, the totals and the export. */
+const sessionFilterArgs = {
+  academicYearId: v.id("academicYears"),
+  dateFrom: v.optional(v.float64()),
+  dateTo: v.optional(v.float64()),
+  campusFilter: v.optional(v.id("campuses")),
+  paymentMode: v.optional(paymentModeValidator),
+  studentIds: v.optional(v.array(v.id("students"))),
+  includeVoided: v.optional(v.boolean()),
+  standardLevelId: v.optional(v.id("standardLevels")),
+};
+
+type SessionFilterArgs = {
+  academicYearId: Id<"academicYears">;
+  dateFrom?: number;
+  dateTo?: number;
+  campusFilter?: Id<"campuses">;
+  paymentMode?: Doc<"feeCollectionSessions">["paymentMode"];
+  studentIds?: Id<"students">[];
+  includeVoided?: boolean;
+  standardLevelId?: Id<"standardLevels">;
+};
+
+type Session = Doc<"feeCollectionSessions">;
+
 /**
- * Returns a list of fee collection sessions for the given academic year,
- * enriched with student name/number and collector name.
- *
- * Supports optional filters: date range, campus, payment mode, student IDs,
- * and a toggle to include voided sessions. Defaults to completed only.
+ * Year + date range go to the `by_academic_year_date` index so storage, not
+ * JS, decides how many rows are read. Everything else is applied by
+ * `matchesFilters` over that range — never over a fixed-size prefix of it.
  */
-export const getTransactionLog = query({
-  args: {
-    academicYearId: v.id("academicYears"),
-    dateFrom: v.optional(v.float64()),
-    dateTo: v.optional(v.float64()),
-    campusFilter: v.optional(v.id("campuses")),
-    paymentMode: v.optional(paymentModeValidator),
-    studentIds: v.optional(v.array(v.id("students"))),
-    includeVoided: v.optional(v.boolean()),
-    standardLevelId: v.optional(v.id("standardLevels")),
-  },
+function sessionRange(ctx: QueryCtx, args: SessionFilterArgs) {
+  return ctx.db
+    .query("feeCollectionSessions")
+    .withIndex("by_academic_year_date", (q) => {
+      const byYear = q.eq("academicYear", args.academicYearId);
+      const from =
+        args.dateFrom !== undefined
+          ? byYear.gte("transactionDate", args.dateFrom)
+          : byYear;
+      return args.dateTo !== undefined
+        ? from.lte("transactionDate", args.dateTo + 86400000 - 1)
+        : from;
+    })
+    .order("desc");
+}
+
+function matchesFilters(s: Session, args: SessionFilterArgs): boolean {
+  if (!args.includeVoided && s.status !== "completed") return false;
+  if (args.campusFilter && s.campus !== args.campusFilter) return false;
+  if (args.paymentMode && s.paymentMode !== args.paymentMode) return false;
+  if (args.standardLevelId && s.standardLevelId !== args.standardLevelId)
+    return false;
+  if (
+    args.studentIds &&
+    args.studentIds.length > 0 &&
+    !args.studentIds.includes(s.studentId)
+  )
+    return false;
+  return true;
+}
+
+/**
+ * Exact totals over every session matching the filters.
+ *
+ * Streams the indexed range and never caps: an undercounted finance total is
+ * worse than a slow one.
+ * ponytail: full range read on a live subscription; the ceiling is Convex's
+ * per-query read limit (loud error, not a silent drop). If a year outgrows
+ * it, move the sums to `@convex-dev/aggregate` keyed by (year, date).
+ */
+export const getTransactionLogTotals = query({
+  args: sessionFilterArgs,
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin"]);
 
-    const rawSessions = await ctx.db
-      .query("feeCollectionSessions")
-      .withIndex("by_academic_year_date", (q) =>
-        q.eq("academicYear", args.academicYearId),
-      )
-      .order("desc")
-      .take(500);
+    let totalAmount = 0;
+    let sessionCount = 0;
+    const byPaymentMode: Record<string, number> = {};
+    const byCampusId = new Map<string, number>();
 
-    // ── Apply filters ─────────────────────────────────────────────────────
-    let filtered = rawSessions;
-
-    if (!args.includeVoided) {
-      filtered = filtered.filter((s) => s.status === "completed");
+    for await (const s of sessionRange(ctx, args)) {
+      if (!matchesFilters(s, args)) continue;
+      sessionCount += 1;
+      totalAmount += s.totalAmount;
+      byPaymentMode[s.paymentMode] =
+        (byPaymentMode[s.paymentMode] ?? 0) + s.totalAmount;
+      const key = s.campus ?? "";
+      byCampusId.set(key, (byCampusId.get(key) ?? 0) + s.totalAmount);
     }
 
-    if (args.dateFrom !== undefined) {
-      const from = args.dateFrom;
-      filtered = filtered.filter((s) => s.transactionDate >= from);
+    const campusIds = [...byCampusId.keys()].filter((k) => k !== "");
+    const campusDocs = await Promise.all(
+      campusIds.map((id) => ctx.db.get(id as Id<"campuses">)),
+    );
+    const campusNameMap = new Map<string, string>();
+    for (const c of campusDocs) {
+      if (c) campusNameMap.set(c._id, c.name);
     }
-    if (args.dateTo !== undefined) {
-      const endOfDay = args.dateTo + 86400000 - 1;
-      filtered = filtered.filter((s) => s.transactionDate <= endOfDay);
-    }
-
-    if (args.campusFilter) {
-      filtered = filtered.filter((s) => s.campus === args.campusFilter);
-    }
-
-    if (args.paymentMode) {
-      filtered = filtered.filter((s) => s.paymentMode === args.paymentMode);
+    const byCampus: Record<string, number> = {};
+    for (const [id, amount] of byCampusId) {
+      const name = id === "" ? "Unknown" : (campusNameMap.get(id) ?? "Unknown");
+      byCampus[name] = (byCampus[name] ?? 0) + amount;
     }
 
-    if (args.studentIds && args.studentIds.length > 0) {
-      const idSet = new Set(args.studentIds);
-      filtered = filtered.filter((s) => idSet.has(s.studentId));
-    }
-
+    let standardLevelName: string | null = null;
     if (args.standardLevelId) {
-      filtered = filtered.filter(
-        (s) => s.standardLevelId === args.standardLevelId,
-      );
+      const level = await ctx.db.get(args.standardLevelId);
+      standardLevelName = level?.name ?? null;
     }
+
+    return {
+      aggregates: { totalAmount, sessionCount, byPaymentMode, byCampus },
+      standardLevelName,
+    };
+  },
+});
+
+/**
+ * Paginated fee collection sessions for the given academic year, newest
+ * first, enriched with student name/number, campus and collector name.
+ *
+ * Year + date range are indexed; campus, payment mode, student IDs, level and
+ * the voided toggle are applied to each page, so a page can come back short
+ * (or empty) while `isDone` is still false — the client keeps loading.
+ */
+export const getTransactionLog = query({
+  args: { ...sessionFilterArgs, paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts, ...args }) => {
+    await requireRole(ctx, ["admin"]);
+
+    const result = await sessionRange(ctx, args).paginate(paginationOpts);
+    const filtered = result.page.filter((s) => matchesFilters(s, args));
 
     // ── Batch-resolve campus IDs to names ────────────────────────────
     const campusIds = [
@@ -87,28 +158,6 @@ export const getTransactionLog = query({
     for (const c of campusDocs) {
       if (c) campusNameMap.set(c._id, c.name);
     }
-
-    // ── Compute aggregates from the filtered set ─────────────────────
-    let totalAmount = 0;
-    const byPaymentMode: Record<string, number> = {};
-    const byCampus: Record<string, number> = {};
-
-    for (const s of filtered) {
-      totalAmount += s.totalAmount;
-      byPaymentMode[s.paymentMode] =
-        (byPaymentMode[s.paymentMode] ?? 0) + s.totalAmount;
-      const campus = s.campus
-        ? (campusNameMap.get(s.campus) ?? "Unknown")
-        : "Unknown";
-      byCampus[campus] = (byCampus[campus] ?? 0) + s.totalAmount;
-    }
-
-    const aggregates = {
-      totalAmount,
-      sessionCount: filtered.length,
-      byPaymentMode,
-      byCampus,
-    };
 
     // ── Batch-enrich: collect unique IDs, then fetch all at once ───────
     const studentIds = [...new Set(filtered.map((s) => s.studentId))];
@@ -139,13 +188,7 @@ export const getTransactionLog = query({
       if (u) collectorMap.set(u._id, u.name);
     }
 
-    let standardLevelName: string | null = null;
-    if (args.standardLevelId) {
-      const level = await ctx.db.get(args.standardLevelId);
-      standardLevelName = level?.name ?? null;
-    }
-
-    const sessions = filtered.map((session) => {
+    const page = filtered.map((session) => {
       const student = studentMap.get(session.studentId);
       return {
         _id: session._id,
@@ -163,7 +206,7 @@ export const getTransactionLog = query({
       };
     });
 
-    return { sessions, aggregates, standardLevelName };
+    return { ...result, page };
   },
 });
 
@@ -262,56 +305,26 @@ export const getSessionDetail = query({
  * Each row represents a single feeTransaction, enriched with session-level
  * fields (invoice, student, payment mode) and fee-level fields (fee name,
  * billing period). Accepts the same filters as getTransactionLog.
+ *
+ * Caps at EXPORT_MAX_SESSIONS and throws past it, so a too-wide export fails
+ * with a message instead of a CSV that quietly omits rows.
  */
+export const EXPORT_MAX_SESSIONS = 2000;
+
 export const getTransactionLogExport = query({
-  args: {
-    academicYearId: v.id("academicYears"),
-    dateFrom: v.optional(v.float64()),
-    dateTo: v.optional(v.float64()),
-    campusFilter: v.optional(v.id("campuses")),
-    paymentMode: v.optional(paymentModeValidator),
-    studentIds: v.optional(v.array(v.id("students"))),
-    includeVoided: v.optional(v.boolean()),
-    standardLevelId: v.optional(v.id("standardLevels")),
-  },
+  args: sessionFilterArgs,
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin"]);
 
-    const rawSessions = await ctx.db
-      .query("feeCollectionSessions")
-      .withIndex("by_academic_year_date", (q) =>
-        q.eq("academicYear", args.academicYearId),
-      )
-      .order("desc")
-      .take(500);
-
-    let filtered = rawSessions;
-
-    if (!args.includeVoided) {
-      filtered = filtered.filter((s) => s.status === "completed");
-    }
-    if (args.dateFrom !== undefined) {
-      const from = args.dateFrom;
-      filtered = filtered.filter((s) => s.transactionDate >= from);
-    }
-    if (args.dateTo !== undefined) {
-      const endOfDay = args.dateTo + 86400000 - 1;
-      filtered = filtered.filter((s) => s.transactionDate <= endOfDay);
-    }
-    if (args.campusFilter) {
-      filtered = filtered.filter((s) => s.campus === args.campusFilter);
-    }
-    if (args.paymentMode) {
-      filtered = filtered.filter((s) => s.paymentMode === args.paymentMode);
-    }
-    if (args.studentIds && args.studentIds.length > 0) {
-      const idSet = new Set(args.studentIds);
-      filtered = filtered.filter((s) => idSet.has(s.studentId));
-    }
-    if (args.standardLevelId) {
-      filtered = filtered.filter(
-        (s) => s.standardLevelId === args.standardLevelId,
-      );
+    const filtered: Session[] = [];
+    for await (const s of sessionRange(ctx, args)) {
+      if (!matchesFilters(s, args)) continue;
+      if (filtered.length === EXPORT_MAX_SESSIONS) {
+        throw new ConvexError(
+          `Export covers more than ${EXPORT_MAX_SESSIONS} sessions. Narrow the date range and try again.`,
+        );
+      }
+      filtered.push(s);
     }
 
     // Batch-resolve campus IDs to names
@@ -432,6 +445,9 @@ export const getTransactionLogExport = query({
 /**
  * Searches students by name for the transaction log filter bar.
  * Returns up to 20 matching students with their ID, name, and admission number.
+ *
+ * Uses the `search_by_name` search index (word-prefix match), so a student
+ * with no recorded name (#93) is simply never indexed.
  */
 export const searchStudents = query({
   args: {
@@ -440,27 +456,22 @@ export const searchStudents = query({
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin"]);
 
-    if (args.nameQuery.trim().length === 0) {
+    const nameQuery = args.nameQuery.trim();
+    if (nameQuery.length === 0) {
       return [];
     }
 
-    const allStudents = await ctx.db.query("students").take(2000);
-    const query = args.nameQuery.toLowerCase();
+    const students = await ctx.db
+      .query("students")
+      .withSearchIndex("search_by_name", (q) =>
+        q.search("studentFullName", nameQuery),
+      )
+      .take(20);
 
-    return (
-      allStudents
-        // `studentFullName` is optional since the import widening (#93). A
-        // student with no recorded name simply never matches a name search
-        // rather than matching on a stand-in value.
-        .filter(
-          (s) => s.studentFullName?.toLowerCase().includes(query) ?? false,
-        )
-        .slice(0, 20)
-        .map((s) => ({
-          _id: s._id,
-          studentFullName: s.studentFullName,
-          studentNumber: s.studentNumber,
-        }))
-    );
+    return students.map((s) => ({
+      _id: s._id,
+      studentFullName: s.studentFullName,
+      studentNumber: s.studentNumber,
+    }));
   },
 });
