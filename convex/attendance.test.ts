@@ -94,6 +94,10 @@ async function enrol(
   );
 }
 
+/** A mid-year class move: the open enrollment is amended in place. */
+const moveTo = (enrollmentId: Id<"enrollments">, level: Id<"standardLevels">) =>
+  t.run((ctx) => ctx.db.patch(enrollmentId, { standardLevelId: level }));
+
 const rowsFor = (studentId: Id<"students">) =>
   t.run((ctx) =>
     ctx.db
@@ -165,7 +169,7 @@ const grade4A = () => ({
 describe("saveRegister", () => {
   it("re-freezes a mover's existing row instead of inserting a second one", async () => {
     const rafi = await seedStudent("Rafi");
-    await enrol(rafi, grade4, campusA);
+    const enrollment = await enrol(rafi, grade3, campusA);
     const date = d(2);
 
     // Rafi was marked under Grade 3 earlier that day (before the class move).
@@ -176,6 +180,7 @@ describe("saveRegister", () => {
       date,
       marks: [{ studentId: rafi, status: "present" }],
     });
+    await moveTo(enrollment, grade4);
     // Grade 4 marks him again the same day.
     const result = await asAdmin().mutation(api.attendance.saveRegister, {
       ...grade4A(),
@@ -190,8 +195,65 @@ describe("saveRegister", () => {
     expect(rows[0].standardLevelId).toBe(grade4);
   });
 
+  it("rejects the whole batch when a student is not placed in this class and year", async () => {
+    const rafi = await seedStudent("Rafi");
+    const mina = await seedStudent("Mina");
+    const nadia = await seedStudent("Nadia");
+    const omar = await seedStudent("Omar");
+    const tania = await seedStudent("Tania");
+    await enrol(rafi, grade4, campusA); // placed: the control
+    await enrol(mina, grade4, campusB); // other campus
+    const left = await enrol(nadia, grade4, campusA);
+    await t.run((ctx) =>
+      ctx.db.patch(left, { exitDate: Date.now(), exitReason: "withdrawn" }),
+    ); // has left: closed enrollment, no Current Placement
+    await t.run((ctx) =>
+      ctx.db.insert("enrollments", {
+        studentId: omar,
+        academicYear: yearNoSplit, // same class, other year
+        standardLevelId: grade4,
+        campus: campusA,
+        enrollmentType: "new_admission",
+        enrollmentDate: Date.now(),
+      }),
+    );
+    // Tania has no enrollment at all.
+
+    for (const outsider of [mina, nadia, omar, tania]) {
+      await expect(
+        asAdmin().mutation(api.attendance.saveRegister, {
+          ...grade4A(),
+          date: d(1),
+          marks: [
+            { studentId: rafi, status: "present" },
+            { studentId: outsider, status: "absent" },
+          ],
+        }),
+      ).rejects.toThrow(/Not in this class for this academic year/);
+    }
+    // Nothing written — not even the placed student's mark.
+    expect(await rowsFor(rafi)).toHaveLength(0);
+  });
+
+  it("names the misplaced students without leaking internals", async () => {
+    const rafi = await seedStudent("Rafi");
+    const err = await asTeacher()
+      .mutation(api.attendance.saveRegister, {
+        ...grade4A(),
+        date: d(1),
+        marks: [{ studentId: rafi, status: "present" }],
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    const data = (err as { data?: unknown }).data;
+    expect(data).toBe(
+      "Not in this class for this academic year: Rafi. Reload the register and save again.",
+    );
+  });
+
   it("writes one audit row with old → new only when the status changes", async () => {
     const rafi = await seedStudent("Rafi");
+    await enrol(rafi, grade4, campusA);
     const date = d(1);
     const mark = (status: "present" | "absent") =>
       asAdmin().mutation(api.attendance.saveRegister, {
@@ -224,6 +286,7 @@ describe("saveRegister", () => {
 
   it("blocks future dates for everyone and old dates for teachers only", async () => {
     const rafi = await seedStudent("Rafi");
+    await enrol(rafi, grade4, campusA);
     const mark = (who: ReturnType<typeof asAdmin>, date: string) =>
       who.mutation(api.attendance.saveRegister, {
         ...grade4A(),
@@ -244,7 +307,7 @@ describe("getClassReport — the denominator", () => {
   it("unions class-marked and student dates, drops closed days, counts no-row days absent", async () => {
     const rafi = await seedStudent("Rafi");
     const mina = await seedStudent("Mina");
-    await enrol(rafi, grade4, campusA);
+    const rafiEnrollment = await enrol(rafi, grade3, campusA);
     await enrol(mina, grade4, campusA);
 
     const mark = (
@@ -264,6 +327,7 @@ describe("getClassReport — the denominator", () => {
       standardLevelId: grade3,
       academicYear: yearId,
     });
+    await moveTo(rafiEnrollment, grade4);
     // Grade 4 marked on days 4, 3, 2; Mina has no row on day 2.
     await mark(d(4), [
       [rafi, "present"],
@@ -609,6 +673,7 @@ describe("getClassReport — the denominator", () => {
 describe("closures.create", () => {
   it("asks for confirmation when marks exist on the target dates, then writes one row per date", async () => {
     const rafi = await seedStudent("Rafi");
+    await enrol(rafi, grade4, campusA);
     await asAdmin().mutation(api.attendance.saveRegister, {
       ...grade4A(),
       date: d(3),

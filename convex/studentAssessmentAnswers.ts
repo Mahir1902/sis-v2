@@ -1,7 +1,40 @@
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { type MutationCtx, mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
+
+/**
+ * Rejects marks for a student who is not in the assessment's class: every
+ * entry's enrollment must be that student's, in the assessment's level and
+ * year. Open is not required — a late CA mark for a closed enrollment of
+ * that year is legitimate.
+ */
+async function assertInAssessmentClass(
+  ctx: MutationCtx,
+  assessmentId: Id<"assessments">,
+  entries: { studentId: Id<"students">; enrollmentId: Id<"enrollments"> }[],
+) {
+  const assessment = await ctx.db.get(assessmentId);
+  if (!assessment) throw new ConvexError("Assessment not found");
+  const ids = [...new Set(entries.map((e) => e.enrollmentId))];
+  const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
+  const byId = new Map(ids.map((id, i) => [id, docs[i]]));
+  const misplaced = entries.some((e) => {
+    const en = byId.get(e.enrollmentId);
+    return (
+      !en ||
+      en.studentId !== e.studentId ||
+      en.standardLevelId !== assessment.standardLevelId ||
+      en.academicYear !== assessment.academicYearId
+    );
+  });
+  if (misplaced) {
+    throw new ConvexError(
+      "A student here is not in this assessment's class. Reload the page and try again.",
+    );
+  }
+}
 
 /** Upsert a single student's answer for a question. */
 export const upsertAnswer = mutation({
@@ -16,6 +49,7 @@ export const upsertAnswer = mutation({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
+    await assertInAssessmentClass(ctx, args.assessmentId, [args]);
     const existing = await ctx.db
       .query("studentAssessmentAnswers")
       .withIndex("by_student_assessment", (q) =>
@@ -57,6 +91,7 @@ export const bulkMarkEntry = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin", "teacher"]);
+    await assertInAssessmentClass(ctx, args.assessmentId, args.entries);
     const now = Date.now();
 
     // Pre-load all existing answers for this assessment (avoid N+1)
@@ -119,6 +154,7 @@ export const markStudentAbsent = mutation({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
+    await assertInAssessmentClass(ctx, args.assessmentId, [args]);
     const questions = await ctx.db
       .query("assessmentQuestions")
       .withIndex("by_assessment", (q) =>

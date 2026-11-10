@@ -17,6 +17,7 @@ const queries = new Map<string, unknown>([
       },
     ],
   ],
+  ["academicYears:getCurrent", { status: "current", year: { _id: "y-now" } }],
 ]);
 vi.mock("convex/react", () => ({
   useQuery: (ref: Parameters<typeof getFunctionName>[0]) =>
@@ -28,7 +29,7 @@ import { useAttendanceClass } from "./use-attendance-class";
 afterEach(() => localStorage.clear());
 
 describe("useAttendanceClass", () => {
-  it("restores campus and level but opens on the year containing today", async () => {
+  it("restores campus and level but opens on the server's current year", async () => {
     // Saved before the year rolled over.
     localStorage.setItem(
       "attendance.lastClass",
@@ -46,6 +47,25 @@ describe("useAttendanceClass", () => {
         academicYear: "y-now",
       }),
     );
+  });
+
+  it("leaves the year unselected when there is no current year", async () => {
+    queries.set("academicYears:getCurrent", {
+      status: "overlap",
+      years: [{ _id: "y-last" }, { _id: "y-now" }],
+    });
+    localStorage.setItem(
+      "attendance.lastClass",
+      JSON.stringify({ campus: "c1", standardLevelId: "l1" }),
+    );
+    const { result } = renderHook(() => useAttendanceClass());
+    await waitFor(() => expect(result.current.selection.campus).toBe("c1"));
+    expect(result.current.selection.academicYear).toBeUndefined();
+    expect(result.current.classKey).toBeNull();
+    queries.set("academicYears:getCurrent", {
+      status: "current",
+      year: { _id: "y-now" },
+    });
   });
 
   it("remembers only campus and level", () => {

@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "convex/react";
 import { CalendarOff, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -44,7 +44,6 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { dhakaDate, formatDisplayDate } from "@/lib/attendanceDate";
 import {
   closureVoidMessage,
-  currentYear,
   dhakaMidnightMs,
   formatDayMonth,
 } from "@/lib/attendanceView";
@@ -69,13 +68,13 @@ export default function SchoolCalendarPage() {
 
 function SchoolCalendarContent() {
   const years = useQuery(api.academicYears.list);
+  const current = useQuery(api.academicYears.getCurrent);
   const campuses = useQuery(api.campus.list);
-  const [yearId, setYearId] = useState<Id<"academicYears">>();
+  const [picked, setYearId] = useState<Id<"academicYears">>();
+  // The admin's pick, else the server's current year — never a guess.
+  const yearId =
+    picked ?? (current?.status === "current" ? current.year._id : undefined);
   const year = years?.find((y) => y._id === yearId);
-
-  useEffect(() => {
-    if (!yearId && years) setYearId(currentYear(years)?._id);
-  }, [yearId, years]);
 
   return (
     <div className="space-y-6">
@@ -111,8 +110,18 @@ function SchoolCalendarContent() {
             <AddClosureForm yearId={year._id} campuses={campuses} />
           </div>
         </>
-      ) : (
+      ) : years === undefined ||
+        campuses === undefined ||
+        current === undefined ? (
         <Skeleton className="h-40 w-full rounded-lg" />
+      ) : (
+        <p className="rounded-lg border border-dashed bg-white p-8 text-center text-sm text-gray-500">
+          {current.status === "overlap"
+            ? `Today falls inside ${current.years.map((y) => y.name).join(" and ")} — their dates overlap. Choose a year.`
+            : years.length === 0
+              ? "No academic year exists yet. Create one on the Promotions page."
+              : "Today is not inside any academic year. Choose a year."}
+        </p>
       )}
     </div>
   );

@@ -2,6 +2,62 @@
 
 ---
 
+## Current Feature: Current academic year — one server-side resolver, writes check placement (architecture review candidate 3, 2026-11-10)
+**Status**: Review — PR open
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 3. Builds on `convex/lib/placement.ts` (candidates 1+2, merged).
+Out of scope: dead-table cleanup (4, parallel branch), the placement narrow (`fm/sis-placement-narrow-v2`).
+
+### Plan
+- `convex/lib/academicYear.ts`: `resolveCurrentAcademicYear(years, today)` (pure) + `getCurrentAcademicYear(ctx, today = dhakaDate())`.
+  A year covers a Dhaka-local day label `d` iff `dhakaDate(startDate) <= d <= dhakaDate(endDate)` — inclusive both ends,
+  same conversion as `attendance.semesterPeriod` and the stored `attendance.date`.
+  - exactly one year covers today → `{ status: "current", year }`;
+  - none (gap between years, before the first, after the last, no years) → `{ status: "none" }`;
+  - two or more (overlap) → `{ status: "overlap", years }`. Never a fallback to "latest" or "first".
+  Callers leave the year unselected and the user picks; nothing guesses.
+- Public query `academicYears.getCurrent` (all roles). No index: the table is ~1 row per year, `.take(100)`.
+- `academicYears.create` rejects a range overlapping another year; `update` rejects a date change that ADDS an overlap
+  (existing seeded overlaps are not made un-editable).
+- Replace every client guess: `lib/attendanceView.currentYear` (deleted) in `use-attendance-class`, `AttendanceTab`,
+  `/admin/calendar`; `years[0]` on `/admin/assessments`. The attendance prototype pages are already deleted.
+- Import: `IMPORT_ACADEMIC_YEAR` constant deleted; `commitImportBatch` and `getExistingStudents` take `academicYear` (id)
+  explicitly; the import page picks it (defaults to the current year, locked once a file is dropped).
+- Writes: `saveRegister` rejects any student whose Current Placement is not this (campus, level, year).
+  Mark entry (`upsertAnswer`, `bulkMarkEntry`, `markStudentAbsent`) rejects an `enrollmentId` that is not the student's
+  or not in the assessment's level + year (open not required: late CA marks for a closed enrollment are legitimate).
+  Errors are `ConvexError` strings — no schema names, survive prod redaction.
+- `getDay` cross-year tolerance KEPT (frozen rows marked under other years must still show) with a `ponytail:` note.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: saveRegister's check is time-blind — a mover's/leaver's back-dated mark is rejected → Decision: keep it strict (Current Placement = this class+year). An as-of-date rule can't be built: `enrollmentDate`/`exitDate` record when the row was created (#115), and `amend` patches level/campus in place, so no history of the old class survives. The register roster (`loadClassRoster`) is current placements for EVERY date, so the strict check accepts exactly what the UI can send. Whole batch rejected (the register submits a full roster; a partial save would misreport the day); the error names the students and says to reload.
+- Concern: seeded years overlap every June–July → no default year for 2 months/yr → Mitigation: seed defs now end 31 May (day before the next 1 June start) for fresh deployments; existing deployments' year dates need a one-off data trim — DEFERRED (no UI edits start/end; flagged in the PR, due before June 2027). No localStorage fallback for the year: that reintroduces the stale-year bug. Overlap result is sorted by start date.
+- Concern: update guard loopholes → per-neighbour set diff (A → A+B is caught); widening an overlap with the SAME neighbour passes — accepted, documented; start < end already validated; inclusive bounds mean sharing one boundary day is an overlap (intended).
+- Concern: mark entry — enrollment not the student's; amended enrollments → check `enrollment.studentId === studentId` and level+year = the assessment's; open not required. An amended student leaves the old level's grid (roster = open enrollments of level+year), so the rejection matches what the UI can send. Enrollment lookups deduped.
+- Concern: `Date.now()` in a query is frozen per run; an open subscription doesn't re-run at midnight → accepted, `ponytail:` note on `getCurrent`.
+- Concern: import preview built for one year, committed for another → the year lives in the hook's loaded phase (one value for preview + every batch); drop is blocked until a year is chosen; commit validates the year exists.
+- Concern: no-year empty states → calendar shows "pick a year" instead of an endless skeleton; attendance tab/screens already render a "choose" state with no selection.
+- Concern: Dhaka-local boundary test → named test at 18:00–23:59 UTC.
+
+### Sub-tasks
+- [x] 1. Resolver lib + `getCurrent` query + create/update overlap guards — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 2. `saveRegister` + mark-entry placement checks — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 3. Import takes the year explicitly — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. Frontend: replace client guesses; import year picker; ConvexError toasts; promotions suggests a 31 May end — APPROVED by Frontend Review Agent (2026-11-10)
+- [x] 5. Tests: resolver (inside / gap / boundary / Dhaka-local / overlap), guards, saveRegister rejection, mark entry; existing attendance/import/hook tests updated — APPROVED by Backend + Frontend Review Agents (2026-11-10)
+- [x] 6. tsc (app + convex) · `npm run lint` · `npm run build` · vitest 408/408 · `graphify update .` — 2026-11-10
+
+### Review Notes
+**Backend Review (round 1, REJECTED):** the promotions page still suggested a 31 July end, so the next year created from it would trip the new create guard; doc comment called the June–July overlap the seeded norm. **Round 2 APPROVED 2026-11-10.** Non-blocking, pre-existing: `create` duplicate-name check is a plain (prod-redacted) Error and doesn't trim; mark entry doesn't scope teachers to their classes; `getExistingStudents` doesn't check the year exists (the commit does).
+**Frontend Review (APPROVED 2026-11-10):** suggestions taken — `serverErrorMessage` falls back for non-string ConvexError data; assessments page shows "choose a year" instead of an endless skeleton. Pre-existing, left: `AcademicYearSelect`'s fixed aria-label overrides a visible `<label>`.
+
+### Deferred
+- Trim existing deployments' academic-year dates (seeded 1 June → 31 July; neighbours overlap June–July → no current year then). No UI edits start/end; needs a one-off data fix before June 2027. Until then, creating 2027-2028 with a 1 June start is rejected as overlapping 2026-2027.
+- `getDay` cross-year tolerance kept (`ponytail:` note) — removable once no attendance row's year differs from its date's academic year.
+
+---
+
 ## Current Feature: Placement module — one copy of "which class", one "has left" (architecture review candidates 1 + 2, 2026-11-10)
 **Status**: Review — PR open; narrow PR stacked, merges after the migrations run
 **Active Agent**: CODING AGENT

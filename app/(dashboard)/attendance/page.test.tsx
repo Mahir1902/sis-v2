@@ -38,6 +38,10 @@ beforeEach(() => {
   queries.set("academicYears:list", [
     { _id: "y1", name: "2026", startDate: 0, endDate: 1e15 },
   ]);
+  queries.set("academicYears:getCurrent", {
+    status: "current",
+    year: { _id: "y1", name: "2026" },
+  });
   localStorage.setItem(
     "attendance.lastClass",
     JSON.stringify({ campus: "c1", standardLevelId: "l1", academicYear: "y1" }),
