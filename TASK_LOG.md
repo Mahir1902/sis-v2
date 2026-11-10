@@ -3,7 +3,7 @@
 ---
 
 ## Current Feature: Placement module — one copy of "which class", one "has left" (architecture review candidates 1 + 2, 2026-11-10)
-**Status**: Review — PR open; narrow PR stacked, merges after the migrations run
+**Status**: Review — narrow PR `#132` merged into the deploy-1 branch; `#131` (→ `main`) still open
 **Active Agent**: CODING AGENT
 
 Source: architecture review 2026-11-10, candidates 1 and 2 only. Rules enforced: CONTEXT.md
@@ -56,6 +56,12 @@ transactionLog caps (8).
 1. `npx convex run migrations:placementReport` — keep the output; fix drift by hand (Edit Student for level/campus, promotion for year), review `closedAsSuspended` and `multipleOpen`.
 2. `npx convex run migrations:runPlacementMigrations '{"dryRun":true}'`, then without `dryRun`.
 3. `npx convex run migrations:placementReport` again — `leaversWithOpen`, `unknownEnrollmentTypes`, `unknownExitReasons` must be empty before merging the narrow PR.
+
+Because `#132` merged into the deploy-1 branch rather than into `main`, `#131` lands the widen
+and the narrow in one `main` deploy, and the merged code no longer carries the migrations. Run
+the three steps above from the `fm/sis-placement-module` branch against every deployment BEFORE
+`#131` merges; afterwards the only recovery path is `git show e6129dd:convex/migrations.ts` plus
+a temporary re-widen (`convex/migrations.ts`, "Removed: placement migrations").
 
 ---
 
