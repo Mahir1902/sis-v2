@@ -86,7 +86,7 @@ export const seedReferenceData = internalMutation({
       await ctx.db.insert("academicYears", {
         name: y.name,
         startDate: new Date(`${y.start}-06-01`).getTime(),
-        endDate: new Date(`${y.end}-07-31`).getTime(),
+        endDate: new Date(`${y.end}-05-31`).getTime(),
       });
     }
 
@@ -274,7 +274,7 @@ export const backfillAcademicYears = mutation({
       await ctx.db.insert("academicYears", {
         name: y.name,
         startDate: new Date(`${y.start}-06-01`).getTime(),
-        endDate: new Date(`${y.end}-07-31`).getTime(),
+        endDate: new Date(`${y.end}-05-31`).getTime(),
       });
       inserted.push(y.name);
     }

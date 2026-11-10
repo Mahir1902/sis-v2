@@ -118,12 +118,14 @@ function AssessmentsPageContent() {
       : "skip",
   );
 
-  // Auto-select current academic year
+  // Auto-select the server's current academic year; none (a gap, or
+  // overlapping years) leaves it for the admin to pick.
+  const currentYear = useQuery(api.academicYears.getCurrent);
   useEffect(() => {
-    if (years && years.length > 0 && !selectedYearId) {
-      setSelectedYearId(years[0]._id);
+    if (!selectedYearId && currentYear?.status === "current") {
+      setSelectedYearId(currentYear.year._id);
     }
-  }, [years, selectedYearId]);
+  }, [currentYear, selectedYearId]);
 
   const activeSubjects = useMemo(
     () => subjects?.filter((s) => s.isActive) ?? [],
@@ -275,6 +277,11 @@ function AssessmentsPageContent() {
       {/* Main content */}
       {!selectedLevelId ? (
         <LevelPickerGrid levels={levels} onSelect={setSelectedLevelId} />
+      ) : !selectedYearId && currentYear !== undefined ? (
+        <p className="rounded-lg border border-dashed bg-white p-8 text-center text-sm text-gray-500">
+          Today is not inside exactly one academic year, so none is preselected.
+          Choose an academic year above.
+        </p>
       ) : assessments === undefined ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (

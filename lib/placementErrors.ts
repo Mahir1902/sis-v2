@@ -16,3 +16,15 @@ export function placementErrorMessage(err: unknown, fallback: string): string {
       : undefined;
   return (code && MESSAGES[code]) || fallback;
 }
+
+/**
+ * A toast message for a server error: a ConvexError's own string (the
+ * placement checks on saveRegister and mark entry, the year-overlap guard),
+ * else the error's message, else the fallback.
+ */
+export function serverErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ConvexError) {
+    return typeof err.data === "string" ? err.data : fallback;
+  }
+  return err instanceof Error ? err.message : fallback;
+}

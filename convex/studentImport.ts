@@ -1,4 +1,4 @@
-import { type Infer, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
   type MutationCtx,
@@ -31,12 +31,6 @@ import { getCurrentPlacement, placeFromImport } from "./lib/placement";
  * them here would turn one bad row into a whole-batch throw the moment the two
  * copies drift.
  */
-
-/**
- * D4: every imported student and their current enrollment point at this year.
- * Seeded by `convex/seed.ts`; an absent year is rejected, never created.
- */
-export const IMPORT_ACADEMIC_YEAR = "2026-2027";
 
 /**
  * Nothing the sheet legitimately carries is longer than this. Batch *size* is
@@ -283,13 +277,15 @@ async function upsertRow(
 
 /**
  * Commits one batch of parsed import rows. Admin-only. Upserts each student on
- * `studentNumber` and upserts that student's enrollment for the current
- * academic year, then writes a single audit document for the batch.
+ * `studentNumber` and upserts that student's enrollment for `academicYear`,
+ * then writes a single audit document for the batch.
  *
  * @param runId Client-generated id stitching a run's batches together.
  * @param batch Which batch of the run this is, 1-based — the only thing that
  *   orders a run's audit documents, since nothing server-side tracks a run.
  * @param rows Parsed rows, at most one batch's worth.
+ * @param academicYear The year every row is placed in — the admin's pick,
+ *   the same one the preview was built for (D4). Never guessed here.
  * @returns What each student number did — inserted or updated.
  */
 export const commitImportBatch = mutation({
@@ -297,6 +293,7 @@ export const commitImportBatch = mutation({
     runId: v.string(),
     batch: v.float64(),
     rows: v.array(importRowValidator),
+    academicYear: v.id("academicYears"),
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
@@ -315,9 +312,9 @@ export const commitImportBatch = mutation({
     }
 
     const ref = await loadReference(ctx);
-    const academicYear = ref.years.get(IMPORT_ACADEMIC_YEAR);
-    if (!academicYear) {
-      throw new Error(`Academic year ${IMPORT_ACADEMIC_YEAR} is not set up`);
+    const { academicYear } = args;
+    if (!(await ctx.db.get(academicYear))) {
+      throw new ConvexError("That academic year no longer exists");
     }
 
     const now = Date.now();
@@ -377,6 +374,8 @@ const dateText = (ms: number | undefined) =>
 /**
  * The students among the given numbers that already exist, each with the
  * current value of every field the import writes. Admin-only.
+ * `academicYear` is the import's year, so `placedInOtherYear` matches what
+ * `commitImportBatch` will refuse for that same year.
  *
  * Two jobs, one round trip: the returned numbers drive the new-vs-update split
  * (§5.2), and the field values are what the inspector renders as `old → new`
@@ -390,7 +389,10 @@ const dateText = (ms: number | undefined) =>
  * here.
  */
 export const getExistingStudents = query({
-  args: { studentNumbers: v.array(v.string()) },
+  args: {
+    studentNumbers: v.array(v.string()),
+    academicYear: v.id("academicYears"),
+  },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin"]);
 
@@ -414,17 +416,14 @@ export const getExistingStudents = query({
       students.map((s) => getCurrentPlacement(ctx, s._id)),
     );
 
-    const importYear = [...names.years].find(
-      ([, name]) => name === IMPORT_ACADEMIC_YEAR,
-    )?.[0];
-
     return students.map((s, i) => {
       const placement = placements[i];
       return {
         studentNumber: s.studentNumber,
         // In a class in another year: the commit would refuse the row (no
         // second open enrollment), so the preview rejects it up front.
-        placedInOtherYear: !!placement && placement.academicYear !== importYear,
+        placedInOtherYear:
+          !!placement && placement.academicYear !== args.academicYear,
         fields: {
           studentFullName: s.studentFullName ?? null,
           gender: s.gender ?? null,

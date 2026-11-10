@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
-import { IMPORT_ACADEMIC_YEAR, type ImportRow } from "./studentImport";
+import type { ImportRow } from "./studentImport";
+
+/** The year the admin picks on the import page. */
+const IMPORT_YEAR = "2026-2027";
 
 /**
  * Behavioural contracts for the Excel import's write path (spec §5, #97).
@@ -54,7 +57,7 @@ async function seedReference(tc: TC, withCurrentYear = true) {
     });
     if (withCurrentYear) {
       currentYear = await ctx.db.insert("academicYears", {
-        name: IMPORT_ACADEMIC_YEAR,
+        name: IMPORT_YEAR,
         startDate: 2,
         endDate: 3,
       });
@@ -85,7 +88,12 @@ const row = (over: Partial<ImportRow> = {}): ImportRow => ({
 });
 
 const commit = (rows: ImportRow[], runId = "run-1", batch = 1) =>
-  asAdmin.mutation(api.studentImport.commitImportBatch, { runId, batch, rows });
+  asAdmin.mutation(api.studentImport.commitImportBatch, {
+    runId,
+    batch,
+    rows,
+    academicYear: currentYear,
+  });
 
 const studentByNumber = (studentNumber: string) =>
   t.run((ctx) =>
@@ -135,6 +143,7 @@ describe("permissions", () => {
           runId: "run-1",
           batch: 1,
           rows: [row()],
+          academicYear: currentYear,
         }),
     ).rejects.toThrow("Unauthorized");
 
@@ -145,6 +154,7 @@ describe("permissions", () => {
     await expect(
       t.query(api.studentImport.getExistingStudents, {
         studentNumbers: [NUMBER],
+        academicYear: currentYear,
       }),
     ).rejects.toThrow("Unauthenticated");
   });
@@ -315,7 +325,7 @@ describe("commitImportBatch — re-commit (upsert)", () => {
     // ...and the preview flags the row so it never reaches the commit.
     const [flagged] = await asAdmin.query(
       api.studentImport.getExistingStudents,
-      { studentNumbers: [NUMBER] },
+      { studentNumbers: [NUMBER], academicYear: currentYear },
     );
     expect(flagged.placedInOtherYear).toBe(true);
   });
@@ -429,29 +439,33 @@ describe("commitImportBatch — server-side validation", () => {
 
     // Rejected, never created.
     const years = await t.run((ctx) => ctx.db.query("academicYears").collect());
-    expect(years.map((y) => y.name).sort()).toEqual([
-      "2021-2022",
-      IMPORT_ACADEMIC_YEAR,
-    ]);
+    expect(years.map((y) => y.name).sort()).toEqual(["2021-2022", IMPORT_YEAR]);
   });
 
-  it("rejects an unknown current academic year rather than creating it", async () => {
-    const bare = convexTest(schema, modules);
-    const bareAdmin = await seedReference(bare, false);
+  it("rejects an import year that no longer exists rather than creating it", async () => {
+    const gone = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("academicYears", {
+        name: "2030-2031",
+        startDate: 4,
+        endDate: 5,
+      });
+      await ctx.db.delete(id);
+      return id;
+    });
 
     await expect(
-      bare
-        .withIdentity({ subject: `${bareAdmin}|s` })
-        .mutation(api.studentImport.commitImportBatch, {
-          runId: "run-1",
-          batch: 1,
-          rows: [row()],
-        }),
-    ).rejects.toThrow(IMPORT_ACADEMIC_YEAR);
+      asAdmin.mutation(api.studentImport.commitImportBatch, {
+        runId: "run-1",
+        batch: 1,
+        rows: [row()],
+        academicYear: gone,
+      }),
+    ).rejects.toThrow(/no longer exists/);
 
     expect(
-      await bare.run((ctx) => ctx.db.query("academicYears").collect()),
-    ).toHaveLength(1);
+      await t.run((ctx) => ctx.db.query("academicYears").collect()),
+    ).toHaveLength(2);
+    expect(await studentByNumber(NUMBER)).toBeNull();
   });
 
   it("rejects payloads the browser would never produce", async () => {
@@ -470,6 +484,7 @@ describe("commitImportBatch — server-side validation", () => {
         batch: 1,
         // biome-ignore lint/suspicious/noExplicitAny: hostile payload by design
         rows: [{ ...row(), isActive: true } as any],
+        academicYear: currentYear,
       }),
     ).rejects.toThrow();
     // No run id to stitch the audit rows together.
@@ -499,7 +514,10 @@ describe("commitImportBatch — server-side validation", () => {
 
 describe("getExistingStudents", () => {
   const existingFor = (studentNumbers: string[]) =>
-    asAdmin.query(api.studentImport.getExistingStudents, { studentNumbers });
+    asAdmin.query(api.studentImport.getExistingStudents, {
+      studentNumbers,
+      academicYear: currentYear,
+    });
 
   it("returns only the numbers already in the database", async () => {
     await commit([row({ studentNumber: NUMBER })]);

@@ -127,14 +127,3 @@ export function closureVoidMessage(o: {
 export function plural(n: number, one: string, many = `${one}s`): string {
   return n === 1 ? one : many;
 }
-
-/** The academic year containing `today`, else the most recent one. */
-export function currentYear<T extends { startDate: number; endDate: number }>(
-  years: T[],
-  now: number = Date.now(),
-): T | undefined {
-  return (
-    years.find((y) => y.startDate <= now && now <= y.endDate) ??
-    [...years].sort((a, b) => b.startDate - a.startDate)[0]
-  );
-}

@@ -6,6 +6,7 @@ import { ConvexError } from "convex/values";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import {
   ImportFileError,
   PARSE_STAGES,
@@ -26,8 +27,16 @@ import {
  * byte reaches the backend — the preview *is* the gate.
  */
 
-/** The file, once read — the split pane stays on screen through the commit. */
-type Loaded = { fileName: string; preview: ImportPreview };
+/**
+ * The file, once read — the split pane stays on screen through the commit.
+ * `academicYear` is the year the preview was built for; every batch commits
+ * into that same one, so a preview and its commit can never disagree.
+ */
+type Loaded = {
+  fileName: string;
+  preview: ImportPreview;
+  academicYear: Id<"academicYears">;
+};
 
 export type ImportPhase =
   | { kind: "idle" }
@@ -91,7 +100,7 @@ export function useStudentImport() {
   const reset = useCallback(() => setPhase({ kind: "idle" }), []);
 
   const drop = useCallback(
-    async (file: File) => {
+    async (file: File, academicYear: Id<"academicYears">) => {
       const stage = (s: ParseStage) =>
         setPhase({
           kind: "parsing",
@@ -103,8 +112,13 @@ export function useStudentImport() {
       try {
         const sheets = await readStudentFile(file, stage);
         stage("checking");
-        const preview = await buildPreview(convex, sheets);
-        setPhase({ kind: "preview", fileName: file.name, preview });
+        const preview = await buildPreview(convex, sheets, academicYear);
+        setPhase({
+          kind: "preview",
+          fileName: file.name,
+          preview,
+          academicYear,
+        });
       } catch (error) {
         const message =
           error instanceof ImportFileError
@@ -126,7 +140,7 @@ export function useStudentImport() {
   const commit = useCallback(async () => {
     if (phase.kind !== "preview" || phase.preview.fileError) return;
 
-    const { preview, fileName } = phase;
+    const { preview, fileName, academicYear } = phase;
     const rows = preview.rows.filter((row) => row.outcome !== "reject");
     const skipped = preview.rows.length - rows.length;
     const runId = crypto.randomUUID();
@@ -136,6 +150,7 @@ export function useStudentImport() {
       kind: "committing",
       fileName,
       preview,
+      academicYear,
       written: 0,
       total: rows.length,
     });
@@ -147,6 +162,7 @@ export function useStudentImport() {
             runId,
             batch,
             rows: payload,
+            academicYear,
           }),
         (done) => {
           written = done;
@@ -157,14 +173,22 @@ export function useStudentImport() {
           );
         },
       );
-      setPhase({ kind: "done", fileName, preview, created, updated, skipped });
+      setPhase({
+        kind: "done",
+        fileName,
+        preview,
+        academicYear,
+        created,
+        updated,
+        skipped,
+      });
       toast.success(
         `${created} created · ${updated} updated · ${skipped} skipped`,
       );
     } catch (err) {
       // Back to the preview: the rows that landed are already correct, and the
       // fix is the same file again rather than anything the admin must undo.
-      setPhase({ kind: "preview", fileName, preview });
+      setPhase({ kind: "preview", fileName, preview, academicYear });
       // Backstop for a student moved to another year since the preview ran
       // (the preview rejects such rows itself): re-uploading won't help.
       const data =
@@ -188,6 +212,7 @@ type ConvexClient = ReturnType<typeof useConvex>;
 async function buildPreview(
   convex: ConvexClient,
   sheets: Awaited<ReturnType<typeof readStudentFile>>,
+  academicYear: Id<"academicYears">,
 ): Promise<ImportPreview> {
   const [levels, campuses, years] = await Promise.all([
     convex.query(api.standardLevels.list, {}),
@@ -222,6 +247,7 @@ async function buildPreview(
     existing.push(
       ...(await convex.query(api.studentImport.getExistingStudents, {
         studentNumbers: numbers.slice(i, i + LOOKUP_CHUNK),
+        academicYear,
       })),
     );
   }
