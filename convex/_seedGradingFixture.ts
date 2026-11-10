@@ -183,14 +183,7 @@ async function resetFixture(ctx: MutationCtx): Promise<number> {
 }
 
 /** Build the required `students` insert payload with valid dummy values. */
-function studentPayload(
-  index: number,
-  refs: {
-    standardLevelId: Id<"standardLevels">;
-    academicYearId: Id<"academicYears">;
-    campusId: Id<"campuses">;
-  },
-) {
+function studentPayload(index: number) {
   const name = STUDENT_NAMES[index];
   const n = index + 1;
   const now = Date.now();
@@ -204,9 +197,6 @@ function studentPayload(
     religion: "Islam",
     bloodGroup: "O+",
     birthCertificateNumber: `BC-FIX-${String(n).padStart(4, "0")}`,
-    standardLevel: refs.standardLevelId,
-    academicYear: refs.academicYearId,
-    campus: refs.campusId,
     admissionDate: now,
     classStartDate: now,
     presentAddress: `House ${n}, Road ${n}, Dhaka`,
@@ -304,13 +294,9 @@ export const seedGradingFixture = internalMutation({
     const englishId = await requireRef(ctx, "subjects", "English");
     const scienceId = await requireRef(ctx, "subjects", "Science");
 
-    const refs = { standardLevelId, academicYearId, campusId };
-
     // ── Students + enrollments (7) ──────────────────────────────────────────
     const studentIds = await Promise.all(
-      STUDENT_NAMES.map((_, i) =>
-        ctx.db.insert("students", studentPayload(i, refs)),
-      ),
+      STUDENT_NAMES.map((_, i) => ctx.db.insert("students", studentPayload(i))),
     );
     const enrollmentIds = await Promise.all(
       studentIds.map((studentId) =>
@@ -319,10 +305,9 @@ export const seedGradingFixture = internalMutation({
           academicYear: academicYearId,
           standardLevelId,
           campus: campusId,
-          enrollmentType: "regular",
+          enrollmentType: "new_admission",
           enrollmentDate: Date.now(),
-          status: "active",
-          // NO exitDate → current/active enrollment (schema-improvement rule #9).
+          // NO exitDate → open enrollment (convex/lib/placement.ts).
         }),
       ),
     );

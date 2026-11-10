@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
+import { getCurrentPlacement } from "./lib/placement";
 
 /**
- * Returns active fee structures for a student's standard level that can still
+ * Returns active fee structures for the level of a student's Current
+ * Placement (none for a leaver) that can still
  * be assigned mid-semester.
  *
  * - Monthly structures are always returned (month-level availability is
@@ -19,13 +21,15 @@ export const getAssignableStructures = query({
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin"]);
 
-    const student = await ctx.db.get(args.studentId);
-    if (!student) throw new Error("Student not found");
+    // Fee structures follow the Current Placement's level; a student in no
+    // class (a leaver) has nothing assignable.
+    const placement = await getCurrentPlacement(ctx, args.studentId);
+    if (!placement) return [];
 
     const feeStructures = await ctx.db
       .query("feeStructure")
       .withIndex("by_standard", (q) =>
-        q.eq("standardLevel", student.standardLevel),
+        q.eq("standardLevel", placement.standardLevelId),
       )
       .take(50);
 

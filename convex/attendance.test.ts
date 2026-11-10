@@ -90,7 +90,6 @@ async function enrol(
       campus,
       enrollmentType: "new_admission",
       enrollmentDate: Date.now(),
-      status: "active",
     }),
   );
 }
@@ -333,7 +332,7 @@ describe("getClassReport — the denominator", () => {
       date: d(2),
       marks: [{ studentId: rafi, status: "present" }],
     });
-    await t.run((ctx) => ctx.db.patch(enrollmentId, { status: "completed" }));
+    await t.run((ctx) => ctx.db.patch(enrollmentId, { exitDate: Date.now() }));
 
     const report = await asAdmin().query(api.attendance.getClassReport, {
       ...grade4A(),
@@ -450,11 +449,11 @@ describe("getClassReport — the denominator", () => {
     const rafi = await seedStudent("Rafi");
     const mina = await seedStudent("Mina");
     const old = await enrol(rafi, grade4, campusA);
-    await t.run((ctx) => ctx.db.patch(old, { status: "completed" }));
+    await t.run((ctx) => ctx.db.patch(old, { exitDate: Date.now() }));
     await enrol(rafi, grade4, campusA);
     await enrol(rafi, grade4, campusA);
     const minaGrade3 = await enrol(mina, grade3, campusA);
-    await t.run((ctx) => ctx.db.patch(minaGrade3, { status: "completed" }));
+    await t.run((ctx) => ctx.db.patch(minaGrade3, { exitDate: Date.now() }));
 
     const classes = await asAdmin().query(api.enrollments.getClassesForYear, {
       academicYear: yearId,
@@ -481,7 +480,7 @@ describe("getClassReport — the denominator", () => {
       date: d(1),
       marks: [{ studentId: mina, status: "absent" }],
     });
-    await t.run((ctx) => ctx.db.patch(minaGrade3, { status: "completed" }));
+    await t.run((ctx) => ctx.db.patch(minaGrade3, { exitDate: Date.now() }));
 
     const day = await asAdmin().query(api.attendance.getDay, {
       date: d(1),
@@ -515,7 +514,6 @@ describe("getClassReport — the denominator", () => {
         campus: campusA,
         enrollmentType: "new_admission",
         enrollmentDate: Date.now(),
-        status: "active",
       }),
     );
     await enrol(mina, grade4, campusA);
@@ -551,7 +549,6 @@ describe("getClassReport — the denominator", () => {
         campus: campusA,
         enrollmentType: "new_admission",
         enrollmentDate: Date.now(),
-        status: "active",
       }),
     );
     await enrol(mina, grade3, campusA);

@@ -188,8 +188,8 @@ function StudentFeeRow({
     studentFullName?: string;
     studentNumber: string;
     studentPhotoUrl?: string | null;
-    standardLevelName?: string;
-    academicYearName?: string;
+    standardLevelName: string | null;
+    academicYearName: string | null;
   };
   onClick: () => void;
 }) {

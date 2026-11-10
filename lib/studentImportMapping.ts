@@ -108,6 +108,12 @@ export type ImportPreviewInput = {
     string,
     Readonly<Record<string, string | null>>
   >;
+  /**
+   * Existing students whose class is in another academic year. The commit
+   * would refuse them (a student has one open enrollment; moving year is a
+   * promotion), so the preview rejects the row instead of the whole batch.
+   */
+  placedInOtherYear?: Iterable<string>;
 };
 
 /** The `header` placeholder for a field with no source column (§7.2). */
@@ -771,6 +777,7 @@ const isEmptyRow = (row: readonly RawCell[]) =>
  */
 export function buildImportPreview(input: ImportPreviewInput): ImportPreview {
   const existing = new Set(input.existingStudentNumbers);
+  const otherYear = new Set(input.placedInOtherYear);
   const tabs: PreviewTab[] = [];
   const rows: PreviewRow[] = [];
 
@@ -818,6 +825,14 @@ export function buildImportPreview(input: ImportPreviewInput): ImportPreview {
       applyDerivations(fields, texts, parsed, input.reference, errors);
 
       const isUpdate = existing.has(studentNumber);
+      if (isUpdate && otherYear.has(studentNumber)) {
+        errors.push({
+          column: studentId?.header ?? "STUDENT ID",
+          value: studentNumber,
+          reason:
+            "in a class in another academic year — promote or hold back first",
+        });
+      }
       const previous = isUpdate
         ? input.existingFieldValues?.get(studentNumber)
         : undefined;

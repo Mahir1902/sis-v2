@@ -1,8 +1,24 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
+import {
+  admit,
+  amend,
+  changeStatus,
+  getCurrentPlacement,
+  readmit,
+} from "./lib/placement";
+
+const studentStatus = v.union(
+  v.literal("active"),
+  v.literal("graduated"),
+  v.literal("transferred"),
+  v.literal("withdrawn"),
+  v.literal("suspended"),
+  v.literal("expelled"),
+);
 
 /**
  * Generate a Convex storage upload URL for a student photo.
@@ -17,7 +33,9 @@ export const generateStudentPhotoUrl = mutation({
 });
 
 /**
- * Create a new student record.
+ * Admission: creates the student record and opens their first enrollment in
+ * one transaction, so a student never exists without a class. The class
+ * (level, year, campus) is stored on the enrollment only.
  * Returns the new student's ID.
  */
 export const createStudent = mutation({
@@ -78,16 +96,24 @@ export const createStudent = mutation({
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
 
+    const { standardLevel, academicYear, campus, ...studentFields } = args;
+    const now = Date.now();
     const studentId = await ctx.db.insert("students", {
-      ...args,
+      ...studentFields,
       // Default Billing Contact to "father" until the admission form (#31)
       // captures the caller's explicit choice. Stays consistent with the
       // backfill default applied to pre-existing students.
       primaryBillingContact: args.primaryBillingContact ?? "father",
       status: "active",
-      admissionDate: Date.now(),
-      createdAt: new Date().toISOString(),
+      admissionDate: now,
+      createdAt: new Date(now).toISOString(),
     });
+    await admit(
+      ctx,
+      studentId,
+      { standardLevelId: standardLevel, academicYear, campus },
+      now,
+    );
 
     // Bidirectional sibling linking — both patches in the same mutation (atomic)
     if (args.siblingIds && args.siblingIds.length > 0) {
@@ -120,6 +146,11 @@ export const createStudent = mutation({
  * Get all students with optional server-side filters.
  * Pre-fetches lookup tables to avoid N+1 reads.
  * Returns a slim projection for the list view.
+ *
+ * Class columns and the level / year filters come from each student's
+ * Current Placement (open enrollment), read in one `by_exit_date` range. A
+ * leaver has no placement: no level/year name, and no level/year filter
+ * matches them.
  *
  * `status: ["unspecified"]` is a filter-only sentinel meaning "no status on
  * record" — it is never a stored value, so `updateStudentStatus` rejects it.
@@ -158,59 +189,68 @@ export const getAllStudents = query({
     const levelMap = new Map(allLevels.map((l) => [l._id, l.name]));
     const yearMap = new Map(allYears.map((y) => [y._id, y.name]));
 
-    // Build query with server-side filters
-    let q = ctx.db.query("students");
+    // Every open enrollment, newest last so a (pre-migration) duplicate
+    // resolves to the newest — same rule as `getCurrentPlacement`.
+    const open = await ctx.db
+      .query("enrollments")
+      .withIndex("by_exit_date", (q) => q.eq("exitDate", undefined))
+      .take(5000);
+    open.sort((a, b) => a.enrollmentDate - b.enrollmentDate);
+    const placementOf = new Map(open.map((e) => [e.studentId, e]));
 
-    // Guard: only apply filter if array is non-empty (qb.or() with 0 args is undefined)
-    if (args.standardLevel && args.standardLevel.length > 0) {
-      const levels = args.standardLevel;
-      q = q.filter((qb) =>
-        qb.or(...levels.map((id) => qb.eq(qb.field("standardLevel"), id))),
-      );
-    }
-    if (args.academicYear && args.academicYear.length > 0) {
-      const years = args.academicYear;
-      q = q.filter((qb) =>
-        qb.or(...years.map((id) => qb.eq(qb.field("academicYear"), id))),
-      );
-    }
-    if (args.gender && args.gender.length > 0) {
-      const genders = args.gender;
-      q = q.filter((qb) =>
-        qb.or(...genders.map((g) => qb.eq(qb.field("gender"), g))),
-      );
-    }
-    if (args.status && args.status.length > 0) {
-      const statuses = args.status;
-      q = q.filter((qb) =>
-        qb.or(
-          ...statuses.map((s) =>
-            // "unspecified" means the field is absent, not a stored value.
-            qb.eq(qb.field("status"), s === "unspecified" ? undefined : s),
-          ),
-        ),
-      );
-    }
+    const levels = args.standardLevel ?? [];
+    const years = args.academicYear ?? [];
+    const genders = args.gender ?? [];
+    const statuses = args.status ?? [];
+    const matches = (s: Doc<"students">) =>
+      (genders.length === 0 || (s.gender && genders.includes(s.gender))) &&
+      (statuses.length === 0 ||
+        // "unspecified" means the field is absent, not a stored value.
+        statuses.includes(s.status ?? "unspecified"));
 
-    const students = await q.take(2000);
+    let students: Doc<"students">[];
+    if (levels.length > 0 || years.length > 0) {
+      // Indexed path: the placement map picks the students, then we load them.
+      const ids = [...placementOf.values()]
+        .filter(
+          (e) =>
+            (levels.length === 0 || levels.includes(e.standardLevelId)) &&
+            (years.length === 0 || years.includes(e.academicYear)),
+        )
+        .map((e) => e.studentId);
+      const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
+      students = docs.filter((s): s is Doc<"students"> => s !== null);
+    } else {
+      // ponytail: full scan capped at 2000 (school ~400); paginate past that.
+      students = await ctx.db.query("students").take(2000);
+    }
+    students = students.filter(matches);
 
     // Resolve photo URLs + return slim projection
     const enriched = await Promise.all(
-      students.map(async (s) => ({
-        _id: s._id,
-        studentNumber: s.studentNumber,
-        studentFullName: s.studentFullName,
-        studentPhotoUrl: s.studentPhotoUrl
-          ? await ctx.storage.getUrl(s.studentPhotoUrl)
-          : null,
-        standardLevel: s.standardLevel,
-        academicYear: s.academicYear,
-        standardLevelName: levelMap.get(s.standardLevel) ?? "Unknown",
-        academicYearName: yearMap.get(s.academicYear) ?? "Unknown",
-        gender: s.gender,
-        classStartDate: s.classStartDate,
-        status: s.status,
-      })),
+      students.map(async (s) => {
+        const placement = placementOf.get(s._id);
+        return {
+          _id: s._id,
+          studentNumber: s.studentNumber,
+          studentFullName: s.studentFullName,
+          studentPhotoUrl: s.studentPhotoUrl
+            ? await ctx.storage.getUrl(s.studentPhotoUrl)
+            : null,
+          // Current Placement — all null for a leaver.
+          standardLevel: placement?.standardLevelId ?? null,
+          academicYear: placement?.academicYear ?? null,
+          standardLevelName: placement
+            ? (levelMap.get(placement.standardLevelId) ?? null)
+            : null,
+          academicYearName: placement
+            ? (yearMap.get(placement.academicYear) ?? null)
+            : null,
+          gender: s.gender,
+          classStartDate: s.classStartDate,
+          status: s.status,
+        };
+      }),
     );
 
     return enriched;
@@ -232,8 +272,17 @@ export const getStudentById = query({
       }
     }
 
-    const student = await ctx.db.get(args.studentId);
-    if (!student) return null;
+    const doc = await ctx.db.get(args.studentId);
+    if (!doc) return null;
+    // Drop the deprecated student-record copy of the class (narrow PR deletes
+    // it); the class comes from the Current Placement below.
+    const {
+      standardLevel: _sl,
+      academicYear: _ay,
+      campus: _c,
+      ...student
+    } = doc;
+    const open = await getCurrentPlacement(ctx, doc._id);
 
     const [
       standardLevel,
@@ -243,12 +292,11 @@ export const getStudentById = query({
       fatherPhoto,
       motherPhoto,
     ] = await Promise.all([
-      ctx.db.get(student.standardLevel),
-      ctx.db.get(student.academicYear),
-      // `campus` is optional since the import widening (#93) — a student whose
-      // CAMPUS cell was blank has no campus to resolve, so `campusDoc` is null
-      // and the UI renders an em-dash rather than a fabricated campus name.
-      student.campus ? ctx.db.get(student.campus) : null,
+      open ? ctx.db.get(open.standardLevelId) : null,
+      open ? ctx.db.get(open.academicYear) : null,
+      // A leaver has no placement, and an imported enrollment may have no
+      // campus (#93) — either way the doc is null and the UI shows an em-dash.
+      open?.campus ? ctx.db.get(open.campus) : null,
       student.studentPhotoUrl
         ? ctx.storage.getUrl(student.studentPhotoUrl)
         : null,
@@ -265,6 +313,15 @@ export const getStudentById = query({
       studentPhotoUrl: studentPhoto,
       fatherPhotoUrl: fatherPhoto,
       motherPhotoUrl: motherPhoto,
+      // Current Placement ids for the edit dialog; null for a leaver.
+      placement: open
+        ? {
+            enrollmentId: open._id,
+            standardLevelId: open.standardLevelId,
+            academicYear: open.academicYear,
+            campus: open.campus ?? null,
+          }
+        : null,
       standardLevelDoc: standardLevel,
       academicYearDoc: academicYear,
       campusDoc: campus,
@@ -288,19 +345,16 @@ export const getStudentById = query({
 });
 
 /**
- * Update a student's status. Validates the status is a valid value.
+ * Change a student's status. Leaving (graduated / withdrawn / transferred /
+ * expelled) also closes the open enrollment in the same transaction;
+ * suspended and active touch the status only. A leaver cannot be set back to
+ * active or suspended — that is `readmitStudent` (ConvexError
+ * `STUDENT_HAS_LEFT`).
  */
 export const updateStudentStatus = mutation({
   args: {
     studentId: v.id("students"),
-    status: v.union(
-      v.literal("active"),
-      v.literal("graduated"),
-      v.literal("transferred"),
-      v.literal("withdrawn"),
-      v.literal("suspended"),
-      v.literal("expelled"),
-    ),
+    status: studentStatus,
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin"]);
@@ -308,7 +362,7 @@ export const updateStudentStatus = mutation({
     if (!student) throw new Error("Student not found");
 
     const oldStatus = student.status;
-    await ctx.db.patch(args.studentId, { status: args.status });
+    await changeStatus(ctx, student, args.status);
 
     await logAudit(ctx, {
       user,
@@ -322,6 +376,43 @@ export const updateStudentStatus = mutation({
     });
 
     return args.studentId;
+  },
+});
+
+/**
+ * Re-admission: places a student who has no open enrollment (a leaver) in a
+ * class again — opens a new enrollment and sets them active. ConvexError
+ * `ALREADY_PLACED` if they already have one.
+ */
+export const readmitStudent = mutation({
+  args: {
+    studentId: v.id("students"),
+    standardLevelId: v.id("standardLevels"),
+    academicYear: v.id("academicYears"),
+    campus: v.id("campuses"),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+    const student = await ctx.db.get(args.studentId);
+    if (!student) throw new Error("Student not found");
+
+    const { studentId, ...placement } = args;
+    const enrollmentId = await readmit(ctx, student, placement);
+
+    await logAudit(ctx, {
+      user,
+      action: "status_change",
+      entityType: "students",
+      entityId: studentId,
+      description: `Re-admitted student ${student.studentFullName ?? student.studentNumber}`,
+      metadata: {
+        oldStatus: student.status,
+        newStatus: "active",
+        enrollmentId,
+      },
+    });
+
+    return enrollmentId;
   },
 });
 
@@ -394,10 +485,11 @@ export const getSiblingsByStudent = query({
       student.siblingIds.map(async (id) => {
         const sibling = await ctx.db.get(id);
         if (!sibling) return null;
+        const open = await getCurrentPlacement(ctx, id);
         const [level, campus] = await Promise.all([
-          ctx.db.get(sibling.standardLevel),
-          // Optional since #93 — see `getStudentById`.
-          sibling.campus ? ctx.db.get(sibling.campus) : null,
+          open ? ctx.db.get(open.standardLevelId) : null,
+          // No placement (leaver) or no campus (#93) — see `getStudentById`.
+          open?.campus ? ctx.db.get(open.campus) : null,
         ]);
         return {
           _id: sibling._id,
@@ -555,6 +647,8 @@ export const deleteStudent = mutation({
 /**
  * Update a student record with partial fields.
  * Handles bidirectional sibling re-linking when siblingIds changes.
+ * `placement` (level + campus) amends the open enrollment in the same
+ * transaction — ConvexError `NOT_PLACED` for a student with none.
  * Requires admin role.
  */
 export const updateStudent = mutation({
@@ -570,9 +664,12 @@ export const updateStudent = mutation({
     birthCertificateNumber: v.optional(v.string()),
     passportNumber: v.optional(v.string()),
     passportValidTill: v.optional(v.float64()),
-    standardLevel: v.optional(v.id("standardLevels")),
-    academicYear: v.optional(v.id("academicYears")),
-    campus: v.optional(v.id("campuses")),
+    placement: v.optional(
+      v.object({
+        standardLevelId: v.id("standardLevels"),
+        campus: v.id("campuses"),
+      }),
+    ),
     presentAddress: v.optional(v.string()),
     permanentAddress: v.optional(v.string()),
     previousSchoolName: v.optional(v.string()),
@@ -608,8 +705,9 @@ export const updateStudent = mutation({
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
 
-    // Extract studentId, spread the rest as update fields
-    const { studentId, ...updateFields } = args;
+    // Extract studentId + placement, spread the rest as update fields
+    const { studentId, placement, ...updateFields } = args;
+    if (placement) await amend(ctx, studentId, placement);
 
     // ── Handle sibling re-linking if siblingIds changed ─────────────────
     if (args.siblingIds !== undefined) {
@@ -656,7 +754,8 @@ export const updateStudent = mutation({
       action: "update",
       entityType: "students",
       entityId: studentId,
-      description: `Updated student ${args.studentFullName ?? student.studentFullName}`,
+      description: `Updated student ${args.studentFullName ?? student.studentFullName}${placement ? " (class amended)" : ""}`,
+      ...(placement ? { metadata: { placement } } : {}),
     });
 
     return studentId;

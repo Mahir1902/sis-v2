@@ -22,7 +22,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { placementErrorMessage } from "@/lib/placementErrors";
 import { cn } from "@/lib/utils";
+import { ReadmitDialog } from "./ReadmitDialog";
 
 type Status =
   | "active"
@@ -50,6 +52,14 @@ const allStatuses: Status[] = [
   "expelled",
 ];
 
+/** Leaving closes the student's enrollment (convex/lib/placement.ts). */
+const leaverStatuses: Status[] = [
+  "graduated",
+  "transferred",
+  "withdrawn",
+  "expelled",
+];
+
 interface StatusBadgeProps {
   studentId: Id<"students">;
   /** Undefined for imported students whose status cell was blank (#93). */
@@ -63,18 +73,33 @@ export function StatusBadge({
   readonly = false,
 }: StatusBadgeProps) {
   const [pendingStatus, setPendingStatus] = useState<Status | null>(null);
+  const [readmitOpen, setReadmitOpen] = useState(false);
   const updateStatus = useMutation(api.students.updateStudentStatus);
+  const hasLeft = !!status && leaverStatuses.includes(status);
 
   async function handleConfirm() {
     if (!pendingStatus) return;
     try {
       await updateStatus({ studentId, status: pendingStatus });
       toast.success(`Status updated to ${pendingStatus}`);
-    } catch {
-      toast.error("Failed to update status");
+    } catch (err) {
+      toast.error(placementErrorMessage(err, "Failed to update status"));
     } finally {
       setPendingStatus(null);
     }
+  }
+
+  function choose(s: Status) {
+    // Anything but active is confirmed first (leaving removes the class).
+    if (s !== "active") setPendingStatus(s);
+    // A leaver goes back to active only by re-admission into a class.
+    else if (hasLeft) setReadmitOpen(true);
+    else
+      updateStatus({ studentId, status: s })
+        .then(() => toast.success(`Status updated to ${s}`))
+        .catch((err) =>
+          toast.error(placementErrorMessage(err, "Failed to update status")),
+        );
   }
 
   const badge = (
@@ -95,7 +120,11 @@ export function StatusBadge({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="focus:outline-none">
+          <button
+            type="button"
+            aria-label={`Change status, currently ${status ?? "unspecified"}`}
+            className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-school-green"
+          >
             {badge}
           </button>
         </DropdownMenuTrigger>
@@ -103,19 +132,12 @@ export function StatusBadge({
           {allStatuses.map((s) => (
             <DropdownMenuItem
               key={s}
-              disabled={s === status}
-              onClick={() => {
-                if (s === "expelled" || s === "suspended") {
-                  setPendingStatus(s);
-                } else {
-                  updateStatus({ studentId, status: s })
-                    .then(() => toast.success(`Status updated to ${s}`))
-                    .catch(() => toast.error("Failed to update status"));
-                }
-              }}
+              // A leaver cannot be suspended — they have no class to keep.
+              disabled={s === status || (hasLeft && s === "suspended")}
+              onClick={() => choose(s)}
               className="capitalize"
             >
-              {s}
+              {hasLeft && s === "active" ? "Re-admit…" : s}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -132,7 +154,12 @@ export function StatusBadge({
             </AlertDialogTitle>
             <AlertDialogDescription>
               This will change the student&apos;s status to{" "}
-              <strong>{pendingStatus}</strong>. This action can be reversed.
+              <strong>{pendingStatus}</strong>.{" "}
+              {hasLeft
+                ? "They stay without a class; going back to active needs a re-admission."
+                : pendingStatus && leaverStatuses.includes(pendingStatus)
+                  ? "They will be removed from their class; bringing them back needs a re-admission."
+                  : "They keep their class. This can be reversed."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -146,6 +173,15 @@ export function StatusBadge({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Mounted only while open: fresh form each time, none per table row. */}
+      {readmitOpen && (
+        <ReadmitDialog
+          open
+          onOpenChange={setReadmitOpen}
+          studentId={studentId}
+        />
+      )}
     </>
   );
 }

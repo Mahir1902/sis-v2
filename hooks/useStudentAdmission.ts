@@ -51,7 +51,6 @@ export function useStudentAdmission(onSuccess: () => void) {
 
   const generateUrl = useMutation(api.students.generateStudentPhotoUrl);
   const createStudent = useMutation(api.students.createStudent);
-  const createEnrollment = useMutation(api.enrollments.createEnrollment);
   const createStudentFee = useMutation(api.studentFees.createStudentFee);
   const feeStructures = useQuery(api.feeStructure.list);
 
@@ -73,7 +72,7 @@ export function useStudentAdmission(onSuccess: () => void) {
 
       const classStartDate = new Date(values.classStartDate).getTime();
 
-      // Create student record
+      // Admission: student record + first enrollment in one transaction
       const studentId = await createStudent({
         studentNumber: values.studentNumber,
         studentFullName: values.studentFullName,
@@ -117,16 +116,6 @@ export function useStudentAdmission(onSuccess: () => void) {
         guardianPhoneNumber: values.guardianPhoneNumber,
         familyAnnualIncome: values.familyAnnualIncome,
         consultantName: values.consultantName,
-      });
-
-      // Create enrollment record
-      await createEnrollment({
-        studentId,
-        academicYear: values.academicYear as Id<"academicYears">,
-        standardLevelId: values.standardLevel as Id<"standardLevels">,
-        campus: values.campus as Id<"campuses">,
-        enrollmentType: "new_admission",
-        enrollmentDate: Date.now(),
       });
 
       // Create student fee records for each applicable fee type

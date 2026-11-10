@@ -138,7 +138,6 @@ function PromotionsPageContent() {
     if (!candidates) return;
     const initial: Record<string, PromotionAction> = {};
     for (const c of candidates.filter(isNonNull)) {
-      if (c.alreadyPromoted) continue;
       initial[c.enrollmentId] = c.isGraduationCandidate
         ? "graduate"
         : "promote";
@@ -167,18 +166,15 @@ function PromotionsPageContent() {
     }
     setIsSubmitting(true);
     try {
-      const promotionItems = (candidates ?? [])
-        .filter(isNonNull)
-        .filter((c) => !c.alreadyPromoted)
-        .map((c) => ({
-          studentId: c.studentId,
-          enrollmentId: c.enrollmentId,
-          action:
-            actions[c.enrollmentId] ??
-            (c.isGraduationCandidate
-              ? ("graduate" as const)
-              : ("promote" as const)),
-        }));
+      const promotionItems = (candidates ?? []).filter(isNonNull).map((c) => ({
+        studentId: c.studentId,
+        enrollmentId: c.enrollmentId,
+        action:
+          actions[c.enrollmentId] ??
+          (c.isGraduationCandidate
+            ? ("graduate" as const)
+            : ("promote" as const)),
+      }));
 
       const result = await bulkPromote({
         sourceAcademicYearId: selectedSourceYearId as Id<"academicYears">,
@@ -189,7 +185,7 @@ function PromotionsPageContent() {
       });
 
       toast.success(
-        `${result.promoted} promoted, ${result.heldBack} held back, ${result.graduated} graduated. ${result.feesAssigned} fee records created.`,
+        `${result.promoted} promoted, ${result.heldBack} held back, ${result.graduated} graduated. ${result.feesAssigned} fee records created.${result.skipped ? ` ${result.skipped} skipped (already enrolled in the target year).` : ""}`,
       );
       setSelectedLevelId("");
       setActions({});
@@ -441,10 +437,7 @@ function PromotionsPageContent() {
                 </TableHeader>
                 <TableBody>
                   {candidates.filter(isNonNull).map((candidate, index) => (
-                    <TableRow
-                      key={candidate.enrollmentId}
-                      className={candidate.alreadyPromoted ? "opacity-60" : ""}
-                    >
+                    <TableRow key={candidate.enrollmentId}>
                       <TableCell className="text-sm text-gray-500">
                         {index + 1}
                       </TableCell>
@@ -471,49 +464,41 @@ function PromotionsPageContent() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {candidate.alreadyPromoted ? (
-                          <Badge className="bg-yellow-400/40 text-yellow-700">
-                            Already Promoted
-                          </Badge>
-                        ) : (
-                          <Select
-                            value={actions[candidate.enrollmentId] ?? "promote"}
-                            onValueChange={(v) =>
-                              setActions((prev) => ({
-                                ...prev,
-                                [candidate.enrollmentId]: v as PromotionAction,
-                              }))
-                            }
+                        <Select
+                          value={actions[candidate.enrollmentId] ?? "promote"}
+                          onValueChange={(v) =>
+                            setActions((prev) => ({
+                              ...prev,
+                              [candidate.enrollmentId]: v as PromotionAction,
+                            }))
+                          }
+                        >
+                          <SelectTrigger
+                            className="w-32 h-8 text-xs"
+                            aria-label={`Action for ${candidate.studentName}`}
                           >
-                            <SelectTrigger
-                              className="w-32 h-8 text-xs"
-                              aria-label={`Action for ${candidate.studentName}`}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {candidate.isGraduationCandidate ? (
-                                <>
-                                  <SelectItem value="graduate">
-                                    Graduate
-                                  </SelectItem>
-                                  <SelectItem value="hold_back">
-                                    Hold Back
-                                  </SelectItem>
-                                </>
-                              ) : (
-                                <>
-                                  <SelectItem value="promote">
-                                    Promote
-                                  </SelectItem>
-                                  <SelectItem value="hold_back">
-                                    Hold Back
-                                  </SelectItem>
-                                </>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        )}
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {candidate.isGraduationCandidate ? (
+                              <>
+                                <SelectItem value="graduate">
+                                  Graduate
+                                </SelectItem>
+                                <SelectItem value="hold_back">
+                                  Hold Back
+                                </SelectItem>
+                              </>
+                            ) : (
+                              <>
+                                <SelectItem value="promote">Promote</SelectItem>
+                                <SelectItem value="hold_back">
+                                  Hold Back
+                                </SelectItem>
+                              </>
+                            )}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                     </TableRow>
                   ))}

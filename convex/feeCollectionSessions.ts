@@ -15,6 +15,7 @@ import type { Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { requireRole } from "./lib/permissions";
+import { getCurrentPlacement } from "./lib/placement";
 
 const paymentModeValidator = v.union(
   v.literal("Cash"),
@@ -129,19 +130,14 @@ export const collectFees = mutation({
     const now = Date.now();
     const totalAmount = fees.reduce((sum, fee) => sum + fee.balance, 0);
 
-    const enrollment = await ctx.db
-      .query("enrollments")
-      .withIndex("by_student_academic_year", (q) =>
-        q
-          .eq("studentId", args.studentId)
-          .eq("academicYear", student.academicYear),
-      )
-      .first();
+    // The session is filed under the student's Current Placement. No
+    // placement (legacy data) → the first fee's year, class left unset.
+    const placement = await getCurrentPlacement(ctx, args.studentId);
 
     const sessionId = await ctx.db.insert("feeCollectionSessions", {
       studentId: args.studentId,
-      academicYear: student.academicYear,
-      campus: enrollment?.campus ?? student.campus,
+      academicYear: placement?.academicYear ?? fees[0].academicYear,
+      campus: placement?.campus,
       totalAmount,
       paymentMode: args.paymentMode,
       remarks: args.remarks,
@@ -149,7 +145,7 @@ export const collectFees = mutation({
       collectedBy: user._id,
       transactionDate: now,
       feeCount: fees.length,
-      standardLevelId: enrollment?.standardLevelId ?? student.standardLevel,
+      standardLevelId: placement?.standardLevelId,
     });
 
     const transactions: Array<{
