@@ -38,15 +38,6 @@ export default defineSchema({
     .index("by_active", ["isActive"])
     .index("by_name", ["name"]),
 
-  gradeMapping: defineTable({
-    letterGrade: v.string(),
-    minPercentage: v.float64(),
-    maxPercentage: v.float64(),
-    order: v.float64(),
-    description: v.optional(v.string()),
-    isActive: v.boolean(),
-  }).index("by_active", ["isActive"]),
-
   // ─── Users ────────────────────────────────────────────────────────────────
 
   users: defineTable({
@@ -93,14 +84,6 @@ export default defineSchema({
   })
     .index("by_token", ["token"])
     .index("by_email", ["email"]),
-
-  // ─── Staff (stub — required by assessment references) ─────────────────────
-
-  staff: defineTable({
-    name: v.string(),
-    email: v.optional(v.string()),
-    role: v.optional(v.string()),
-  }),
 
   // ─── Students & Enrollments ───────────────────────────────────────────────
 
@@ -296,25 +279,6 @@ export default defineSchema({
     createdAt: v.float64(),
   }).index("by_date", ["date"]),
 
-  // ─── Simple Grades (kept alongside assessment system) ─────────────────────
-
-  grades: defineTable({
-    studentId: v.id("students"),
-    enrollmentId: v.id("enrollments"),
-    subjectId: v.id("subjects"),
-    marksObtained: v.float64(),
-    totalMarks: v.float64(),
-    percentage: v.float64(),
-    letterGrade: v.string(),
-    semester: v.union(v.literal(1), v.literal(2)),
-    remarks: v.optional(v.string()),
-    createdAt: v.float64(),
-    updatedAt: v.optional(v.float64()),
-  })
-    .index("by_enrollment", ["enrollmentId"])
-    .index("by_enrollment_semester", ["enrollmentId", "semester"])
-    .index("by_student", ["studentId"]),
-
   // ─── Fee System ───────────────────────────────────────────────────────────
 
   feeStructure: defineTable({
@@ -354,7 +318,6 @@ export default defineSchema({
     maxDiscountAmount: v.optional(v.float64()),
     isActive: v.optional(v.boolean()),
     description: v.optional(v.string()),
-    discription: v.optional(v.string()), // typo in v1 data — kept for compatibility
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
   }),
@@ -455,18 +418,6 @@ export default defineSchema({
     endDate: v.optional(v.string()),
     status: v.string(), // "active" | "inactive"
     relatedEntityId: v.optional(v.string()),
-  }).index("by_student_year", ["studentId", "academicYear"]),
-
-  advancePayments: defineTable({
-    studentId: v.id("students"),
-    transactionId: v.id("feeTransactions"),
-    academicYear: v.id("academicYears"),
-    amount: v.float64(),
-    adjustedAmount: v.optional(v.float64()),
-    remainingAmount: v.float64(),
-    monthsCovered: v.array(v.string()),
-    paymentDate: v.string(),
-    status: v.string(), // "active" | "fully_applied"
   }).index("by_student_year", ["studentId", "academicYear"]),
 
   // ─── Receipts (ADR-0002 + ADR-0003) ──────────────────────────────────────

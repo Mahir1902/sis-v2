@@ -332,7 +332,6 @@ interface DiscountRule {
   maxDiscountAmount?: number;
   isActive?: boolean;
   description?: string;
-  discription?: string;
   startDate?: string;
   endDate?: string;
 }

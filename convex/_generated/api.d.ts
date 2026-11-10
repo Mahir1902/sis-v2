@@ -20,7 +20,6 @@ import type * as campus from "../campus.js";
 import type * as closures from "../closures.js";
 import type * as computedGrades from "../computedGrades.js";
 import type * as dashboard from "../dashboard.js";
-import type * as deadTables from "../deadTables.js";
 import type * as discounts from "../discounts.js";
 import type * as enrollments from "../enrollments.js";
 import type * as feeCollectionSessions from "../feeCollectionSessions.js";
@@ -66,7 +65,6 @@ declare const fullApi: ApiFromModules<{
   closures: typeof closures;
   computedGrades: typeof computedGrades;
   dashboard: typeof dashboard;
-  deadTables: typeof deadTables;
   discounts: typeof discounts;
   enrollments: typeof enrollments;
   feeCollectionSessions: typeof feeCollectionSessions;

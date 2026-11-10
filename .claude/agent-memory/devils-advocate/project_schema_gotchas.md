@@ -14,7 +14,7 @@ Any query against students using .filter() performs a full table scan. At 500-20
 ---
 
 **`students.studentDiscounts.academicYear` is a plain string, not v.id("academicYears").**
-The `studentDiscounts` table uses `academicYear: v.string()` rather than the proper FK. This is an existing inconsistency that could break joins. Same issue in `advancePayments`.
+The `studentDiscounts` table uses `academicYear: v.string()` rather than the proper FK. This is an existing inconsistency that could break joins.
 
 ---
 

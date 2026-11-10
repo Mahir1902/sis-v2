@@ -530,11 +530,9 @@ export const deleteStudent = mutation({
     // ── 1. Query all related records in parallel ────────────────────────
     const [
       enrollments,
-      grades,
       studentFees,
       feeTransactions,
       studentDiscounts,
-      advancePayments,
       reportCards,
       assessmentAnswers,
       computedGrades,
@@ -546,10 +544,6 @@ export const deleteStudent = mutation({
         )
         .collect(),
       ctx.db
-        .query("grades")
-        .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
-        .collect(),
-      ctx.db
         .query("studentFees")
         .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
         .collect(),
@@ -559,10 +553,6 @@ export const deleteStudent = mutation({
         .collect(),
       ctx.db
         .query("studentDiscounts")
-        .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
-        .collect(),
-      ctx.db
-        .query("advancePayments")
         .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
         .collect(),
       ctx.db
@@ -584,11 +574,9 @@ export const deleteStudent = mutation({
     // ── 2. Delete all related records in parallel ───────────────────────
     await Promise.all([
       ...enrollments.map((doc) => ctx.db.delete(doc._id)),
-      ...grades.map((doc) => ctx.db.delete(doc._id)),
       ...studentFees.map((doc) => ctx.db.delete(doc._id)),
       ...feeTransactions.map((doc) => ctx.db.delete(doc._id)),
       ...studentDiscounts.map((doc) => ctx.db.delete(doc._id)),
-      ...advancePayments.map((doc) => ctx.db.delete(doc._id)),
       ...assessmentAnswers.map((doc) => ctx.db.delete(doc._id)),
       ...computedGrades.map((doc) => ctx.db.delete(doc._id)),
     ]);
