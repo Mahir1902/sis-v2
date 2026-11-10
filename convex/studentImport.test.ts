@@ -176,10 +176,6 @@ describe("commitImportBatch — insert", () => {
       admittedLevel: grade1,
       status: "active",
     });
-    // The class lives on the enrollment only (Placement module).
-    expect(student.standardLevel).toBeUndefined();
-    expect(student.academicYear).toBeUndefined();
-    expect(student.campus).toBeUndefined();
 
     const enrollments = await enrollmentsOf(student._id);
     expect(enrollments).toHaveLength(1);

@@ -16,19 +16,13 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
  *  - a suspended student keeps theirs.
  */
 
-export type EnrollmentType =
-  | "new_admission"
-  | "promotion"
-  | "repeat"
-  | "readmission";
+export type EnrollmentType = Doc<"enrollments">["enrollmentType"];
 
-export type ExitReason =
-  | "promotion"
-  | "hold_back"
-  | "graduated"
-  | "withdrawn"
-  | "transferred"
-  | "expelled";
+/** What can be written; "suspended" is a legacy stored value only. */
+export type ExitReason = Exclude<
+  NonNullable<Doc<"enrollments">["exitReason"]>,
+  "suspended"
+>;
 
 export type StudentStatus = NonNullable<Doc<"students">["status"]>;
 

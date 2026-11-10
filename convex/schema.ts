@@ -120,13 +120,8 @@ export default defineSchema({
     passportNumber: v.optional(v.string()),
     passportValidTill: v.optional(v.float64()),
 
-    // DEPRECATED — a stale copy of the open enrollment's class. Nothing reads
-    // or writes these; the `stripStudentPlacement` migration unsets them and
-    // the narrow PR deletes them. The class lives on `enrollments` only
+    // No class fields: a student's class is their open enrollment
     // (convex/lib/placement.ts, CONTEXT.md "Current Placement").
-    standardLevel: v.optional(v.id("standardLevels")),
-    academicYear: v.optional(v.id("academicYears")),
-    campus: v.optional(v.id("campuses")),
 
     // Dates
     admissionDate: v.optional(v.float64()),
@@ -214,9 +209,7 @@ export default defineSchema({
 
     createdAt: v.string(), // ISO string
   })
-    .index("by_standard_level", ["standardLevel"])
     .index("by_status", ["status"])
-    .index("by_academic_year", ["academicYear"])
     .index("by_student_number", ["studentNumber"]),
 
   enrollments: defineTable({
@@ -226,16 +219,30 @@ export default defineSchema({
     campus: v.optional(v.id("campuses")),
     section: v.optional(v.string()),
     rollNumber: v.optional(v.string()),
-    // `EnrollmentType` / `ExitReason` in convex/lib/placement.ts. Still
-    // v.string() until the narrow PR — stored rows may hold legacy values.
-    enrollmentType: v.string(),
+    // Written only by convex/lib/placement.ts.
+    enrollmentType: v.union(
+      v.literal("new_admission"),
+      v.literal("promotion"),
+      v.literal("repeat"),
+      v.literal("readmission"),
+    ),
     enrollmentDate: v.float64(),
-    // DEPRECATED — open/closed is `exitDate === undefined` and nothing else.
-    // Never written; unset by the `stripEnrollmentStatus` migration.
-    status: v.optional(v.string()),
 
+    // Open iff exitDate is undefined — there is no status flag.
     exitDate: v.optional(v.float64()),
-    exitReason: v.optional(v.string()),
+    exitReason: v.optional(
+      v.union(
+        v.literal("promotion"),
+        v.literal("hold_back"),
+        v.literal("graduated"),
+        v.literal("withdrawn"),
+        v.literal("transferred"),
+        v.literal("expelled"),
+        // Legacy, never written: suspension keeps the enrollment open. Rows
+        // closed this way before the placement module are left for review.
+        v.literal("suspended"),
+      ),
+    ),
     exitDestination: v.optional(v.string()),
     exitNotes: v.optional(v.string()),
 

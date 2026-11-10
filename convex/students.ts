@@ -272,17 +272,10 @@ export const getStudentById = query({
       }
     }
 
-    const doc = await ctx.db.get(args.studentId);
-    if (!doc) return null;
-    // Drop the deprecated student-record copy of the class (narrow PR deletes
-    // it); the class comes from the Current Placement below.
-    const {
-      standardLevel: _sl,
-      academicYear: _ay,
-      campus: _c,
-      ...student
-    } = doc;
-    const open = await getCurrentPlacement(ctx, doc._id);
+    const student = await ctx.db.get(args.studentId);
+    if (!student) return null;
+    // The class comes from the Current Placement (open enrollment).
+    const open = await getCurrentPlacement(ctx, student._id);
 
     const [
       standardLevel,
