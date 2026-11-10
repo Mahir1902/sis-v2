@@ -487,8 +487,8 @@ Apply these corrections — they were bugs in v1:
 1. **`feeType` must be lowercase literals** — v1 mixed `"Admission"` and `"admission"`. Always lowercase.
 2. **`students.status` is a union literal type**, not `v.string()`.
 3. **`standardLevels` names must exactly match seed data** — v1 had name inconsistencies that broke lookups.
-4. **Add a `staff` table** if `promotionDetails.approvedBy` references `v.id("staff")`.
-5. **`gradeMapping` seeded on first deploy** — never manually created.
+4. **No `staff` table** — staff are `users` (admin/teacher); reference them as `v.id("users")`. v1's stub `staff` table was dropped (review candidate 4); don't reintroduce it.
+5. **No `gradeMapping` table** — letter grades come only from `lib/gradeComputation`. v1's seeded table was dropped (review candidate 4); don't add a second source of grade bands.
 6. **`feeTransactions.academicYear` is `v.id("academicYears")`**, not a plain string.
 7. **Indexes must exist** for every field used with `withIndex`.
 8. **Sibling linking is bidirectional** — when A lists B as sibling, patch B's `siblingIds` too.

@@ -12,3 +12,7 @@ When schema unions need renaming/adding required fields, this project follows th
 **How to apply:** When reviewing a migration removal, do NOT flag the deletion as a regression. Verify (a) the preserved comment block faithfully reproduces the original `customRange` + `migrateOne`, (b) it documents the deploy order (widen → deploy → run → narrow → deploy), and (c) it warns about Convex's schema-validation fail-safe between widen and narrow.
 
 Related: [[project_invoice_status]]
+
+**Two platform facts that recur in rollout runbooks (verified 2026-11-10, candidate 4 review):**
+- Dropping a *table* from `schema.ts` is NOT a fail-safe: Convex only validates tables listed in the schema (see `schemaValidation`/`strictTableNameTypes` docs in `convex/server/schema.d.ts`), so leftover rows are silently orphaned. Only removing a *field* (or narrowing a validator) fails the push. Reject runbooks that cite a table drop as a backstop.
+- `@convex-dev/migrations` runner (0.3.x) no-ops a migration already marked done, including each step of a series. "Fix by hand, then run again" needs `'{"reset":true}'`.
