@@ -118,6 +118,33 @@ export const runRecomputeAllGrades = migrations.runner(
   internal.migrations.recomputeAllGrades,
 );
 
+// ─── ADR-0007: Class is per campus — widen → backfill → narrow ─────────────
+
+/**
+ * Copies the enrollment's `campus` onto every `computedGrades` row that lacks
+ * it, so the per-campus analytics index (`by_class_subject_semester`) sees
+ * every grade. A grade whose enrollment has no campus is left alone — it is in
+ * no Class until the admin fixes the enrollment (`placementReport.noCampus`).
+ * Idempotent.
+ *
+ * Run via:
+ *   npx convex run migrations:runBackfillComputedGradeCampus '{"dryRun":true}'
+ *   npx convex run migrations:runBackfillComputedGradeCampus
+ */
+export const backfillComputedGradeCampus = migrations.define({
+  table: "computedGrades",
+  migrateOne: async (ctx, grade) => {
+    if (grade.campus !== undefined) return;
+    const enrollment = await ctx.db.get(grade.enrollmentId);
+    if (!enrollment?.campus) return;
+    return { campus: enrollment.campus };
+  },
+});
+
+export const runBackfillComputedGradeCampus = migrations.runner(
+  internal.migrations.backfillComputedGradeCampus,
+);
+
 // ─── Placement module: widen → migrate → narrow (review candidates 1 + 2) ──
 //
 // Deploy 1 (this code) stopped reading/writing `students.standardLevel /
@@ -176,7 +203,10 @@ const EXIT_REASONS = [
  *    the copy is stripped — fix level/campus by hand via Edit Student, a
  *    year mismatch via promotion / hold-back (the year is not amendable);
  *  - unknownEnrollmentTypes / unknownExitReasons: values outside the unions
- *    ("regular" is mapped to "new_admission" by `stripEnrollmentStatus`).
+ *    ("regular" is mapped to "new_admission" by `stripEnrollmentStatus`);
+ *  - noCampus: OPEN enrollments without a campus — in no Class (ADR-0007), so
+ *    on no roster, register, promotion list or class statistic. Fix via Edit
+ *    Student (campus). Must be empty after the per-campus deploy.
  *
  * ponytail: whole-table reads, fine at school size (~400 students); paginate
  * if the school grows past ~10k enrollments.
@@ -213,9 +243,24 @@ export const placementReport = internalQuery({
       }[],
       unknownEnrollmentTypes: {} as Record<string, number>,
       unknownExitReasons: {} as Record<string, number>,
+      noCampus: [] as {
+        studentNumber: string;
+        enrollmentId: Id<"enrollments">;
+        academicYear: Id<"academicYears">;
+      }[],
     };
+    const studentNumberOf = new Map(
+      students.map((s) => [s._id, s.studentNumber]),
+    );
 
     for (const e of enrollments) {
+      if (e.exitDate === undefined && e.campus === undefined) {
+        report.noCampus.push({
+          studentNumber: studentNumberOf.get(e.studentId) ?? "?",
+          enrollmentId: e._id,
+          academicYear: e.academicYear,
+        });
+      }
       if (!ENROLLMENT_TYPES.includes(e.enrollmentType)) {
         report.unknownEnrollmentTypes[e.enrollmentType] =
           (report.unknownEnrollmentTypes[e.enrollmentType] ?? 0) + 1;

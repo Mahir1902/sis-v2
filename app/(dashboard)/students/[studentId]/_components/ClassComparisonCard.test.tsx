@@ -84,6 +84,7 @@ describe("SubjectComparisonRowView", () => {
 
 describe("ClassComparisonCard", () => {
   const queryArgs = {
+    campus: "campus_1" as Id<"campuses">,
     standardLevelId: "level_1" as Id<"standardLevels">,
     academicYear: "year_1" as Id<"academicYears">,
     semester: 1 as const,

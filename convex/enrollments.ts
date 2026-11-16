@@ -2,7 +2,10 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { type QueryCtx, query } from "./_generated/server";
 import { requireRole } from "./lib/permissions";
-import { getCurrentPlacement } from "./lib/placement";
+import {
+  getClassRoster as classEnrollments,
+  getCurrentPlacement,
+} from "./lib/placement";
 import { LEVEL_CODE_ORDER } from "./standardLevels";
 
 /**
@@ -66,49 +69,9 @@ export const getCurrentEnrollment = query({
 });
 
 /**
- * Get active enrollments for a standard level + academic year.
- * Used for class lists (e.g., mark entry grid).
- */
-export const getEnrollmentsByLevelYear = query({
-  args: {
-    standardLevelId: v.id("standardLevels"),
-    academicYearId: v.id("academicYears"),
-  },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
-    const enrollments = await ctx.db
-      .query("enrollments")
-      .withIndex("by_standard_level", (q) =>
-        q.eq("standardLevelId", args.standardLevelId),
-      )
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("academicYear"), args.academicYearId),
-          q.eq(q.field("exitDate"), undefined),
-        ),
-      )
-      .take(200);
-
-    return await Promise.all(
-      enrollments.map(async (e) => {
-        const student = await ctx.db.get(e.studentId);
-        return {
-          ...e,
-          studentName: student?.studentFullName ?? "Unknown",
-          studentNumber: student?.studentNumber ?? "",
-        };
-      }),
-    );
-  },
-});
-
-/**
- * Campus-aware class roster for attendance: active enrollments in one
- * (campus, standardLevel, academicYear), sorted by student name.
- * Reuses `by_campus_standard` and filters year + open (`exitDate` unset) in the builder —
- * one (campus, level) pair across all years is a few hundred rows at most
- * (attendance spec §7 A4). Deliberately NOT `getEnrollmentsByLevelYear`,
- * which is campus-blind (#120).
+ * The roster of one Class (campus + level + year, ADR-0007) with student
+ * names, sorted by name. Used by mark entry (#120) and the attendance
+ * screens. The membership rule lives in `lib/placement.getClassRoster`.
  */
 export const getClassRoster = query({
   args: {
@@ -124,7 +87,7 @@ export const getClassRoster = query({
 
 /**
  * Shared roster loader for `getClassRoster`, `attendance.getRegister` and
- * `attendance.getClassReport`. Active enrollments only, unless
+ * `attendance.getClassReport`. Open enrollments only, unless
  * `includeInactive` — reports keep leavers and past-year classes.
  */
 export async function loadClassRoster(
@@ -136,22 +99,9 @@ export async function loadClassRoster(
   },
   opts: { includeInactive?: boolean } = {},
 ) {
-  const all = await ctx.db
-    .query("enrollments")
-    .withIndex("by_campus_standard", (q) =>
-      q.eq("campus", args.campus).eq("standardLevelId", args.standardLevelId),
-    )
-    .filter((q) =>
-      opts.includeInactive
-        ? q.eq(q.field("academicYear"), args.academicYear)
-        : q.and(
-            q.eq(q.field("academicYear"), args.academicYear),
-            q.eq(q.field("exitDate"), undefined),
-          ),
-    )
-    .take(200);
-  const enrollments = [...new Map(all.map((e) => [e.studentId, e])).values()];
-
+  const enrollments = await classEnrollments(ctx, args, {
+    includeClosed: opts.includeInactive,
+  });
   const rows = await Promise.all(
     enrollments.map(async (e) => {
       const student = await ctx.db.get(e.studentId);

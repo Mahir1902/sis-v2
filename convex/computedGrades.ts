@@ -122,10 +122,11 @@ export async function recomputeGrade(
   const gradeData = {
     studentId: args.studentId,
     enrollmentId: args.enrollmentId,
-    // Denormalised from the enrollment so class-level analytics can index by
-    // level + year + subject + semester (see schema). Immutable for this grade.
+    // The enrollment's Class (campus + level + year, ADR-0007), copied so the
+    // analytics index holds a whole Class; `placement.amend` moves it along.
     standardLevelId: enrollment.standardLevelId,
     academicYear: enrollment.academicYear,
+    campus: enrollment.campus,
     subjectId: args.subjectId,
     semester: args.semester,
     ca1Marks: result.ca1?.marks,
@@ -233,16 +234,17 @@ export const getGradesByEnrollmentSemester = query({
 // ─── Phase B — Class analytics (ADR-0005) ──────────────────────────────────────
 //
 // All of these are difficulty-adjusted: a student is compared only to classmates
-// who sat the same papers (same level + year + subject + semester). Each does ONE
-// indexed range read on `by_level_year_subject_semester`, then filters to ACTIVE
+// who sat the same papers in the same Class (campus + level + year, ADR-0007).
+// Each does ONE indexed range read on `by_class_subject_semester`, then filters to ACTIVE
 // enrollments before any math — a withdrawn student's leftover grade must not pad
 // the ≥5 floor or skew an average (DA B-1). All the ranking/averaging is pure and
 // unit-tested in `lib/gradeAnalytics.ts`.
 //
-// ⚠️ These read `computedGrades` rows via the denormalised `standardLevelId` +
-// `academicYear`. Rows written before the ADR-0004 A.4 backfill lack those fields
-// and are invisible to the index; results are only complete once the backfill has
-// run (it has, on dev — the table was emptied of orphans and repopulated).
+// ⚠️ These read `computedGrades` rows via the denormalised `campus` +
+// `standardLevelId` + `academicYear`. Rows written before the backfills
+// (`runRecomputeAllGrades`, `runBackfillComputedGradeCampus`) lack those fields
+// and are invisible to the index. A grade whose enrollment has no campus is in
+// no Class and never appears here.
 
 /** How many of a row's three CAs are present (their percentage field is set). */
 function presentCaCount(row: Doc<"computedGrades">): number {
@@ -280,6 +282,7 @@ async function activeRows<T extends { enrollmentId: Id<"enrollments"> }>(
 async function classSubjectRows(
   ctx: QueryCtx,
   args: {
+    campus: Id<"campuses">;
     standardLevelId: Id<"standardLevels">;
     academicYear: Id<"academicYears">;
     subjectId: Id<"subjects">;
@@ -288,8 +291,9 @@ async function classSubjectRows(
 ): Promise<Doc<"computedGrades">[]> {
   const rows = await ctx.db
     .query("computedGrades")
-    .withIndex("by_level_year_subject_semester", (q) =>
+    .withIndex("by_class_subject_semester", (q) =>
       q
+        .eq("campus", args.campus)
         .eq("standardLevelId", args.standardLevelId)
         .eq("academicYear", args.academicYear)
         .eq("subjectId", args.subjectId)
@@ -301,13 +305,14 @@ async function classSubjectRows(
 
 /**
  * Every ACTIVE student's grade for one Class across ALL subjects in a semester.
- * The index is [level, year, subject, semester] — subject sits before semester,
- * so we range on the [level, year] prefix and post-filter the semester in memory.
- * Bounded to one class's grades (dozens–low-hundreds of rows).
+ * The index is [campus, level, year, subject, semester] — subject sits before
+ * semester, so we range on the [campus, level, year] prefix and post-filter the
+ * semester in memory. Bounded to one class's grades (dozens–low-hundreds of rows).
  */
 async function classTermRows(
   ctx: QueryCtx,
   args: {
+    campus: Id<"campuses">;
     standardLevelId: Id<"standardLevels">;
     academicYear: Id<"academicYears">;
     semester: 1 | 2;
@@ -315,8 +320,9 @@ async function classTermRows(
 ): Promise<Doc<"computedGrades">[]> {
   const rows = await ctx.db
     .query("computedGrades")
-    .withIndex("by_level_year_subject_semester", (q) =>
+    .withIndex("by_class_subject_semester", (q) =>
       q
+        .eq("campus", args.campus)
         .eq("standardLevelId", args.standardLevelId)
         .eq("academicYear", args.academicYear),
     )
@@ -367,6 +373,7 @@ async function liveAssessmentCount(
  */
 export const getClassAverages = query({
   args: {
+    campus: v.id("campuses"),
     standardLevelId: v.id("standardLevels"),
     academicYear: v.id("academicYears"),
     subjectId: v.id("subjects"),
@@ -408,6 +415,7 @@ export const getClassAverages = query({
  */
 export const getPerCaClassBaseline = query({
   args: {
+    campus: v.id("campuses"),
     standardLevelId: v.id("standardLevels"),
     academicYear: v.id("academicYears"),
     subjectId: v.id("subjects"),
@@ -449,6 +457,7 @@ export const getPerCaClassBaseline = query({
  */
 export const getClassPositions = query({
   args: {
+    campus: v.id("campuses"),
     standardLevelId: v.id("standardLevels"),
     academicYear: v.id("academicYears"),
     semester: v.union(v.literal(1), v.literal(2)),
@@ -564,13 +573,14 @@ export const getClassPositions = query({
 });
 
 /**
- * B.5a — A–F grade distribution across a Class (level + year), optionally narrowed
+ * B.5a — A–F grade distribution across a Class (campus + level + year), optionally narrowed
  * to one semester and/or subject. A cohort snapshot for the admin/teacher class
  * view; includes provisional grades (it shows where the cohort stands right now).
  * No ≥5 floor: an aggregate count of six buckets does not single out a peer.
  */
 export const getGradeSpread = query({
   args: {
+    campus: v.id("campuses"),
     standardLevelId: v.id("standardLevels"),
     academicYear: v.id("academicYears"),
     semester: v.optional(v.union(v.literal(1), v.literal(2))),
@@ -580,8 +590,9 @@ export const getGradeSpread = query({
     await requireRole(ctx, ["admin", "teacher"]);
     const raw = await ctx.db
       .query("computedGrades")
-      .withIndex("by_level_year_subject_semester", (q) =>
+      .withIndex("by_class_subject_semester", (q) =>
         q
+          .eq("campus", args.campus)
           .eq("standardLevelId", args.standardLevelId)
           .eq("academicYear", args.academicYear),
       )
@@ -606,6 +617,7 @@ export const getGradeSpread = query({
  */
 export const getStudentsNeedingHelp = query({
   args: {
+    campus: v.id("campuses"),
     standardLevelId: v.id("standardLevels"),
     academicYear: v.id("academicYears"),
     semester: v.union(v.literal(1), v.literal(2)),

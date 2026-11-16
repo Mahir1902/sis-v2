@@ -52,7 +52,49 @@ export type PlacementInput = {
   campus: Id<"campuses">;
 };
 
+/** A Class (CONTEXT.md, ADR-0007): campus + standard level + academic year. */
+export type ClassKey = PlacementInput;
+
 type Ctx = QueryCtx | MutationCtx;
+
+/**
+ * ponytail: a class is tens of pupils (low hundreds with closed rows); past
+ * this many rows the data is corrupt, not paginated. Replace the throw with
+ * pagination if a real class ever approaches it.
+ */
+const MAX_CLASS_ROWS = 500;
+
+/**
+ * The one definition of "who is in the class": the enrollments of one Class,
+ * open ones only unless `includeClosed` (attendance reports keep leavers),
+ * de-duplicated per student (the newest row wins). One range on `by_class`,
+ * never a silent cap — throws `CLASS_TOO_LARGE` instead of dropping rows.
+ * Callers do their own role check and name enrichment.
+ */
+export async function getClassRoster(
+  ctx: Ctx,
+  cls: ClassKey,
+  opts: { includeClosed?: boolean } = {},
+): Promise<Doc<"enrollments">[]> {
+  const rows = await ctx.db
+    .query("enrollments")
+    .withIndex("by_class", (q) =>
+      q
+        .eq("campus", cls.campus)
+        .eq("standardLevelId", cls.standardLevelId)
+        .eq("academicYear", cls.academicYear),
+    )
+    .take(MAX_CLASS_ROWS + 1);
+  if (rows.length > MAX_CLASS_ROWS) {
+    throw new ConvexError({ code: "CLASS_TOO_LARGE" });
+  }
+  const byStudent = new Map<Id<"students">, Doc<"enrollments">>();
+  for (const e of rows.sort((a, b) => a.enrollmentDate - b.enrollmentDate)) {
+    if (!opts.includeClosed && e.exitDate !== undefined) continue;
+    byStudent.set(e.studentId, e);
+  }
+  return [...byStudent.values()];
+}
 
 /** A student's enrollments, any year. Bounded: one per year at most in practice. */
 function enrollmentsOf(ctx: Ctx, studentId: Id<"students">) {
@@ -145,6 +187,9 @@ export async function readmit(
  * attendance and report cards stay on it. Never opens a second enrollment.
  * The year is not amendable — fees and fee sessions are keyed by year, so a
  * year change is a promotion / hold-back, not an edit.
+ * The enrollment's computed grades carry a copy of its Class (level, year,
+ * campus) for the analytics index; they move with it here, in the same
+ * transaction, so the student is never counted in the old class.
  */
 export async function amend(
   ctx: MutationCtx,
@@ -154,6 +199,13 @@ export async function amend(
   const open = await getCurrentPlacement(ctx, studentId);
   if (!open) throw new ConvexError({ code: "NOT_PLACED" });
   await ctx.db.patch(open._id, placement);
+  // ponytail: one enrollment holds subjects × 2 semesters (≈20) grade rows;
+  // 100 is a safety bound, not a page size.
+  const grades = await ctx.db
+    .query("computedGrades")
+    .withIndex("by_enrollment_semester", (q) => q.eq("enrollmentId", open._id))
+    .take(100);
+  await Promise.all(grades.map((g) => ctx.db.patch(g._id, placement)));
   return open._id;
 }
 
