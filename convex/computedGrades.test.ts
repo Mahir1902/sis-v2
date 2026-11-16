@@ -383,6 +383,80 @@ describe("CA set changes refresh expectedCaCount class-wide", () => {
   });
 });
 
+describe("CA papers are shared by every campus of a level + year (ADR-0007)", () => {
+  it("a CA or question change recomputes the grades in both campuses, and rows with no campus yet", async () => {
+    const ca1 = await createCa(1, 10);
+    await enterMarks(ca1, [5, 5, 5, 5, 5, 5]); // Campus 01: 50%
+    // A Grade 4 pupil at a second campus sits the same paper.
+    const other = await t.run(async (ctx) => {
+      const campus2 = await ctx.db.insert("campuses", {
+        name: "Campus 02",
+        address: "-",
+      });
+      const studentId = await ctx.db.insert("students", {
+        studentNumber: "C2-0",
+        createdAt: new Date(0).toISOString(),
+      });
+      const enrollmentId = await ctx.db.insert("enrollments", {
+        studentId,
+        academicYear: year,
+        standardLevelId: grade4,
+        campus: campus2,
+        enrollmentType: "new_admission",
+        enrollmentDate: 0,
+      });
+      return { campus2, studentId, enrollmentId };
+    });
+    await asAdmin.mutation(api.studentAssessmentAnswers.upsertAnswer, {
+      studentId: other.studentId,
+      enrollmentId: other.enrollmentId,
+      assessmentId: ca1.assessmentId,
+      questionId: ca1.questionId,
+      marksObtained: 10,
+    });
+    const otherGrade = () =>
+      t.run((ctx) =>
+        ctx.db
+          .query("computedGrades")
+          .withIndex("by_enrollment_semester", (q) =>
+            q.eq("enrollmentId", other.enrollmentId),
+          )
+          .first(),
+      );
+    expect((await otherGrade())?.campus).toBe(other.campus2);
+    // Student 0's row predates the campus backfill.
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("computedGrades")
+        .withIndex("by_enrollment_semester", (q) =>
+          q.eq("enrollmentId", enrollments[0]),
+        )
+        .first();
+      if (!row) throw new Error("fixture: row expected");
+      const { _id, _creationTime, campus: _drop, ...rest } = row;
+      await ctx.db.replace(_id, rest);
+    });
+
+    // A new CA with no marks on it: the targets come from the stored rows
+    // alone, so this is the path that depends on the cross-campus read.
+    await createCa(2);
+    expect((await gradeOf(3))?.expectedCaCount).toBe(2);
+    expect((await otherGrade())?.expectedCaCount).toBe(2);
+    const legacy = await gradeOf(0);
+    expect(legacy?.expectedCaCount).toBe(2);
+    expect(legacy?.campus).toBe(campus); // refilled by the recompute
+
+    // Re-marking the question moves the denominator in every campus.
+    await asAdmin.mutation(api.assessmentQuestions.updateQuestion, {
+      questionId: ca1.questionId,
+      marksAllocated: 20,
+    });
+    await settle();
+    expect((await gradeOf(3))?.weightedAverage).toBe(25);
+    expect((await otherGrade())?.weightedAverage).toBe(50);
+  });
+});
+
 describe("getClassPositions final/provisional gate", () => {
   const positions = (i: number) =>
     asAdmin.query(api.computedGrades.getClassPositions, {
