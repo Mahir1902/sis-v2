@@ -59,7 +59,6 @@ describe("dashboard bootstrap still works via internal references", () => {
       academicYears: (await ctx.db.query("academicYears").collect()).length,
       campuses: (await ctx.db.query("campuses").collect()).length,
       standardLevels: (await ctx.db.query("standardLevels").collect()).length,
-      gradeMapping: (await ctx.db.query("gradeMapping").collect()).length,
       subjects: (await ctx.db.query("subjects").collect()).length,
       discountRules: (await ctx.db.query("discountRules").collect()).length,
     }));
@@ -67,7 +66,6 @@ describe("dashboard bootstrap still works via internal references", () => {
       academicYears: 12,
       campuses: 3,
       standardLevels: 16,
-      gradeMapping: 6,
       subjects: 12,
       discountRules: 4,
     });

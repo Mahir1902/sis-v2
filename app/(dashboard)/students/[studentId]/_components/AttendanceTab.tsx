@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { AlertTriangle, CalendarCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AcademicYearSelect } from "@/components/shared/AcademicYearSelect";
 import {
   Select,
@@ -17,7 +17,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { formatDisplayDate } from "@/lib/attendanceDate";
 import {
   appearanceNotes,
-  currentYear,
   formatLongDate,
   percentLabel,
   rawCountLabel,
@@ -33,16 +32,22 @@ type Period = "year" | "1" | "2";
  */
 export function AttendanceTab({ studentId }: { studentId: Id<"students"> }) {
   const years = useQuery(api.academicYears.list);
+  const current = useQuery(api.academicYears.getCurrent);
   const enrollment = useQuery(api.enrollments.getCurrentEnrollment, {
     studentId,
   });
-  const [yearId, setYearId] = useState<Id<"academicYears">>();
+  const [picked, setYearId] = useState<Id<"academicYears">>();
   const [period, setPeriod] = useState<Period>("year");
 
-  useEffect(() => {
-    if (yearId || enrollment === undefined || !years) return;
-    setYearId(enrollment?.academicYear ?? currentYear(years)?._id);
-  }, [yearId, enrollment, years]);
+  // The user's pick, else the student's class year, else the server's
+  // current year. None of those → the user chooses; nothing is guessed.
+  const loading = enrollment === undefined || current === undefined;
+  const yearId =
+    picked ??
+    (loading
+      ? undefined
+      : (enrollment?.academicYear ??
+        (current.status === "current" ? current.year._id : undefined)));
 
   const summary = useQuery(
     api.attendance.getStudentAttendance,
@@ -81,7 +86,12 @@ export function AttendanceTab({ studentId }: { studentId: Id<"students"> }) {
         </Select>
       </div>
 
-      {summary === undefined ? (
+      {!yearId && !loading ? (
+        <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-gray-500">
+          This student has no class and today is not inside exactly one academic
+          year. Choose a year to see attendance.
+        </p>
+      ) : summary === undefined ? (
         <div className="space-y-3">
           <Skeleton className="h-20 w-full rounded-lg" />
           <Skeleton className="h-8 w-full" />

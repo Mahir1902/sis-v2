@@ -10,7 +10,7 @@ import schema from "./schema";
  * `computedGrades` never go stale (architecture review candidate 6).
  * Mark entry recomputes in the same transaction; CA / question changes
  * recompute the whole class through the scheduled, chunked batch; placement
- * amend keeps the denormalised level in step. Math per ADR-0004 / CONTEXT.md
+ * amend keeps the denormalised Class in step. Math per ADR-0004 / CONTEXT.md
  * ("Present CA", "Absent vs Unmarked", "Provisional Grade").
  */
 
@@ -25,6 +25,7 @@ let asAdmin: TC;
 let grade4: Id<"standardLevels">;
 let grade5: Id<"standardLevels">;
 let year: Id<"academicYears">;
+let campus: Id<"campuses">;
 let math: Id<"subjects">;
 let students: Id<"students">[];
 let enrollments: Id<"enrollments">[];
@@ -49,6 +50,10 @@ beforeEach(async () => {
       startDate: 0,
       endDate: 1,
     });
+    campus = await ctx.db.insert("campuses", {
+      name: "Campus 01",
+      address: "-",
+    });
     math = await ctx.db.insert("subjects", {
       name: "Math",
       code: "MATH",
@@ -69,6 +74,7 @@ beforeEach(async () => {
           studentId,
           academicYear: year,
           standardLevelId: grade4,
+          campus,
           enrollmentType: "new_admission",
           enrollmentDate: 0,
         }),
@@ -161,9 +167,11 @@ describe("mark entry recomputes in the same transaction", () => {
     expect(g0?.weightedAverage).toBe(100);
     expect(g0?.letterGrade).toBe("A+");
     expect(g0?.standardLevelId).toBe(grade4);
+    expect(g0?.campus).toBe(campus);
     expect(g0?.expectedCaCount).toBe(1);
 
     const avg = await asAdmin.query(api.computedGrades.getClassAverages, {
+      campus,
       standardLevelId: grade4,
       academicYear: year,
       subjectId: math,
@@ -185,6 +193,7 @@ describe("mark entry recomputes in the same transaction", () => {
     });
     expect((await gradeOf(5))?.weightedAverage).toBe(60);
     const avg2 = await asAdmin.query(api.computedGrades.getClassAverages, {
+      campus,
       standardLevelId: grade4,
       academicYear: year,
       subjectId: math,
@@ -203,7 +212,7 @@ describe("mark entry recomputes in the same transaction", () => {
         questionId: ca1.questionId,
         marksObtained: 5,
       }),
-    ).rejects.toThrow("Enrollment does not match this assessment");
+    ).rejects.toThrow(/not in this assessment's class/);
     expect(await gradeOf(0)).toBeNull();
   });
 
@@ -224,6 +233,7 @@ describe("mark entry recomputes in the same transaction", () => {
           studentId,
           academicYear: year,
           standardLevelId: grade4,
+          campus,
           enrollmentType: "new_admission",
           enrollmentDate: 0,
         });
@@ -243,8 +253,9 @@ describe("mark entry recomputes in the same transaction", () => {
     const rows = await t.run((ctx) =>
       ctx.db
         .query("computedGrades")
-        .withIndex("by_level_year_subject_semester", (q) =>
+        .withIndex("by_class_subject_semester", (q) =>
           q
+            .eq("campus", campus)
             .eq("standardLevelId", grade4)
             .eq("academicYear", year)
             .eq("subjectId", math),
@@ -375,6 +386,7 @@ describe("CA set changes refresh expectedCaCount class-wide", () => {
 describe("getClassPositions final/provisional gate", () => {
   const positions = (i: number) =>
     asAdmin.query(api.computedGrades.getClassPositions, {
+      campus,
       standardLevelId: grade4,
       academicYear: year,
       semester: 1,
@@ -423,16 +435,15 @@ describe("placement amend keeps the denormalised level in step", () => {
   it("moving a student to another level moves their grade rows' standardLevelId", async () => {
     const ca1 = await createCa(1);
     await enterMarks(ca1, [10, 10, 10, 10, 10, 10]);
-    const campus = await t.run((ctx) =>
-      ctx.db.insert("campuses", { name: "Campus 01", address: "-" }),
-    );
     await asAdmin.mutation(api.students.updateStudent, {
       studentId: students[0],
       placement: { standardLevelId: grade5, campus },
     });
     expect((await gradeOf(0))?.standardLevelId).toBe(grade5);
+    expect((await gradeOf(0))?.campus).toBe(campus);
     // The old class no longer counts them.
     const avg = await asAdmin.query(api.computedGrades.getClassAverages, {
+      campus,
       standardLevelId: grade4,
       academicYear: year,
       subjectId: math,

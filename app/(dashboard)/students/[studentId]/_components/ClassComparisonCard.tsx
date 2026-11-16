@@ -24,6 +24,7 @@ import { formatPercentage } from "@/lib/gradeUtils";
 
 /** Shared query args for a single term's class averages, one subject at a time. */
 export type ClassComparisonQueryArgs = {
+  campus: Id<"campuses">;
   standardLevelId: Id<"standardLevels">;
   academicYear: Id<"academicYears">;
   semester: 1 | 2;
@@ -153,6 +154,7 @@ export function SubjectComparisonRow({
   queryArgs: ClassComparisonQueryArgs;
 }) {
   const res = useQuery(api.computedGrades.getClassAverages, {
+    campus: queryArgs.campus,
     standardLevelId: queryArgs.standardLevelId,
     academicYear: queryArgs.academicYear,
     subjectId: seed.subjectId,

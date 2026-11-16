@@ -217,7 +217,8 @@ export default defineSchema({
     .index("by_standard_level", ["standardLevel"])
     .index("by_status", ["status"])
     .index("by_academic_year", ["academicYear"])
-    .index("by_student_number", ["studentNumber"]),
+    .index("by_student_number", ["studentNumber"])
+    .searchIndex("search_by_name", { searchField: "studentFullName" }),
 
   enrollments: defineTable({
     studentId: v.id("students"),
@@ -243,7 +244,10 @@ export default defineSchema({
   })
     .index("by_student_academic_year", ["studentId", "academicYear"])
     .index("by_standard_level", ["standardLevelId"])
-    .index("by_campus_standard", ["campus", "standardLevelId"])
+    // A Class = campus + level + year (ADR-0007). `getClassRoster` in
+    // convex/lib/placement.ts is the one reader; nothing reads a roster
+    // without a campus.
+    .index("by_class", ["campus", "standardLevelId", "academicYear"])
     // Which classes exist in a year, for the day view's "N of M classes
     // marked" and the report's completeness banner. No existing index can
     // range on academicYear alone. (attendance spec §7 A3)
@@ -632,6 +636,9 @@ export default defineSchema({
     // backfills every row; narrow to required afterward (widen-migrate-narrow).
     standardLevelId: v.optional(v.id("standardLevels")),
     academicYear: v.optional(v.id("academicYears")),
+    // The third part of the Class key (ADR-0007), copied the same way.
+    // Optional until `backfillComputedGradeCampus` has run; narrow with the two above.
+    campus: v.optional(v.id("campuses")),
     subjectId: v.id("subjects"),
     semester: v.union(v.literal(1), v.literal(2)),
     ca1Marks: v.optional(v.float64()),
@@ -667,8 +674,19 @@ export default defineSchema({
     ])
     .index("by_student", ["studentId"])
     .index("by_subject", ["subjectId"])
-    // Class-level analytics: one indexed read returns an entire class for a subject + term.
-    .index("by_level_year_subject_semester", [
+    // Every grade one set of CA papers feeds: the papers are per level + year
+    // and shared by all campuses, so the class-wide recompute after a CA or
+    // question change reads across campuses (and rows with no campus yet).
+    .index("by_subject_semester_level_year", [
+      "subjectId",
+      "semester",
+      "standardLevelId",
+      "academicYear",
+    ])
+    // Class-level analytics: one indexed read returns an entire Class (one
+    // campus) for a subject + term. Rows with no campus are in no Class.
+    .index("by_class_subject_semester", [
+      "campus",
       "standardLevelId",
       "academicYear",
       "subjectId",

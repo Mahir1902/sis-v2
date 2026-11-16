@@ -33,6 +33,7 @@ import {
   formatDhakaTime,
   formatLongDate,
 } from "@/lib/attendanceView";
+import { serverErrorMessage } from "@/lib/placementErrors";
 import { cn } from "@/lib/utils";
 import { ClassPicker } from "./_components/ClassPicker";
 
@@ -185,7 +186,7 @@ function Register({ classKey, date }: { classKey: ClassKey; date: string }) {
           : `Register saved for ${formatDisplayDate(date)}`,
       );
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Could not save");
+      toast.error(serverErrorMessage(err, "Could not save"));
     } finally {
       setSaving(false);
     }

@@ -1,9 +1,8 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import {
-  assertEnrollmentForAssessment,
   type GradeTarget,
   recomputeGrade,
   scheduleRecompute,
@@ -18,12 +17,38 @@ import { requireRole } from "./lib/permissions";
  */
 const INLINE_RECOMPUTE_MAX = 50;
 
-async function getAssessmentOrThrow(
+/**
+ * Rejects marks for a student who is not in the assessment's class: every
+ * entry's enrollment must be that student's, in the assessment's level and
+ * year. Open is not required — a late CA mark for a closed enrollment of
+ * that year is legitimate. Without it the recompute would write (or delete)
+ * a grade row in the wrong class. Returns the assessment, whose subject +
+ * semester key the recompute.
+ */
+async function assertInAssessmentClass(
   ctx: MutationCtx,
   assessmentId: Id<"assessments">,
+  entries: { studentId: Id<"students">; enrollmentId: Id<"enrollments"> }[],
 ): Promise<Doc<"assessments">> {
   const assessment = await ctx.db.get(assessmentId);
-  if (!assessment) throw new Error("Assessment not found");
+  if (!assessment) throw new ConvexError("Assessment not found");
+  const ids = [...new Set(entries.map((e) => e.enrollmentId))];
+  const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
+  const byId = new Map(ids.map((id, i) => [id, docs[i]]));
+  const misplaced = entries.some((e) => {
+    const en = byId.get(e.enrollmentId);
+    return (
+      !en ||
+      en.studentId !== e.studentId ||
+      en.standardLevelId !== assessment.standardLevelId ||
+      en.academicYear !== assessment.academicYearId
+    );
+  });
+  if (misplaced) {
+    throw new ConvexError(
+      "A student here is not in this assessment's class. Reload the page and try again.",
+    );
+  }
   return assessment;
 }
 
@@ -40,13 +65,15 @@ export const upsertAnswer = mutation({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
-    const assessment = await getAssessmentOrThrow(ctx, args.assessmentId);
-    const target = await assertEnrollmentForAssessment(
-      ctx,
-      assessment,
-      args.studentId,
-      args.enrollmentId,
-    );
+    const assessment = await assertInAssessmentClass(ctx, args.assessmentId, [
+      args,
+    ]);
+    const target = {
+      studentId: args.studentId,
+      enrollmentId: args.enrollmentId,
+      subjectId: assessment.subjectId,
+      semester: assessment.semester,
+    };
     const existing = await ctx.db
       .query("studentAssessmentAnswers")
       .withIndex("by_student_assessment", (q) =>
@@ -93,11 +120,16 @@ export const bulkMarkEntry = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin", "teacher"]);
+    // Every (student, enrollment) in the payload must be in this assessment's
+    // class — validated before any write.
+    const assessment = await assertInAssessmentClass(
+      ctx,
+      args.assessmentId,
+      args.entries,
+    );
     const now = Date.now();
-    const assessment = await getAssessmentOrThrow(ctx, args.assessmentId);
 
-    // Every (student, enrollment) in the payload must be in this Class —
-    // validated before any write. These are also the recompute targets.
+    // The distinct (student, enrollment) pairs are the recompute targets.
     const targetMap = new Map<string, GradeTarget>();
     for (const e of args.entries) {
       targetMap.set(`${e.studentId}|${e.enrollmentId}`, {
@@ -106,16 +138,6 @@ export const bulkMarkEntry = mutation({
       });
     }
     const targets = [...targetMap.values()];
-    await Promise.all(
-      targets.map((t) =>
-        assertEnrollmentForAssessment(
-          ctx,
-          assessment,
-          t.studentId,
-          t.enrollmentId,
-        ),
-      ),
-    );
 
     // Pre-load all existing answers for this assessment (avoid N+1)
     const allExisting = await ctx.db
@@ -191,13 +213,15 @@ export const markStudentAbsent = mutation({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
-    const assessment = await getAssessmentOrThrow(ctx, args.assessmentId);
-    const target = await assertEnrollmentForAssessment(
-      ctx,
-      assessment,
-      args.studentId,
-      args.enrollmentId,
-    );
+    const assessment = await assertInAssessmentClass(ctx, args.assessmentId, [
+      args,
+    ]);
+    const target = {
+      studentId: args.studentId,
+      enrollmentId: args.enrollmentId,
+      subjectId: assessment.subjectId,
+      semester: assessment.semester,
+    };
     const questions = await ctx.db
       .query("assessmentQuestions")
       .withIndex("by_assessment", (q) =>
