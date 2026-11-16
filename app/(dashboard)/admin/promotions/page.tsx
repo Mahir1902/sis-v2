@@ -54,6 +54,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { serverErrorMessage } from "@/lib/placementErrors";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ function suggestNextYear(sourceYearName: string) {
   return {
     name: `${startYear}-${endYear}`,
     startDate: `${startYear}-06-01`,
-    endDate: `${endYear}-07-31`,
+    endDate: `${endYear}-05-31`,
   };
 }
 
@@ -210,9 +211,7 @@ function PromotionsPageContent() {
       setSelectedTargetYearId(newId);
       setCreateYearOpen(false);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to create academic year";
-      toast.error(message);
+      toast.error(serverErrorMessage(err, "Failed to create academic year"));
     }
   }
 

@@ -34,6 +34,10 @@ beforeEach(() => {
   queries.set("academicYears:list", [
     { _id: "y1", name: "2026", startDate: 0, endDate: 1e15 },
   ]);
+  queries.set("academicYears:getCurrent", {
+    status: "current",
+    year: { _id: "y1", name: "2026" },
+  });
   queries.set("campus:list", [
     { _id: "c1", name: "Campus A" },
     { _id: "c2", name: "Campus B" },
