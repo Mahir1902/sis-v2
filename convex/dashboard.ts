@@ -11,14 +11,23 @@ export const getSummaryStats = query({
   handler: async (ctx) => {
     await requireRole(ctx, ["admin"]);
 
+    // ponytail: counting means reading every student doc; ceiling is 10k
+    // (silent past that). Move the counts to `@convex-dev/aggregate` if the
+    // roll ever approaches it.
     const students = await ctx.db.query("students").take(10000);
     const activeStudents = students.filter((s) => s.status === "active");
 
-    const fees = await ctx.db.query("studentFees").take(10000);
-    const totalOutstanding = fees.reduce((sum, f) => sum + f.balance, 0);
-    const overdueCount = fees.filter(
-      (f) => f.status !== "paid" && f.dueDate < Date.now(),
-    ).length;
+    // Only unpaid fees carry a balance or can be overdue, so read just that
+    // index range instead of the whole table.
+    const now = Date.now();
+    let totalOutstanding = 0;
+    let overdueCount = 0;
+    for await (const f of ctx.db
+      .query("studentFees")
+      .withIndex("by_status_and_due_date", (q) => q.eq("status", "unpaid"))) {
+      totalOutstanding += f.balance;
+      if (f.dueDate < now) overdueCount += 1;
+    }
 
     const assessments = await ctx.db
       .query("assessments")

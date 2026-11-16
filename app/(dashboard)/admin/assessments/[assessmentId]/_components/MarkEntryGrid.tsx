@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { serverErrorMessage } from "@/lib/placementErrors";
 import { cn } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -214,9 +215,7 @@ export function MarkEntryGrid({
       setChangeCount(0);
       toast.success(`Saved marks for ${savedCount} entries`);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to save marks";
-      toast.error(message);
+      toast.error(serverErrorMessage(err, "Failed to save marks"));
     } finally {
       setIsSaving(false);
     }
@@ -232,9 +231,7 @@ export function MarkEntryGrid({
         });
         toast.success(`Marked ${studentName} as absent`);
       } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : "Failed to mark absent";
-        toast.error(message);
+        toast.error(serverErrorMessage(err, "Failed to mark absent"));
       }
     },
     [assessmentId, markAbsent],
