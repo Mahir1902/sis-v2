@@ -135,55 +135,6 @@ export const seedReferenceData = internalMutation({
       await ctx.db.patch(insertedIds[i], { nextLevelId: insertedIds[i + 1] });
     }
 
-    // ── Grade Mapping ─────────────────────────────────────────────────────
-    const gradeMappings = [
-      {
-        letterGrade: "A+",
-        minPercentage: 90,
-        maxPercentage: 100,
-        order: 1,
-        description: "Outstanding",
-      },
-      {
-        letterGrade: "A",
-        minPercentage: 80,
-        maxPercentage: 89,
-        order: 2,
-        description: "Excellent",
-      },
-      {
-        letterGrade: "B",
-        minPercentage: 70,
-        maxPercentage: 79,
-        order: 3,
-        description: "Good",
-      },
-      {
-        letterGrade: "C",
-        minPercentage: 60,
-        maxPercentage: 69,
-        order: 4,
-        description: "Satisfactory",
-      },
-      {
-        letterGrade: "D",
-        minPercentage: 50,
-        maxPercentage: 59,
-        order: 5,
-        description: "Pass",
-      },
-      {
-        letterGrade: "F",
-        minPercentage: 0,
-        maxPercentage: 49,
-        order: 6,
-        description: "Fail",
-      },
-    ];
-    for (const g of gradeMappings) {
-      await ctx.db.insert("gradeMapping", { ...g, isActive: true });
-    }
-
     // ── Subjects ──────────────────────────────────────────────────────────
     const subjectDefs = [
       // Early childhood (PG/NUR/KG)
