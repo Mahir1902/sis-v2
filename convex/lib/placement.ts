@@ -199,14 +199,39 @@ export async function amend(
   const open = await getCurrentPlacement(ctx, studentId);
   if (!open) throw new ConvexError({ code: "NOT_PLACED" });
   await ctx.db.patch(open._id, placement);
+  await moveGradesToClass(ctx, open._id, placement);
+  return open._id;
+}
+
+/**
+ * `computedGrades` carries a copy of the enrollment's Class (campus + level;
+ * the year is not amendable) for the class-analytics index, so a placement
+ * change must move the enrollment's grade rows with it or they stay in the
+ * old Class's range. The one place that does it, for `amend` and the import's
+ * amend. Patch-only: the grades themselves are not recomputed here. NOTE the
+ * marks behind them were earned on the OLD level's papers; the next recompute
+ * of that subject (new marks, or a CA / question change in the new level)
+ * replaces the row with the new level's grade, or deletes it when the student
+ * has none there yet.
+ */
+async function moveGradesToClass(
+  ctx: MutationCtx,
+  enrollmentId: Id<"enrollments">,
+  cls: { standardLevelId: Id<"standardLevels">; campus?: Id<"campuses"> },
+) {
   // ponytail: one enrollment holds subjects × 2 semesters (≈20) grade rows;
   // 100 is a safety bound, not a page size.
-  const grades = await ctx.db
+  const rows = await ctx.db
     .query("computedGrades")
-    .withIndex("by_enrollment_semester", (q) => q.eq("enrollmentId", open._id))
+    .withIndex("by_enrollment_semester", (q) =>
+      q.eq("enrollmentId", enrollmentId),
+    )
     .take(100);
-  await Promise.all(grades.map((g) => ctx.db.patch(g._id, placement)));
-  return open._id;
+  const patch = {
+    standardLevelId: cls.standardLevelId,
+    ...(cls.campus ? { campus: cls.campus } : {}),
+  };
+  await Promise.all(rows.map((r) => ctx.db.patch(r._id, patch)));
 }
 
 /**
@@ -312,6 +337,7 @@ export async function placeFromImport(
       standardLevelId: placement.standardLevelId,
       ...(placement.campus ? { campus: placement.campus } : {}),
     });
+    await moveGradesToClass(ctx, open._id, placement);
     return false;
   }
   const wasLeaver = isLeaver(student.status);

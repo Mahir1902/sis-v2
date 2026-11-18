@@ -1,20 +1,35 @@
 import { ConvexError, v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import {
+  type GradeTarget,
+  recomputeGrade,
+  scheduleRecompute,
+} from "./computedGrades";
 import { requireRole } from "./lib/permissions";
+
+/**
+ * A grid save for one class recomputes each student's grade in the same
+ * transaction up to this many students (≈ 100 docs read per student, so a
+ * 50-student class stays well under the per-transaction ceiling). Larger
+ * payloads are recomputed by the scheduled, chunked batch instead.
+ */
+const INLINE_RECOMPUTE_MAX = 50;
 
 /**
  * Rejects marks for a student who is not in the assessment's class: every
  * entry's enrollment must be that student's, in the assessment's level and
  * year. Open is not required — a late CA mark for a closed enrollment of
- * that year is legitimate.
+ * that year is legitimate. Without it the recompute would write (or delete)
+ * a grade row in the wrong class. Returns the assessment, whose subject +
+ * semester key the recompute.
  */
 async function assertInAssessmentClass(
   ctx: MutationCtx,
   assessmentId: Id<"assessments">,
   entries: { studentId: Id<"students">; enrollmentId: Id<"enrollments"> }[],
-) {
+): Promise<Doc<"assessments">> {
   const assessment = await ctx.db.get(assessmentId);
   if (!assessment) throw new ConvexError("Assessment not found");
   const ids = [...new Set(entries.map((e) => e.enrollmentId))];
@@ -34,6 +49,7 @@ async function assertInAssessmentClass(
       "A student here is not in this assessment's class. Reload the page and try again.",
     );
   }
+  return assessment;
 }
 
 /** Upsert a single student's answer for a question. */
@@ -49,7 +65,15 @@ export const upsertAnswer = mutation({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
-    await assertInAssessmentClass(ctx, args.assessmentId, [args]);
+    const assessment = await assertInAssessmentClass(ctx, args.assessmentId, [
+      args,
+    ]);
+    const target = {
+      studentId: args.studentId,
+      enrollmentId: args.enrollmentId,
+      subjectId: assessment.subjectId,
+      semester: assessment.semester,
+    };
     const existing = await ctx.db
       .query("studentAssessmentAnswers")
       .withIndex("by_student_assessment", (q) =>
@@ -58,6 +82,7 @@ export const upsertAnswer = mutation({
       .filter((q) => q.eq(q.field("questionId"), args.questionId))
       .first();
 
+    let id: Id<"studentAssessmentAnswers">;
     if (existing) {
       await ctx.db.patch(existing._id, {
         marksObtained: args.marksObtained,
@@ -65,12 +90,16 @@ export const upsertAnswer = mutation({
         remarks: args.remarks,
         enteredAt: Date.now(),
       });
-      return existing._id;
+      id = existing._id;
+    } else {
+      id = await ctx.db.insert("studentAssessmentAnswers", {
+        ...args,
+        enteredAt: Date.now(),
+      });
     }
-    return await ctx.db.insert("studentAssessmentAnswers", {
-      ...args,
-      enteredAt: Date.now(),
-    });
+    // Same transaction: the grade never lags the mark.
+    await recomputeGrade(ctx, target);
+    return id;
   },
 });
 
@@ -91,8 +120,24 @@ export const bulkMarkEntry = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin", "teacher"]);
-    await assertInAssessmentClass(ctx, args.assessmentId, args.entries);
+    // Every (student, enrollment) in the payload must be in this assessment's
+    // class — validated before any write.
+    const assessment = await assertInAssessmentClass(
+      ctx,
+      args.assessmentId,
+      args.entries,
+    );
     const now = Date.now();
+
+    // The distinct (student, enrollment) pairs are the recompute targets.
+    const targetMap = new Map<string, GradeTarget>();
+    for (const e of args.entries) {
+      targetMap.set(`${e.studentId}|${e.enrollmentId}`, {
+        studentId: e.studentId,
+        enrollmentId: e.enrollmentId,
+      });
+    }
+    const targets = [...targetMap.values()];
 
     // Pre-load all existing answers for this assessment (avoid N+1)
     const allExisting = await ctx.db
@@ -133,6 +178,20 @@ export const bulkMarkEntry = mutation({
       }
     }
 
+    // Recompute the affected grades: inline for a normal class save, scheduled
+    // (chunked) when the payload is too large for one transaction.
+    const key = {
+      subjectId: assessment.subjectId,
+      semester: assessment.semester,
+    };
+    if (targets.length <= INLINE_RECOMPUTE_MAX) {
+      await Promise.all(
+        targets.map((t) => recomputeGrade(ctx, { ...t, ...key })),
+      );
+    } else {
+      await scheduleRecompute(ctx, key, targets);
+    }
+
     await logAudit(ctx, {
       user,
       action: "update",
@@ -154,7 +213,15 @@ export const markStudentAbsent = mutation({
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, ["admin", "teacher"]);
-    await assertInAssessmentClass(ctx, args.assessmentId, [args]);
+    const assessment = await assertInAssessmentClass(ctx, args.assessmentId, [
+      args,
+    ]);
+    const target = {
+      studentId: args.studentId,
+      enrollmentId: args.enrollmentId,
+      subjectId: assessment.subjectId,
+      semester: assessment.semester,
+    };
     const questions = await ctx.db
       .query("assessmentQuestions")
       .withIndex("by_assessment", (q) =>
@@ -197,6 +264,8 @@ export const markStudentAbsent = mutation({
         });
       }
     }
+    // Absent = a present 0 (CONTEXT.md): the grade drops in the same transaction.
+    await recomputeGrade(ctx, target);
   },
 });
 
