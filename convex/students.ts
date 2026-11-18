@@ -514,7 +514,7 @@ export const getSiblingsByStudent = query({
  * Refused when the student has any financial row (receipt, collection
  * session or transaction) — those are the audit trail and are never
  * orphaned or deleted; mark the student withdrawn instead. Otherwise removes
- * enrollments, attendance, grades, unpaid fees, discounts, report cards
+ * enrollments, attendance, grades, unpaid fees, report cards
  * (including stored files), assessment answers, computed grades and stored
  * photos, and unlinks this student from any siblings. Requires admin role.
  */
@@ -556,7 +556,6 @@ export const deleteStudent = mutation({
       attendance,
       grades,
       studentFees,
-      studentDiscounts,
       advancePayments,
       reportCards,
       assessmentAnswers,
@@ -578,10 +577,6 @@ export const deleteStudent = mutation({
         .collect(),
       ctx.db
         .query("studentFees")
-        .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
-        .collect(),
-      ctx.db
-        .query("studentDiscounts")
         .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
         .collect(),
       ctx.db
@@ -610,7 +605,6 @@ export const deleteStudent = mutation({
       ...attendance.map((doc) => ctx.db.delete(doc._id)),
       ...grades.map((doc) => ctx.db.delete(doc._id)),
       ...studentFees.map((doc) => ctx.db.delete(doc._id)),
-      ...studentDiscounts.map((doc) => ctx.db.delete(doc._id)),
       ...advancePayments.map((doc) => ctx.db.delete(doc._id)),
       ...assessmentAnswers.map((doc) => ctx.db.delete(doc._id)),
       ...computedGrades.map((doc) => ctx.db.delete(doc._id)),
