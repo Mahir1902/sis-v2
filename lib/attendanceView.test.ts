@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   appearanceNotes,
   closureVoidMessage,
-  currentYear,
   formatDhakaTime,
   percentLabel,
   saveButtonLabel,
@@ -76,13 +75,7 @@ describe("attendanceView", () => {
     );
   });
 
-  it("formats mark time in Dhaka local time and picks the current year", () => {
+  it("formats mark time in Dhaka local time", () => {
     expect(formatDhakaTime(Date.UTC(2026, 3, 12, 2, 12))).toBe("08:12");
-    const years = [
-      { name: "a", startDate: 0, endDate: 10 },
-      { name: "b", startDate: 20, endDate: 30 },
-    ];
-    expect(currentYear(years, 25)?.name).toBe("b");
-    expect(currentYear(years, 15)?.name).toBe("b");
   });
 });

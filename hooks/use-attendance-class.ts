@@ -4,7 +4,6 @@ import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { currentYear } from "@/lib/attendanceView";
 
 export interface ClassKey {
   campus: Id<"campuses">;
@@ -17,12 +16,14 @@ const STORAGE_KEY = "attendance.lastClass";
 /**
  * The register unit (campus, level, year) chosen on the attendance screens.
  * The last campus and level are remembered in localStorage and restored on
- * open (spec §5.3); the year always defaults to the one containing today.
+ * open (spec §5.3); the year defaults to the server's current academic year,
+ * and stays unselected when there is none (a gap, or overlapping years).
  */
 export function useAttendanceClass() {
   const campuses = useQuery(api.campus.list);
   const levels = useQuery(api.standardLevels.list);
   const years = useQuery(api.academicYears.list);
+  const current = useQuery(api.academicYears.getCurrent);
   const [selection, setSelection] = useState<Partial<ClassKey>>({});
   const [restored, setRestored] = useState(false);
 
@@ -42,10 +43,11 @@ export function useAttendanceClass() {
   }, []);
 
   useEffect(() => {
-    if (!restored || selection.academicYear || !years) return;
-    const year = currentYear(years);
-    if (year) setSelection((s) => ({ ...s, academicYear: year._id }));
-  }, [restored, selection.academicYear, years]);
+    if (!restored || selection.academicYear || current?.status !== "current")
+      return;
+    const id = current.year._id;
+    setSelection((s) => ({ ...s, academicYear: id }));
+  }, [restored, selection.academicYear, current]);
 
   function update(patch: Partial<ClassKey>) {
     setSelection((s) => {

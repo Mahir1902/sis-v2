@@ -71,6 +71,306 @@ Verdict: APPROVE WITH CAUTION — proceed with the mitigations above.
 
 ---
 
+## Current Feature: `computedGrades` never go stale — recompute on every write (architecture review candidate 6, 2026-11-10)
+**Status**: Review — PR open
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 6. Rules: CONTEXT.md "Weighted Average /
+Computed Grade", "Present CA", "Absent vs Unmarked", "Provisional Grade"; ADR-0004 (math, unchanged)
+and ADR-0005 (class analytics read `computedGrades` by level+year). This work changes WHEN grades are
+recomputed, never HOW — `lib/gradeComputation.ts` is untouched. Out of scope: current academic year
+(3), dead tables incl. legacy `grades` (4), fee ledger (5), class roster/campus (#120).
+
+### Re-verified problem (post-#131 line numbers)
+- `recomputeGrade` (computedGrades.ts:46) is the only writer; its only trigger is the manual
+  "Compute Grades" dialog (GradesTab.tsx:331). Mark entry, question add/update/delete and
+  assessment update/deactivate/delete never recompute → class averages/positions/spread read
+  stale or missing rows.
+- `expectedCaCount` is a compute-time snapshot (computedGrades.ts:146); `getClassPositions` works
+  around it with `liveAssessmentCount` (:339), an extra read per subject.
+- `computedGrades.standardLevelId/academicYear` are copied from the enrollment and labelled
+  immutable, but `placement.amend` and `placeFromImport` patch `standardLevelId` in place and do
+  NOT refresh the rows → a moved student's grades stay in the old Class's index range.
+- The "active assessments for subject+level+year+semester" lookup is duplicated (:60 and :347) and
+  both scan `by_subject_semester` (every level × year of that subject) and post-filter.
+
+### Plan
+- One lookup helper `activeAssessmentsFor()` on a new `assessments` index
+  `by_subject_semester_level_year` (scans ≤3 docs instead of every level/year).
+- Per-student recompute **inline, same transaction**: `upsertAnswer`, `markStudentAbsent`,
+  `bulkMarkEntry` (distinct students in the payload = one class, bounded by what the grid sends).
+- Class-wide recompute (denominator / CA-set changes: question create/bulk/update/delete,
+  assessment create/bulk/deactivate/delete) is **scheduled + chunked** via `ctx.scheduler`:
+  the mutation gathers the target set (existing rows for the Class+subject+semester ∪ students with
+  answers on the changed assessment) and schedules `recomputeGradesBatch`, which recomputes 25 at a
+  time and reschedules itself. A whole class × 20-question papers can approach the 16k-docs-read
+  ceiling inline, so these are eventually consistent (ms). `expectedCaCount` is refreshed as a
+  by-product (it is written by every recompute).
+- `getClassPositions` uses the stored `expectedCaCount` (now never stale); `liveAssessmentCount`
+  deleted. Rows without the field (pre-backfill) count as provisional until the migration runs.
+- `placement.amend` / `placeFromImport` patch `standardLevelId` onto the enrollment's
+  `computedGrades` rows in the same transaction (year is not amendable). Done inside placement.ts.
+- Manual "Compute Grades" dialog and the public `computeGradesForStudent` mutation are removed; the
+  admin repair action is the migration (`npx convex run migrations:runRecomputeAllGrades`).
+- Migration: keep `recomputeAllGrades` (existing rows + orphans) and add `recomputeEnrollmentGrades`
+  over `enrollments` (creates rows for subjects that were marked but never computed). One runner
+  runs both in series.
+- Tests (`convex/computedGrades.test.ts`, convex-test): marks → grade + class average; adding a CA
+  makes a final grade provisional; deleting a CA with marks recomputes (and deletes the row when it
+  was the only present CA); Absent = present 0 vs Unmarked = excluded; amend refreshes level.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: patching `standardLevelId` on amend is undone by the next recompute — the moved student's answers belong to old-level assessments, so a recompute at the new level finds 0 present CAs and deletes the row → Mitigation: followed the task's explicit instruction (patch) and documented the consequence; the alternative (derive the row's class from the assessments the marks were earned on, so grades stay with the papers) is logged as an open question for the user. Rare in practice (amend = correcting a mistaken placement, usually before marks).
+- Concern: a public batch mutation lets anyone trigger class-wide recomputes; an `assessmentId` arg may be deleted before the job runs → Mitigation: `internalMutation` keyed by (subject, semester) + explicit target list; never an assessment id.
+- Concern: `bulkMarkEntry` inline recompute at 200 students ≈ 28k docs read, over the ~16k ceiling → Mitigation: inline when ≤ 50 distinct students (one class's grid save ≈ 5k reads), scheduled batch above that.
+- Concern: a throwing target (orphan row → "Enrollment not found") kills the scheduled chain silently → Mitigation: per-target try/catch (orphans skipped + logged), reschedule regardless; the migration is the documented repair.
+- Concern: enrollment-table migration at batch 25 ≈ 50–100k reads → Mitigation: batch 3; (subject, semester) pairs derived from the enrollment's own answers, not all subjects.
+- Concern: removing `liveAssessmentCount` before prod runs the migration leaves pre-backfill rows (no `expectedCaCount`) wrongly suppressed → Mitigation: stored count with a live fallback for rows missing the field; drop the fallback in a follow-up once the migration has run on prod.
+- Concern: `upsertAnswer` / `bulkMarkEntry` trust caller ids — a mismatched enrollment writes a row in the wrong class → Mitigation: enrollment must belong to the student and match the assessment's level + year, checked before any write.
+- Concern: `deleteAssessment` must gather targets before cascading → Mitigation: targets = existing rows (index) — unaffected by the delete; scheduled job runs after commit.
+- Concern: `deactivateAssessment` re-grades a whole class with no audit/existence check → Mitigation: null-check + `logAudit` added. Admin-only restriction deferred to Phase 5 (no ownership model yet).
+- Concern: `updateAssessment` → only name/totalMarks/passingMarks/date, none in the math (ADR-0004: totalMarks display-only) → Accepted: no recompute on update.
+- Concern: `bulkCreateAssessments` would schedule 3 jobs → Mitigation: one schedule after all inserts.
+- Concern: GradesTab empty state after the dialog goes → existing copy already says grades appear once marks are entered; no CTA change.
+- Accepted: OCC — per-student recomputes replace only that student's row; shared reads (assessments/questions) change only on edit. Double submit idempotent. Mid-chain `expectedCaCount` flicker for seconds is eventual consistency, documented.
+
+### Sub-tasks
+- [x] 1. Schema: `assessments.by_subject_semester_level_year` + `computedGrades.by_enrollment_semester_subject` indexes — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 2. Backend: `activeAssessmentsFor`, inline recompute in answer mutations (≤50 students, else scheduled), scheduled chunked class recompute in question/assessment mutations, stored `expectedCaCount` (+ live fallback for legacy rows) in positions, `computeGradesForStudent` deleted — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 3. Placement: `amend` / `placeFromImport` → `syncGradeLevel` patches `standardLevelId` on the enrollment's grade rows — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. Migration: `recomputeEnrollmentGrades` (batch 3, pairs from the student's answers); `runRecomputeAllGrades` runs stale-rows then missing-rows — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 5. Frontend: Compute Grades button + dialog removed from GradesTab; empty-state copy updated — APPROVED by Frontend Review Agent (2026-11-10)
+- [x] 6. Tests `convex/computedGrades.test.ts` (12) · tsc · `npm run lint` · `npm run build` · vitest 408/408 · `graphify update .` — 2026-11-10
+
+### Review Notes
+**Backend Review (round 1, REJECTED):** (1) `recomputeGrade` found the existing row by ranging `by_enrollment_semester` + in-memory subject filter, so two teachers saving different subjects' grids OCC-conflicted on every shared student → new `by_enrollment_semester_subject` index; (2) no test for the `getClassPositions` gate change → added (stored count, live fallback, provisional → final on CA delete). Non-blocking taken: `getAssessmentsBySubjectSemester` on the new index.
+**Backend Review (round 2, APPROVED 2026-11-10).** Follow-ups (non-blocking): `console.warn` when `gatherClassTargets` hits `.take(5000)`; per-assessment denominator precompute if the inline path needs headroom; `Promise.all` over pairs in the migration; tests for `deleteQuestion`, `bulkCreateQuestions`, `bulkCreateAssessments`, import-amend → `syncGradeLevel`; `ConvexError` for "Enrollment does not match this assessment" if the UI should show it; admin-only `deactivate/deleteAssessment` (Phase 5).
+**Frontend Review (APPROVED 2026-11-10):** no required changes. Pre-existing notes: no route error boundary check, `text-gray-400` contrast, selection logic in component body.
+
+### Deployment runbook
+1. Deploy. Positions for rows lacking `expectedCaCount` use the live count until step 2.
+2. `npx convex run migrations:runRecomputeAllGrades '{"dryRun":true}'`, then without `dryRun` (stale rows first, then rows for marks that were never computed).
+3. Follow-up PR: drop the live fallback in `getClassPositions`; narrow `expectedCaCount`, `standardLevelId`, `academicYear` to required.
+
+### Open question for the user
+- Mid-year level change with marks: this PR patches the row's `standardLevelId` (as specified), so the row moves to the new Class; the next recompute of that subject (new marks, or a CA/question change in the new Class) replaces it with the new level's grade — or deletes it when there are none yet, since the answers belong to the old level's papers. Alternative: derive the row's class from the assessments the marks were earned on, so grades stay with the papers (no patch needed, recompute stable). Decide before the migration runs on prod if any such student exists.
+
+### Merge with main (2026-11-16) — conflict resolution with #138 (current academic year) and #139 (Class per campus)
+- Unified: (1) one mark-entry class check — main's `assertInAssessmentClass` (`ConvexError` strings the UI shows) now returns the assessment and feeds the same-transaction recompute; `assertEnrollmentForAssessment` deleted. (2) one placement helper `moveGradesToClass` patches `campus` + `standardLevelId` on the enrollment's grade rows, called by `amend` and the import's amend (replaces `syncGradeLevel` and #139's inline patch). (3) `recomputeGrade` writes `campus` + `expectedCaCount`; analytics keep #139's `campus` arg / `by_class_subject_semester` and this PR's stored-`expectedCaCount` gate. Cross-campus recompute: CA papers are per level + year and shared by all campuses, so `gatherClassTargets` reads a new campus-free index `computedGrades.by_subject_semester_level_year` (bounded `.take`, warns at the bound) — every campus's rows plus rows with no `campus` yet; tested in `convex/computedGrades.test.ts`.
+
+---
+
+## Current Feature: Class is per campus — one roster, per-campus analytics (architecture review candidate 7, issue #120, 2026-11-10)
+**Status**: Review — PR open
+**Active Agent**: CODING AGENT
+
+User decision (2026-11-10): a **Class = campus + standard level + academic year**. CONTEXT.md said
+level + year (campus-blind); attendance already used campus; the school compares within a campus.
+Assessments (the CA papers) stay per level + year, shared across campuses.
+
+### Plan
+- Glossary: CONTEXT.md Class / Class Average / Class Position / Enrollment / Assessment updated; ADR-0007
+  records the change (ADR-0005's "Class = level + year" is superseded on that point only).
+- One roster: `getClassRoster(ctx, {campus, standardLevelId, academicYear})` in `convex/lib/placement.ts`
+  — open enrollments only, de-duplicated per student, no silent cap (throws `CLASS_TOO_LARGE` above
+  1000 rows). New `enrollments.by_class` index (campus, level, year) replaces `by_campus_standard`.
+  Callers: mark entry (`enrollments.getClassRoster`), attendance (`loadClassRoster`), promotion
+  candidates, class analytics. `getEnrollmentsByLevelYear` is deleted.
+- Analytics per campus: `computedGrades.campus` copied from the enrollment at compute time (widen,
+  optional); `by_class_subject_semester` index (campus, level, year, subject, semester) replaces
+  `by_level_year_subject_semester`; every ADR-0005 query takes `campus`. Backfill migration
+  `backfillComputedGradeCampus`; narrow (required) later with level/year/expectedCaCount.
+  ≥5-peer floor unchanged — smaller per-campus classes suppress more often (intended).
+- No-campus enrollments are in no Class: excluded from every roster and analytics read; listed in
+  `migrations:placementReport.noCampus` for the admin to fix via Edit Student.
+- Screens: mark entry and promotion choose a campus; class analytics chooses a campus; the student's
+  Academic History uses the enrollment's campus (no campus → comparisons marked unavailable).
+- Tests (vitest + convex-test): roster exact per campus and de-duplicated; a 250-student class is
+  not truncated; Class Average and Position computed per campus; no-campus rows excluded + reported.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: copying `campus` onto `computedGrades` is redundant — `activeRows` already loads every row's enrollment, so a live campus filter costs no extra reads → Taken as a note, not adopted: the user asked for the denormalised copy + index (one indexed read per Class, same shape as level/year). Recorded in ADR-0007 "Considered options".
+- Concern: the copy goes stale when `amend` changes campus (and, pre-existing, level) → Mitigation: `amend` now patches the open enrollment's `computedGrades` (`by_enrollment_semester` range on enrollmentId, ~20 rows) with the new campus + level in the same transaction; "immutable" comments corrected.
+- Concern: `includeInactive` must survive for `attendance.getClassReport` → Already kept (`includeClosed`).
+- Concern: 1000-row ceiling unreachable; a thrown `CLASS_TOO_LARGE` reaches the page's error boundary → Mitigation: ceiling 500; a throw is right (silent truncation is how #120 hid). Inline per-page error states deferred — the ceiling is only hit by corrupt data.
+- Concern: no-campus students vanish from mark entry, promotion and analytics with nothing telling the admin → Mitigation: runbook gate: `placementReport.noCampus` must be empty after deploy. A UI banner with a count is deferred (noted in "Deferred").
+- Concern: `bulkMarkEntry` never checks the enrollment belongs to the assessment's level/year (pre-existing) → Deferred, out of scope; campus pick is UI-scoped as the brief intends.
+- Concern: promoting campus A and forgetting campus B leaves half a level open with no signal → Accepted; the promotion screen's year/level picker still lists the other campus's class when selected. A "still open at other campuses" count is deferred.
+- Concern: any teacher can read any campus's roster/grades (no teacher→class assignment exists) → Pre-existing, accepted until Phase 5; `getGradeSpread` / needs-help carry no ≥5 floor by design (ADR-0005).
+- Concern: dropping two indexes in the same deploy as their readers → Verified: `by_campus_standard` read only by the replaced roster; `by_level_year_subject_semester` only by the three analytics paths; all change in this PR.
+- Concern: a mid-year campus move re-ranks both campuses with no history → Accepted: Class membership is the Current Placement (CONTEXT.md); report-card positions would be snapshotted at report-card time, not on grades.
+
+### Sub-tasks
+- [x] 1. CONTEXT.md (Class, Assessment, Enrollment, Class Average, Class Position, relationships, two flagged ambiguities) + ADR-0007 + ADR-0005 amendment note — 2026-11-10
+- [x] 2. Schema widen: `computedGrades.campus` (optional), `enrollments.by_class` replaces `by_campus_standard`, `computedGrades.by_class_subject_semester` replaces `by_level_year_subject_semester` — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 3. `lib/placement.getClassRoster` (de-dup, `CLASS_TOO_LARGE` above 500); `enrollments.loadClassRoster` / `getClassRoster` on it; `getEnrollmentsByLevelYear` deleted; `getPromotionCandidates` + all five ADR-0005 queries take `campus`; `recomputeGrade` copies campus; `placement.amend` moves the enrollment's grades; `backfillComputedGradeCampus`; `placementReport.noCampus` — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. Frontend: campus Select on MarkEntryGrid (header shows the campus), promotions and class analytics; AcademicHistoryTab passes the enrollment's campus, `no_campus` headline when it has none — APPROVED by Frontend Review Agent (2026-11-10)
+- [x] 5. Tests — `convex/classRoster.test.ts` (7): exact per campus + de-dup + closed excluded; 250-student class not truncated; no-campus excluded + reported; promotion candidates per campus; Class Average/Position per campus; 4-pupil campus class suppressed; amend moves grades; `no_campus` copy test — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 6. tsc (only the pre-existing attendance.test.ts errors) · `npm run lint` · `npm run build` · vitest 404/404 · `graphify update .` — 2026-11-10; PR closing #120 open
+
+### Review Notes
+**Backend Review (APPROVED 2026-11-10):** role check on every public function; `campus: v.id` validated everywhere; both new indexes declared, every range an equality prefix; roster `.take(501)` + throw; no stale readers of the dropped indexes or `getEnrollmentsByLevelYear`; no codegen needed. Non-blocking taken: comment on `amend`'s 100-row bound, `Id` types in `noCampus`. Deferred: a `CLASS_TOO_LARGE` test + toast mapping; a test pinning "older open row beats newer closed row".
+**Frontend Review (APPROVED 2026-11-10):** four mark-entry states each render the campus picker; labels + aria on every Select; stacks at 375px; `no_campus` renders through `OverallPositionHeadline`. Non-blocking taken: unsaved edits cleared on campus switch, alias removed, `no_campus` copy test. Deferred: shared `CampusSelect`, campus list loading/empty copy.
+
+### Deferred (not in this PR)
+- UI banner "N students have no campus and are not listed" on mark entry / promotions / analytics (DA); the runbook gate covers it.
+- `bulkMarkEntry` server check that the enrollment matches the assessment's level + year (pre-existing hole).
+- "Still open at other campuses" count on the promotion screen.
+- Narrow `computedGrades.campus` / `standardLevelId` / `academicYear` / `expectedCaCount` to required (after backfills on every deployment).
+
+### Deployment runbook
+1. Deploy. 2. `npx convex run migrations:runBackfillComputedGradeCampus '{"dryRun":true}'`, then without.
+3. `npx convex run migrations:placementReport` — fix every `noCampus` enrollment via Edit Student (campus).
+4. Narrow `computedGrades.campus` to required together with level / year / expectedCaCount.
+
+---
+
+## Current Feature: Current academic year — one server-side resolver, writes check placement (architecture review candidate 3, 2026-11-10)
+**Status**: Review — PR open
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 3. Builds on `convex/lib/placement.ts` (candidates 1+2, merged).
+Out of scope: dead-table cleanup (4, parallel branch), the placement narrow (`fm/sis-placement-narrow-v2`).
+
+### Plan
+- `convex/lib/academicYear.ts`: `resolveCurrentAcademicYear(years, today)` (pure) + `getCurrentAcademicYear(ctx, today = dhakaDate())`.
+  A year covers a Dhaka-local day label `d` iff `dhakaDate(startDate) <= d <= dhakaDate(endDate)` — inclusive both ends,
+  same conversion as `attendance.semesterPeriod` and the stored `attendance.date`.
+  - exactly one year covers today → `{ status: "current", year }`;
+  - none (gap between years, before the first, after the last, no years) → `{ status: "none" }`;
+  - two or more (overlap) → `{ status: "overlap", years }`. Never a fallback to "latest" or "first".
+  Callers leave the year unselected and the user picks; nothing guesses.
+- Public query `academicYears.getCurrent` (all roles). No index: the table is ~1 row per year, `.take(100)`.
+- `academicYears.create` rejects a range overlapping another year; `update` rejects a date change that ADDS an overlap
+  (existing seeded overlaps are not made un-editable).
+- Replace every client guess: `lib/attendanceView.currentYear` (deleted) in `use-attendance-class`, `AttendanceTab`,
+  `/admin/calendar`; `years[0]` on `/admin/assessments`. The attendance prototype pages are already deleted.
+- Import: `IMPORT_ACADEMIC_YEAR` constant deleted; `commitImportBatch` and `getExistingStudents` take `academicYear` (id)
+  explicitly; the import page picks it (defaults to the current year, locked once a file is dropped).
+- Writes: `saveRegister` rejects any student whose Current Placement is not this (campus, level, year).
+  Mark entry (`upsertAnswer`, `bulkMarkEntry`, `markStudentAbsent`) rejects an `enrollmentId` that is not the student's
+  or not in the assessment's level + year (open not required: late CA marks for a closed enrollment are legitimate).
+  Errors are `ConvexError` strings — no schema names, survive prod redaction.
+- `getDay` cross-year tolerance KEPT (frozen rows marked under other years must still show) with a `ponytail:` note.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: saveRegister's check is time-blind — a mover's/leaver's back-dated mark is rejected → Decision: keep it strict (Current Placement = this class+year). An as-of-date rule can't be built: `enrollmentDate`/`exitDate` record when the row was created (#115), and `amend` patches level/campus in place, so no history of the old class survives. The register roster (`loadClassRoster`) is current placements for EVERY date, so the strict check accepts exactly what the UI can send. Whole batch rejected (the register submits a full roster; a partial save would misreport the day); the error names the students and says to reload.
+- Concern: seeded years overlap every June–July → no default year for 2 months/yr → Mitigation: seed defs now end 31 May (day before the next 1 June start) for fresh deployments; existing deployments' year dates need a one-off data trim — DEFERRED (no UI edits start/end; flagged in the PR, due before June 2027). No localStorage fallback for the year: that reintroduces the stale-year bug. Overlap result is sorted by start date.
+- Concern: update guard loopholes → per-neighbour set diff (A → A+B is caught); widening an overlap with the SAME neighbour passes — accepted, documented; start < end already validated; inclusive bounds mean sharing one boundary day is an overlap (intended).
+- Concern: mark entry — enrollment not the student's; amended enrollments → check `enrollment.studentId === studentId` and level+year = the assessment's; open not required. An amended student leaves the old level's grid (roster = open enrollments of level+year), so the rejection matches what the UI can send. Enrollment lookups deduped.
+- Concern: `Date.now()` in a query is frozen per run; an open subscription doesn't re-run at midnight → accepted, `ponytail:` note on `getCurrent`.
+- Concern: import preview built for one year, committed for another → the year lives in the hook's loaded phase (one value for preview + every batch); drop is blocked until a year is chosen; commit validates the year exists.
+- Concern: no-year empty states → calendar shows "pick a year" instead of an endless skeleton; attendance tab/screens already render a "choose" state with no selection.
+- Concern: Dhaka-local boundary test → named test at 18:00–23:59 UTC.
+
+### Sub-tasks
+- [x] 1. Resolver lib + `getCurrent` query + create/update overlap guards — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 2. `saveRegister` + mark-entry placement checks — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 3. Import takes the year explicitly — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. Frontend: replace client guesses; import year picker; ConvexError toasts; promotions suggests a 31 May end — APPROVED by Frontend Review Agent (2026-11-10)
+- [x] 5. Tests: resolver (inside / gap / boundary / Dhaka-local / overlap), guards, saveRegister rejection, mark entry; existing attendance/import/hook tests updated — APPROVED by Backend + Frontend Review Agents (2026-11-10)
+- [x] 6. tsc (app + convex) · `npm run lint` · `npm run build` · vitest 408/408 · `graphify update .` — 2026-11-10
+
+### Review Notes
+**Backend Review (round 1, REJECTED):** the promotions page still suggested a 31 July end, so the next year created from it would trip the new create guard; doc comment called the June–July overlap the seeded norm. **Round 2 APPROVED 2026-11-10.** Non-blocking, pre-existing: `create` duplicate-name check is a plain (prod-redacted) Error and doesn't trim; mark entry doesn't scope teachers to their classes; `getExistingStudents` doesn't check the year exists (the commit does).
+**Frontend Review (APPROVED 2026-11-10):** suggestions taken — `serverErrorMessage` falls back for non-string ConvexError data; assessments page shows "choose a year" instead of an endless skeleton. Pre-existing, left: `AcademicYearSelect`'s fixed aria-label overrides a visible `<label>`.
+
+### Deferred
+- Trim existing deployments' academic-year dates (seeded 1 June → 31 July; neighbours overlap June–July → no current year then). No UI edits start/end; needs a one-off data fix before June 2027. Until then, creating 2027-2028 with a 1 June start is rejected as overlapping 2026-2027.
+- `getDay` cross-year tolerance kept (`ponytail:` note) — removable once no attendance row's year differs from its date's academic year.
+
+---
+
+## Current Feature: Drop the dead tables (architecture review candidate 4, 2026-11-10)
+**Status**: Review — stage 1 PR open; stage 2 stacked, merges only after the migrations ran on every deployment (runbook under sub-task 2)
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 4 only. Out of scope: `studentDiscounts`
+(write-only, but belongs to the fee ledger, candidate 5), the current academic year (candidate 3,
+parallel branch), and the students/enrollments placement fields (narrow pending on
+`fm/sis-placement-narrow-v2`).
+
+### Usage re-verified (2026-11-10, dev `hushed-bass-123`)
+| Candidate | Runtime readers/writers | Dev rows |
+|---|---|---|
+| `staff` | none (CLAUDE.md "Schema improvements" #4 only) | 0 |
+| `gradeMapping` | seed insert + seed test only; letter grades come from `lib/gradeComputation` | 6 (seeded) |
+| `grades` | `deleteStudent` cascade only | 0 |
+| `advancePayments` | `deleteStudent` cascade only | 0 |
+| `discountRules.discription` | none (a dead optional field on `FeeDetailDialog`'s local type) | 4 of 4 rules, all with empty `description` |
+| `convex/backfillEnrollments.ts` | already deleted by the placement PR (#131); not in `api.d.ts` or `scripts/` | n/a |
+
+Prod could not be read from this session; `deadTables:report` is the gate there.
+
+### Plan (revised after Devil's Advocate)
+- Stage 1 (PR against main): `convex/deadTables.ts` = `report` query + two migrations chained in
+  `run`: delete the seeded `gradeMapping` rows (throws on any row that is not an exact seed band),
+  and move `discountRules.discription` into an empty `description`. `staff` / `grades` /
+  `advancePayments` get NO delete migration: they are empty on dev, and a non-zero count anywhere is
+  real data, so the rollout stops there. Stop the last writer: the `gradeMapping` seed and its test
+  expectation. CLAUDE.md "Schema improvements" #4 / #5 rewritten.
+- Stage 2 (stacked PR): schema drops the 4 tables + `discountRules.discription`; the `deleteStudent`
+  cascade lines for `grades` / `advancePayments` go here (the only atomic point with the table drop);
+  `deadTables.ts` + test deleted; `FeeDetailDialog` type field dropped. Merges only after the
+  migrations ran everywhere and a fresh `report` is all zeros.
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern (blocking): `run` deleted every row unconditionally, so real prod data would be destroyed and the report was only advisory → Mitigation: no delete migration for `staff` / `grades` / `advancePayments`; the `gradeMapping` delete throws on any row that isn't an exact seed band (6 rows fit one batch, so it's all-or-nothing).
+- Concern (blocking): removing the `deleteStudent` cascade in stage 1 orphans rows if a student is deleted before the data question is answered → Mitigation: cascade removal moved to stage 2.
+- Concern (blocking): an old-code reseed or preview deployment can recreate `gradeMapping` rows after the migration → Mitigation: runbook says re-run `report` immediately before merging stage 2. A dropped table does NOT fail the schema push (Convex only validates listed tables; the rows are silently orphaned), so that fresh `report` is the only gate for the four tables; only `discountRules.discription` fails the push.
+- Concern: the migrations component reports "done" even when it skipped a conflicting discount rule → Mitigation: `report` (not migration status) is the gate; one shared `discriptionAction` helper drives both the report and the migration, unit-tested on every case.
+- Concern: report counts must be bounded → Mitigation: `take(1000)` per table; any non-zero count stops the rollout anyway.
+- Concern: stage 2 and the placement narrow both push schema → Mitigation: noted in the stage 2 PR; land one, then rebase the other.
+- Concern: CLAUDE.md #4/#5 deleted silently would let agents re-add them from v1 → Mitigation: rewritten as "removed — don't reintroduce".
+
+### Sub-tasks
+- [x] 1. Stage 1 (PR against main, `fm/sis-drop-dead-tables`): `convex/deadTables.ts` (`report`, `deleteSeedGradeMapping`, `moveDiscription`, `run`) + test, `gradeMapping` seed and its test expectation removed, CLAUDE.md #4/#5 — APPROVED by Backend Review Agent (2026-11-10, after the runbook fixes below)
+- [ ] 2. Stage 2 — schema narrow + runbook line — PENDING
+- [x] 3. Stage 1: tsc · `npm run lint` · `npm run build` · vitest 407/407 · `graphify update .` — 2026-11-10
+
+### Review Notes
+**Backend Review (round 1, REJECTED — rollout text only, code endorsed):** (1) a finished `run` never runs again; the conflict-fix / reseed path needs `deadTables:run '{"reset":true}'`; (2) "Convex rejects the push while rows remain" is false for tables — a dropped table deploys and silently orphans its rows; only the `discription` field fails the push, so the fresh pre-merge `report` is the only gate for the four tables. Non-blocking: pin that a `gradeMapping` throw stops the series before `moveDiscription` (test added); regenerate `api.d.ts` with real codegen on the next `npx convex dev` and expect no diff.
+**Backend Review (round 2, APPROVED 2026-11-10):** reset command and table-drop-is-no-backstop wording fixed in `deadTables.ts`, the Devil's Advocate line and the stage 2 runbook; series-stop assertion added.
+
+---
+
+## Current Feature: Transaction log — read paths that silently drop rows (architecture review candidate 8, 2026-11-10)
+**Status**: Review — PR open
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-10, candidate 8 only. Scope: read paths + indexes. No write path or
+schema shape change (`fm/sis-fee-ledger` owns fee/session/receipt writes in parallel).
+
+### Plan
+- `getTransactionLog` / `getTransactionLogExport` took 500 sessions per year BEFORE filtering in JS, so
+  every total undercounts once a year passes 500 sessions.
+- Fix: push year + date range into `by_academic_year_date`, filter the rest (campus, mode, level,
+  students, voided) in JS over that range. Totals come from a separate streaming query over the whole
+  range (exact, never capped). The row list is paginated (`paginationOpts`, "Load more"). Export keeps a
+  LOUD cap (ConvexError past 2000 sessions, message shown in the toast) instead of a silent one.
+- `searchStudents`: `students.search_by_name` search index instead of `.take(2000)` + JS filter.
+- `dashboard.getSummaryStats`: fee figures via `by_status_and_due_date` (unpaid only); student count
+  stays a bounded scan with a `ponytail:` note (ceiling + upgrade path).
+
+### Devil's Advocate Findings (2026-11-10)
+- Concern: the totals query reads the whole filtered range on a live subscription → Mitigation: that is the only exact answer without a digest; range is year + date, bounded by the Convex per-query read limit which throws loudly rather than undercounting. `ponytail:` note names `@convex-dev/aggregate` as the upgrade path.
+- Concern: JS filtering after `.paginate()` can return short/empty pages while `isDone` is false → Mitigation: "Load more" keeps the cursor; the empty state only renders when the query is exhausted.
+- Concern: search index is word-prefix, not substring — "ohn" no longer matches "John" → Accepted; prefix-of-any-word is the expected behaviour of a name picker.
+- Concern: `dateTo` semantics (end of day) must survive the move into the index range → Mitigation: same `+ 86400000 - 1` math inside the range builder; covered by the test.
+- Concern: export of a whole year could exceed function limits → Mitigation: explicit 2000-session cap that throws a ConvexError the UI shows; never a silent truncation.
+
+### Sub-tasks
+- [x] 1. Backend — shared range/filter helpers, `getTransactionLogTotals`, paginated `getTransactionLog`, loud-capped export, `searchStudents` on a search index, dashboard unpaid-fee index — APPROVED by Backend Review Agent (2026-11-10, round 2)
+- [x] 2. Frontend — `usePaginatedQuery` + Load more on /admin/transactions, totals from the new query, export error message — reviewed in the backend round (page wiring only; no new component)
+- [x] 3. Test — `convex/transactionLog.test.ts` (6): 700 sessions in a year, filtered totals / row count / export exact, export cap throws, search index — APPROVED by Backend Review Agent (2026-11-10)
+- [x] 4. `npm run build` · `npm run lint` · vitest 402/402 · `graphify update .` — 2026-11-10
+
+### Review Notes
+**Backend Review (round 1, REJECTED):** `allRows` in the test had an implicit `any` under `tsc -p convex` (TS7022), which would break `convex dev/deploy`. Runtime code passed every checklist item: dateTo end-of-day math identical, includeVoided default, requireRole first, indexes present, no unbounded collect, no N+1, error message leaks nothing; full-range streaming for totals judged acceptable (loud limit, not a silent drop).
+**Round 2 (APPROVED 2026-11-10):** `res`/`rows` typed via `FunctionReturnType`; `tsc -p convex` clean. Non-blocking, pre-existing: export `.take(50)` line items per session; search is word-prefix (not substring) now; short pages before `isDone` are handled by the page (empty state only when exhausted).
+
+---
+
 ## Current Feature: Placement module — one copy of "which class", one "has left" (architecture review candidates 1 + 2, 2026-11-10)
 **Status**: Review — PR open; narrow PR stacked, merges after the migrations run
 **Active Agent**: CODING AGENT
@@ -183,6 +483,7 @@ Server side (schema, `convex/attendance.ts`, `convex/closures.ts`, roster querie
 - 2026-11-10 Fee ledger: voided transactions are kept as ledger history stamped `voidedAt` (never deleted); readers check the field, no session join.
 - 2026-11-10 Fee ledger: re-issue corrects payment method / date / remarks only, for the same fees, filed under the voided session's year and class. Line-item or student corrections = void, then collect from the right student (deferred). A leaver's receipt can be re-issued; a plain collect for a leaver stays refused.
 - 2026-11-10 Fee ledger: a student with any receipt, session or transaction cannot be hard-deleted — "withdrawn" is the archive. Unpaid-only students still cascade (now including attendance).
+- 2026-11-10 Class = campus + level + year (ADR-0007); assessments stay per level + year; ≥5 floor kept; `campus` denormalised onto `computedGrades` as the user asked (the DA's live-filter alternative is recorded in the ADR); `amend` moves grades with the enrollment.
 - 2026-11-10 Placement: amend changes level + campus only; a year change is promotion/hold-back (fees are keyed by year).
 - 2026-11-10 Placement: re-admission opens a new enrollment even in the year the student left (closed + open rows in one year); only an OPEN enrollment blocks re-admit/import, any target-year enrollment blocks promotion.
 - 2026-11-10 Placement: rollout split into deploy 1 (widen + code + migrations) and a stacked narrow PR, because the narrowed schema can't be pushed until the migrations have run on each deployment.

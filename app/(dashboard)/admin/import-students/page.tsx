@@ -1,8 +1,10 @@
 "use client";
 
+import { useQuery } from "convex/react";
 import { AlertTriangle, Download, FileSpreadsheet, Upload } from "lucide-react";
 import { useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { AcademicYearSelect } from "@/components/shared/AcademicYearSelect";
 import { RoleGate } from "@/components/shared/RoleGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import {
   countRows,
   type ImportPhase,
@@ -44,19 +48,59 @@ export default function ImportStudentsPage() {
 
 function ImportSurface() {
   const { phase, drop, commit, reset } = useStudentImport();
+  const years = useQuery(api.academicYears.list);
+  const current = useQuery(api.academicYears.getCurrent);
+  const [picked, setPicked] = useState<Id<"academicYears">>();
+  // The admin's pick, else the server's current year — never a guess.
+  const yearId =
+    picked ?? (current?.status === "current" ? current.year._id : undefined);
 
   if (
     phase.kind === "preview" ||
     phase.kind === "committing" ||
     phase.kind === "done"
   ) {
-    return <Preview phase={phase} onCommit={commit} onReset={reset} />;
+    const yearName = years?.find((y) => y._id === phase.academicYear)?.name;
+    return (
+      <Preview
+        phase={phase}
+        yearName={yearName}
+        onCommit={commit}
+        onReset={reset}
+      />
+    );
   }
 
   return (
     <div className="space-y-6">
       <Header />
-      {phase.kind === "idle" && <DropZone onFile={drop} />}
+      {phase.kind === "idle" && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="import-year" className="text-sm text-gray-700">
+              Place every student in academic year
+            </label>
+            <AcademicYearSelect
+              id="import-year"
+              years={years}
+              value={yearId}
+              onChange={setPicked}
+              className="w-36"
+            />
+          </div>
+          {yearId ? (
+            <DropZone onFile={(file) => drop(file, yearId)} />
+          ) : (
+            <p className="rounded-lg border border-dashed bg-white p-8 text-center text-sm text-gray-500">
+              {current === undefined || years === undefined
+                ? "Loading academic years…"
+                : years.length === 0
+                  ? "No academic year exists yet. Create one on the Promotions page first."
+                  : "Today is not inside exactly one academic year, so none is preselected. Choose the year to import into."}
+            </p>
+          )}
+        </>
+      )}
       {phase.kind === "parsing" && (
         <div className="rounded-lg border bg-white p-8 sm:p-12">
           <ProgressBar fraction={phase.fraction} label={`${phase.label}…`} />
@@ -177,10 +221,12 @@ type LoadedPhase = Extract<
 
 function Preview({
   phase,
+  yearName,
   onCommit,
   onReset,
 }: {
   phase: LoadedPhase;
+  yearName: string | undefined;
   onCommit: () => void;
   onReset: () => void;
 }) {
@@ -200,6 +246,7 @@ function Preview({
         <h1 className="text-xl font-semibold text-gray-900">{fileName}</h1>
         <span className="text-sm text-gray-500">
           {counts.all} rows · {preview.tabs.length - rejectedTabs.length} sheets
+          {yearName && ` · into ${yearName}`}
         </span>
         <div className="ml-auto flex gap-2">
           <Button

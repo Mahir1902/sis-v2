@@ -73,7 +73,7 @@ _Avoid_: "Payer", "Bill recipient", "Primary parent" — these have collided in 
 
 # Grading & Academic Records
 
-This glossary covers how the school measures and reports academic performance. It is a separate domain from Fee Billing above. Grade-computation decisions are recorded in [ADR-0004](docs/adr/0004-grade-computation-model.md).
+This glossary covers how the school measures and reports academic performance. It is a separate domain from Fee Billing above. Grade-computation decisions are recorded in [ADR-0004](docs/adr/0004-grade-computation-model.md); the comparison group in [ADR-0005](docs/adr/0005-difficulty-adjusted-academic-analytics.md) and [ADR-0007](docs/adr/0007-class-is-per-campus.md).
 
 ## Language
 
@@ -81,7 +81,7 @@ This glossary covers how the school measures and reports academic performance. I
 One of the (up to) three graded assessments a subject runs in a semester. A subject's term grade is built from its CAs and nothing else. CAs are numbered 1/2/3; the number is positional, not a weight.
 
 **Assessment**:
-The `assessments` row for one CA of one subject, at one standard level, in one academic year and semester. Uniquely identified by that combination — there is at most one CA-1 Math for Grade 4 in Sem 1 of a given year. Carries a display-only `totalMarks` target; the real total a student is graded against is the sum of its Questions (see _Present CA_).
+The `assessments` row for one CA of one subject, at one standard level, in one academic year and semester. Uniquely identified by that combination — there is at most one CA-1 Math for Grade 4 in Sem 1 of a given year. An Assessment is **not per campus**: the same paper is sat by every campus's Class at that level, so one Assessment is marked for several Classes (one campus at a time). Carries a display-only `totalMarks` target; the real total a student is graded against is the sum of its Questions (see _Present CA_).
 
 **Question**:
 An `assessmentQuestions` row — one item on a CA paper, worth `marksAllocated`. Marks are entered and stored **per question per student**, never as a single CA total. This granularity is deliberate: it powers per-question diagnostics ("which questions did the class miss?") and is the intended basis for future concept-level analytics (`conceptTag`, `learningObjective` — captured but not yet surfaced).
@@ -101,11 +101,11 @@ A `computedGrades` row: the renormalized weighted average of a student's present
 _Avoid_: "GPA" — the school works in percentages and letter grades, not grade points. Also avoid reading a missing Computed Grade as failure — missing means unmeasured.
 
 **Class** (the comparison group; also loosely "cohort"):
-All **active enrollments sharing one standard level + academic year**. This is the unit assessments are defined for, marks are entered for, and grades are compared within. `section` is a cosmetic sub-label and does **not** subdivide a Class for grading or analytics — the whole level+year is one Class.
-_Avoid_: "class" meaning a section, a room, or one teacher's group. For grading, Class = level + year.
+All **open Enrollments sharing one campus + standard level + academic year**. This is the unit a register is taken for, marks are entered for, students are promoted from, and grades are compared within. A Class exists because students are enrolled in it — there is no classes table; the roster is read from `enrollments` through one helper (`getClassRoster` in the Placement module), which is the only definition of "who is in the class". Campus is part of the identity because the school compares a student with the children they sit beside, and attendance has always been taken per campus. `section` is a cosmetic sub-label and does **not** subdivide a Class. An Enrollment with **no campus** (legacy import rows) is in **no Class**: it appears on no roster and in no class statistic until an admin sets its campus (Edit Student); the placement report lists them.
+_Avoid_: "class" meaning a section, a room, one teacher's group, or a level across campuses ("all of Grade 4") — the last is a **level**, not a Class. Before 2026-11-10 the glossary defined Class as level + year; that reading is retired (ADR-0007).
 
 **Enrollment**:
-One student's placement in one standard level, campus and academic year. An Enrollment is **open** until the student leaves it (by promotion, hold-back, graduation, withdrawal, transfer or expulsion), at which point it is **closed** with an exit date and reason. A student has **at most one open Enrollment** at any time — never two classes at once. A mid-year change of campus, section or level (including correcting a mistaken placement) **amends the open Enrollment**; it does not close it and open a new one, so the year's grades, attendance and report cards stay on one Enrollment. New Enrollments are opened only by admission, promotion/hold-back, and re-admission.
+One student's placement in one standard level, campus and academic year — i.e. membership of one Class while open. An Enrollment is **open** until the student leaves it (by promotion, hold-back, graduation, withdrawal, transfer or expulsion), at which point it is **closed** with an exit date and reason. A student has **at most one open Enrollment** at any time — never two classes at once. A mid-year change of campus, section or level (including correcting a mistaken placement) **amends the open Enrollment**; it does not close it and open a new one, so the year's grades, attendance and report cards stay on one Enrollment. New Enrollments are opened only by admission, promotion/hold-back, and re-admission.
 _Avoid_: treating a suspension as leaving — a suspended student keeps their open Enrollment.
 
 **Current Placement**:
@@ -113,11 +113,11 @@ The student's **open Enrollment**, or **none**. A student who has left the schoo
 _Avoid_: answering "current class" with a leaver's last class.
 
 **Class Average**:
-For one subject + semester, the mean of the **renormalized weighted averages** of every student in the Class who has a Computed Grade for it. It is the **difficulty-adjusted baseline** a student is measured against — comparing a student to the classmates who sat the same papers cancels difficulty out, which raw cross-level scores cannot. Shown only when **at least 5 students** in the Class have a grade for that subject+semester; below that the sample is too small to be a meaningful average and the comparison is suppressed ("not enough class data yet"). The per-CA baseline used in the within-term view is the mean of *present* students' percentages for that specific CA.
+For one subject + semester, the mean of the **renormalized weighted averages** of every student in the Class (one campus) who has a Computed Grade for it. Pupils at another campus sat the same paper but are not in the average. It is the **difficulty-adjusted baseline** a student is measured against — comparing a student to the classmates who sat the same papers cancels difficulty out, which raw cross-level scores cannot. Shown only when **at least 5 students** in the Class have a grade for that subject+semester; below that the sample is too small to be a meaningful average and the comparison is suppressed ("not enough class data yet"). Per-campus Classes are smaller than a whole level, so suppression is more common — that is the intended trade (ADR-0007). The per-CA baseline used in the within-term view is the mean of *present* students' percentages for that specific CA.
 _Avoid_: presenting a 1–4 student "average" as a class baseline — it identifies a specific peer rather than a cohort.
 
 **Class Position**:
-A student's **rank within the Class**, by descending renormalized weighted average (1st = highest). Two scopes: **per-subject** (rank within one subject+semester, shown as detail in each subject row) and **overall** (rank by the across-subjects term average — the traditional report-card "stood 4th in class," the headline figure). Ties share a position (standard competition ranking: two tied for 5th are both 5th, the next is 7th). A position is shown **only when the grade is final** (not Provisional) **and at least 5 classmates** also have a final grade in scope to rank against — so it does not thrash as marks are keyed in mid-term.
+A student's **rank within the Class** (their own campus), by descending renormalized weighted average (1st = highest). Two scopes: **per-subject** (rank within one subject+semester, shown as detail in each subject row) and **overall** (rank by the across-subjects term average — the traditional report-card "stood 4th in class," the headline figure). Ties share a position (standard competition ranking: two tied for 5th are both 5th, the next is 7th). A position is shown **only when the grade is final** (not Provisional) **and at least 5 classmates** also have a final grade in scope to rank against — so it does not thrash as marks are keyed in mid-term.
 _Avoid_: ranking on provisional/partial grades, or presenting a position computed against fewer than 5 ranked peers.
 
 **Provisional Grade**:
@@ -130,7 +130,8 @@ _Avoid_: conflating Report Card with Computed Grade — the report card is an op
 
 ## Relationships
 
-- A **Computed Grade** belongs to one student, one enrollment, one subject, one semester, and is derived only from that subject's **Present CAs** for that semester.
+- A **Computed Grade** belongs to one student, one enrollment, one subject, one semester, and is derived only from that subject's **Present CAs** for that semester. It carries a copy of its Enrollment's Class (campus, level, year) so a whole Class's grades are one indexed read; a Class change mid-year (amend) reaches the grade on the next recompute.
+- A **Class** is campus + level + year. An **Assessment** is level + year, so one Assessment is sat by one Class per campus; Class Average and Class Position compare only within one of them.
 - An **Assessment** has zero or more **Questions**; a student has zero or more per-question answers per assessment. The CA total a student is graded against is the sum of the assessment's question marks, not the assessment's `totalMarks` field.
 - A **Report Card** references an enrollment + semester and is independent of Computed Grades — deleting or recomputing grades does not touch it, and vice versa.
 - **Cross-level comparison is not difficulty-adjusted.** A subject's score plotted across grade levels (e.g. Grade 2 Math → Grade 4 Math) is a raw-score history, not a like-for-like improvement signal, because difficulty changes between levels. Genuine improvement is measured against a same-difficulty baseline (peers in the same class, or CA-1→2→3 within one term).
@@ -140,4 +141,6 @@ _Avoid_: conflating Report Card with Computed Grade — the report card is an op
 - **"Trend"** had meant two different things in code (semester-over-semester within one enrollment, and first-vs-last across the whole history) under one label. **Resolved (2026-06-26):** the cross-level first-vs-last "Improving/Declining" verdict is removed — it compared different-difficulty levels and judged the student on an apples-to-oranges basis. The cross-year line may survive only as **raw history**, explicitly labeled "different years, different difficulty" and carrying *no* improvement judgment. The word "improvement"/"trend" is reserved for **same-difficulty** comparisons only: progression across the three CAs within one term, and movement relative to the class average on the same papers.
 - **`assessment.totalMarks`** — historically used as the grading denominator; per ADR-0004 it is display-only and the question-mark sum is authoritative. Old code dividing by `totalMarks` is the deprecated path.
 - **`conceptTag` / `learningObjective`** — captured on Questions but not yet readable or writable through any UI. Reserved for planned concept-level analytics, not dead fields.
+- **"Class" = level + year (ADR-0005 wording, code until 2026-11-10).** Resolved: a Class is campus + level + year (ADR-0007). Code that read a roster or a class statistic by level + year alone (`getEnrollmentsByLevelYear`, the `by_level_year_subject_semester` index) mixed the campuses (#120) and is gone. "Grade 4 across the school" is a *level*, which no screen aggregates today.
+- **Enrollment without a campus.** Not a Class member. Excluded from rosters, registers, promotion lists and class statistics; listed by `migrations:placementReport` (`noCampus`) for the admin to fix.
 

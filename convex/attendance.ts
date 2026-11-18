@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   dhakaDate,
   isDateLabel,
@@ -15,6 +15,7 @@ import {
   requireAttendanceWrite,
 } from "./lib/attendancePermissions";
 import { requireRole } from "./lib/permissions";
+import { getCurrentPlacement } from "./lib/placement";
 
 /**
  * Daily student attendance (spec: issue #111). One row per student per
@@ -260,6 +261,12 @@ export const getRegister = query({
  * existing row re-freezes to the class that just marked them. One audit row
  * per record whose status actually changed, carrying old → new. `note` is
  * never touched here.
+ *
+ * Every student must be placed in this class now (Current Placement = this
+ * campus + level + year), whatever the date — the same set the register
+ * roster lists. Otherwise the whole batch is rejected, naming the students.
+ * Not "as of the date": enrollment dates are row-creation stamps and an
+ * amend rewrites the class in place, so no history exists to check against.
  */
 export const saveRegister = mutation({
   args: {
@@ -277,6 +284,30 @@ export const saveRegister = mutation({
     const marks = [
       ...new Map(args.marks.map((m) => [m.studentId, m.status])),
     ].map(([studentId, status]) => ({ studentId, status }));
+
+    const placements = await Promise.all(
+      marks.map((m) => getCurrentPlacement(ctx, m.studentId)),
+    );
+    const misplaced = marks.filter((_, i) => {
+      const p = placements[i];
+      return (
+        !p ||
+        p.campus !== args.campus ||
+        p.standardLevelId !== args.standardLevelId ||
+        p.academicYear !== args.academicYear
+      );
+    });
+    if (misplaced.length > 0) {
+      const names = await Promise.all(
+        misplaced.map(async (m) => {
+          const s = await ctx.db.get(m.studentId);
+          return s?.studentFullName ?? "Unknown student";
+        }),
+      );
+      throw new ConvexError(
+        `Not in this class for this academic year: ${names.join(", ")}. Reload the register and save again.`,
+      );
+    }
 
     const existing = await Promise.all(
       marks.map((m) =>
@@ -360,6 +391,11 @@ export const saveRegister = mutation({
  * marks on the date but no enrollment in the selected year is still listed
  * (its roster is the rows themselves); otherwise its register, and every
  * update to it, is invisible here.
+ *
+ * ponytail: kept although saveRegister now checks placement and both screens
+ * default to the server's current year — rows already saved under another
+ * year are frozen snapshots and must still show. Drop the cross-year match
+ * only once no attendance row's year differs from its date's academic year.
  */
 export const getDay = query({
   args: { date: v.string(), academicYear: v.id("academicYears") },
