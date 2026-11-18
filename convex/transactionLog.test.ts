@@ -115,7 +115,6 @@ beforeEach(async () => {
       balance: 1,
       status: "unpaid",
       appliedDiscounts: [],
-      paymentDetails: [],
     });
 
     for (const s of seeded) {
