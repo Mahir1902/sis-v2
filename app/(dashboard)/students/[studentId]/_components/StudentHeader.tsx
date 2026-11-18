@@ -243,8 +243,15 @@ export function StudentHeader({
                       await deleteStudent({ studentId });
                       toast.success("Student deleted successfully");
                       router.push("/students");
-                    } catch {
-                      toast.error("Failed to delete student");
+                    } catch (err: unknown) {
+                      // The server refuses students with payment records;
+                      // surface its reason instead of a generic failure.
+                      toast.error(
+                        err instanceof Error &&
+                          err.message.includes("payment records")
+                          ? "This student has payment records and cannot be deleted. Mark them as withdrawn instead."
+                          : "Failed to delete student",
+                      );
                       setIsDeleting(false);
                     }
                   }}

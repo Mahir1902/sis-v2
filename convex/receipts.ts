@@ -6,6 +6,10 @@ import {
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import {
+  voidReceipt as ledgerVoidReceipt,
+  voidAndReissue,
+} from "./lib/feeLedger";
 import { requireRole } from "./lib/permissions";
 
 /**
@@ -27,6 +31,9 @@ const LIST_RECEIPTS_FETCH_LIMIT = 500;
  * are NO live joins to `students`, `feeStructure`, or any other table.
  * Future edits to those source rows must not change what a parent sees on
  * a reprint, which is precisely why the snapshot fields exist.
+ *
+ * The only joins are to the receipts in the correction chain (ADR-0003), so
+ * the PDF can print "superseded by" / "re-issued in place of" numbers.
  */
 export const getReceipt = query({
   args: { receiptId: v.id("receipts") },
@@ -36,7 +43,15 @@ export const getReceipt = query({
     if (!receipt) {
       throw new Error("Receipt not found");
     }
-    return receipt;
+    const [supersedes, supersededBy] = await Promise.all([
+      receipt.supersedes ? ctx.db.get(receipt.supersedes) : null,
+      receipt.supersededBy ? ctx.db.get(receipt.supersededBy) : null,
+    ]);
+    return {
+      ...receipt,
+      supersedesNumber: supersedes?.receiptNumber,
+      supersededByNumber: supersededBy?.receiptNumber,
+    };
   },
 });
 
@@ -153,8 +168,8 @@ function toListRow(receipt: Doc<"receipts">): ReceiptListRow {
  * PDF re-renders silently with the new values; the cosmetic-edit history
  * lives in the audit log only.
  *
- * Rejects voided receipts — those use `voidAndReissueReceipt` (separate
- * slice) to introduce a corrected row.
+ * Rejects voided receipts — financial corrections use
+ * `voidAndReissueReceipt` below.
  */
 export const editReceipt = mutation({
   args: {
@@ -218,5 +233,49 @@ export const editReceipt = mutation({
     });
 
     return null;
+  },
+});
+
+/**
+ * Whole-receipt void (ADR-0003): "this payment never happened". Receipt and
+ * session → `voided`, every covered fee → `unpaid`. No replacement document.
+ * Admin only; the reason goes into the audit log.
+ */
+export const voidReceipt = mutation({
+  args: { receiptId: v.id("receipts"), reason: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+    const { restoredFeeIds, skippedFeeIds } = await ledgerVoidReceipt(
+      ctx,
+      user,
+      args,
+    );
+    return { restoredFeeIds, skippedFeeIds };
+  },
+});
+
+/**
+ * Atomic financial correction (ADR-0003): voids the receipt and issues a new
+ * one for the same fees with the corrected payment method / date / remarks.
+ * The two receipts are cross-linked via `supersedes` / `supersededBy`.
+ */
+export const voidAndReissueReceipt = mutation({
+  args: {
+    receiptId: v.id("receipts"),
+    reason: v.string(),
+    paymentMode: v.union(
+      v.literal("Cash"),
+      v.literal("Bank Transfer"),
+      v.literal("Cheque"),
+      v.literal("UPI"),
+      v.literal("Online"),
+    ),
+    paymentDate: v.optional(v.float64()),
+    remarks: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin"]);
+    const result = await voidAndReissue(ctx, user, args);
+    return { receiptId: result.receiptId, receiptNumber: result.receiptNumber };
   },
 });

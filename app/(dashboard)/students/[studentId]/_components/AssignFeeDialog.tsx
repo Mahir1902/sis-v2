@@ -115,10 +115,6 @@ export function AssignFeeDialog({
         studentId,
         feeStructureId: selectedStructure._id as Id<"feeStructure">,
         academicYear: academicYearId,
-        originalAmount: selectedStructure.baseAmount,
-        paidAmount: 0,
-        balance: selectedStructure.baseAmount,
-        status: "unpaid",
         billingPeriod: isMonthly ? selectedBillingPeriod : undefined,
       });
       toast.success("Fee assigned successfully");

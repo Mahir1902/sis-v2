@@ -136,10 +136,6 @@ export function useStudentAdmission(onSuccess: () => void) {
             studentId,
             feeStructureId: structure._id,
             academicYear: values.academicYear as Id<"academicYears">,
-            originalAmount: structure.baseAmount,
-            paidAmount: 0,
-            balance: structure.baseAmount,
-            status: "unpaid",
           });
         }
       }

@@ -26,7 +26,9 @@ export const getSummaryStats = query({
       .query("studentFees")
       .withIndex("by_status_and_due_date", (q) => q.eq("status", "unpaid"))) {
       totalOutstanding += f.balance;
-      if (f.dueDate < now) overdueCount += 1;
+      // Overdue = unpaid with money still owed (a fully discounted fee owes
+      // nothing until its ৳0 receipt is issued, so it is not overdue).
+      if (f.balance > 0 && f.dueDate < now) overdueCount += 1;
     }
 
     const assessments = await ctx.db

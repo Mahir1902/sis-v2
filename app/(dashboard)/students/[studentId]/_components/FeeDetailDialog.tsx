@@ -49,13 +49,6 @@ interface EnrichedDiscount extends AppliedDiscount {
   ruleValue?: number;
 }
 
-interface PaymentDetail {
-  paymentId: Id<"feeTransactions">;
-  date: string;
-  amount: number;
-  mode: string;
-}
-
 interface FeeRecord {
   _id: Id<"studentFees">;
   originalAmount: number;
@@ -65,7 +58,6 @@ interface FeeRecord {
   dueDate: number;
   academicYear: Id<"academicYears">;
   appliedDiscounts: AppliedDiscount[];
-  paymentDetails: PaymentDetail[];
   feeStructureDoc?: { feeType?: string; name?: string } | null;
   academicYearDoc?: { name?: string } | null;
   enrichedDiscounts: EnrichedDiscount[];
@@ -292,17 +284,30 @@ function PaymentHistorySection({ feeId }: { feeId: Id<"studentFees"> }) {
                 <TableHead className="text-xs text-right">Amount</TableHead>
                 <TableHead className="text-xs">Mode</TableHead>
                 <TableHead className="text-xs">Reference</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {[...transactions]
                 .sort((a, b) => b.transactionDate - a.transactionDate)
                 .map((txn) => (
-                  <TableRow key={txn._id}>
+                  <TableRow
+                    key={txn._id}
+                    className={cn(
+                      txn.voidedAt !== undefined && "text-gray-500",
+                    )}
+                  >
                     <TableCell className="text-sm">
                       {format(new Date(txn.transactionDate), "dd/MM/yyyy")}
                     </TableCell>
-                    <TableCell className="text-sm text-right font-medium text-green-700">
+                    <TableCell
+                      className={cn(
+                        "text-sm text-right font-medium",
+                        txn.voidedAt === undefined
+                          ? "text-green-700"
+                          : "line-through",
+                      )}
+                    >
                       ৳{txn.amount.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
@@ -310,6 +315,23 @@ function PaymentHistorySection({ feeId }: { feeId: Id<"studentFees"> }) {
                     </TableCell>
                     <TableCell className="text-sm text-gray-500 font-mono text-xs">
                       {txn.referenceNumber ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      {txn.voidedAt !== undefined ? (
+                        <Badge
+                          variant="outline"
+                          className="bg-red-400/40 text-red-700 border-transparent"
+                        >
+                          Voided
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="bg-green-400/40 text-green-700 border-transparent"
+                        >
+                          Live
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -352,7 +374,7 @@ function ApplyDiscountSubDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const discountRules = useQuery(api.discounts.list);
-  const applyDiscount = useMutation(api.studentDiscounts.applyDiscount);
+  const applyDiscount = useMutation(api.studentFees.applyDiscount);
 
   const activeRules: DiscountRule[] = (discountRules ?? []).filter(
     (r): r is DiscountRule => r.isActive === true,
@@ -382,14 +404,18 @@ function ApplyDiscountSubDialog({
     if (!selectedRule) return;
     setIsSubmitting(true);
     try {
-      const { discountAmount } = await applyDiscount({
-        studentId,
+      const { discountAmount, balance } = await applyDiscount({
         feeId: fee._id,
         discountRuleId: selectedRule._id,
-        academicYear: fee.academicYear,
       });
       toast.success(
         `Discount of ৳${discountAmount.toLocaleString()} applied successfully`,
+        balance === 0
+          ? {
+              description:
+                "Nothing is owed now. Collect ৳0 to issue the receipt that settles this fee.",
+            }
+          : undefined,
       );
       onClose();
     } catch (err: unknown) {

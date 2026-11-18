@@ -10,12 +10,12 @@ export const getByStudent = query({
     const txns = await ctx.db
       .query("feeTransactions")
       .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
-      .collect();
+      .take(500);
     return txns.sort((a, b) => b.transactionDate - a.transactionDate);
   },
 });
 
-/** Get transactions for a specific fee record. */
+/** Get transactions for a specific fee record. Rows with `voidedAt` are history, not live payments. */
 export const getByFee = query({
   args: { feeId: v.id("studentFees") },
   handler: async (ctx, args) => {
@@ -23,6 +23,6 @@ export const getByFee = query({
     return await ctx.db
       .query("feeTransactions")
       .withIndex("by_fee", (q) => q.eq("feeId", args.feeId))
-      .collect();
+      .take(100);
   },
 });

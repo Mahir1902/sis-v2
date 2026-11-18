@@ -511,10 +511,12 @@ export const getSiblingsByStudent = query({
 
 /**
  * Permanently delete a student and all related data (cascade delete).
- * Removes enrollments, grades, fees, transactions, discounts, advance payments,
- * report cards (including stored files), assessment answers, computed grades,
- * and stored photos. Also unlinks this student from any siblings.
- * Requires admin role.
+ * Refused when the student has any financial row (receipt, collection
+ * session or transaction) — those are the audit trail and are never
+ * orphaned or deleted; mark the student withdrawn instead. Otherwise removes
+ * enrollments, attendance, grades, unpaid fees, discounts, report cards
+ * (including stored files), assessment answers, computed grades and stored
+ * photos, and unlinks this student from any siblings. Requires admin role.
  */
 export const deleteStudent = mutation({
   args: { studentId: v.id("students") },
@@ -527,12 +529,33 @@ export const deleteStudent = mutation({
     // Capture name before deletion for the audit log
     const studentName = student.studentFullName;
 
+    // ── 0. Refuse while any financial row exists (cheap indexed probes) ──
+    const [receipt, session, transaction] = await Promise.all([
+      ctx.db
+        .query("receipts")
+        .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
+        .first(),
+      ctx.db
+        .query("feeCollectionSessions")
+        .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
+        .first(),
+      ctx.db
+        .query("feeTransactions")
+        .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
+        .first(),
+    ]);
+    if (receipt || session || transaction) {
+      throw new Error(
+        "This student has payment records and cannot be deleted. Mark them as withdrawn instead; the records are kept for the audit trail.",
+      );
+    }
+
     // ── 1. Query all related records in parallel ────────────────────────
     const [
       enrollments,
+      attendance,
       grades,
       studentFees,
-      feeTransactions,
       studentDiscounts,
       advancePayments,
       reportCards,
@@ -546,15 +569,15 @@ export const deleteStudent = mutation({
         )
         .collect(),
       ctx.db
+        .query("attendance")
+        .withIndex("by_student_date", (q) => q.eq("studentId", args.studentId))
+        .collect(),
+      ctx.db
         .query("grades")
         .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
         .collect(),
       ctx.db
         .query("studentFees")
-        .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
-        .collect(),
-      ctx.db
-        .query("feeTransactions")
         .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
         .collect(),
       ctx.db
@@ -584,9 +607,9 @@ export const deleteStudent = mutation({
     // ── 2. Delete all related records in parallel ───────────────────────
     await Promise.all([
       ...enrollments.map((doc) => ctx.db.delete(doc._id)),
+      ...attendance.map((doc) => ctx.db.delete(doc._id)),
       ...grades.map((doc) => ctx.db.delete(doc._id)),
       ...studentFees.map((doc) => ctx.db.delete(doc._id)),
-      ...feeTransactions.map((doc) => ctx.db.delete(doc._id)),
       ...studentDiscounts.map((doc) => ctx.db.delete(doc._id)),
       ...advancePayments.map((doc) => ctx.db.delete(doc._id)),
       ...assessmentAnswers.map((doc) => ctx.db.delete(doc._id)),
