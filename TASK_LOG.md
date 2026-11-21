@@ -3,8 +3,8 @@
 ---
 
 ## Current Feature: Access Policy module — one capability table for server and client (architecture review candidate 1, 2026-11-21)
-**Status**: Devil's Advocate Review
-**Active Agent**: PLANNING AGENT
+**Status**: In Progress — waiting on the captain's UI pick (needs-decision `sis-access-policy-ui`)
+**Active Agent**: CODING AGENT
 
 Source: architecture review 2026-11-21, candidate 1, plus live defects 1–4 and issue #122. The CLAUDE.md
 permission matrix is the source of truth for the table. Branch `fm/sis-access-policy`.
@@ -56,12 +56,29 @@ permission matrix is the source of truth for the table. Branch `fm/sis-access-po
 - Rejected: merging the admin-only capabilities into one (they map 1:1 to nav entries and Phase 5 will split them); a discriminated union for the student record.
 
 ### Sub-tasks
-- [ ] 1. `lib/accessPolicy.ts` + role × capability × own-or-other table test — PENDING
-- [ ] 2. `convex/lib/permissions.ts` adapter (`requireCapability`, `requireStudentAccess`, `readStudent`, `linkedStudentFor`) + migrate every `requireRole` call — PENDING
-- [ ] 3. Defects 2, 3, 4 server fixes + convex-test parity and regression tests — PENDING
-- [ ] 4. UI prototype (3 variants) + screenshots + needs-decision — PENDING
-- [ ] 5. Client adapter: `useCapabilities`, `RoleGate`, Sidebar, `homeFor`, role copies removed — PENDING
-- [ ] 6. Student detail page + students list: defect 1, mis-shown actions, chosen UI variant — PENDING
+- [x] 1. `lib/accessPolicy.ts` + role × capability × own-or-other table test — APPROVED by Backend Review Agent (2026-11-21)
+- [x] 2. `convex/lib/permissions.ts` adapter (`requireCapability`, `requireStudentAccess`, `readStudent`, `studentLinkFor`) + every `requireRole` call migrated — APPROVED by Backend Review Agent (2026-11-21)
+- [x] 3. Defects 2, 3, 4 server fixes + convex-test parity and regression tests — APPROVED by Backend Review Agent (2026-11-21)
+- [ ] 4. UI prototype (3 variants) + screenshots — DONE, waiting for the captain's pick
+- [ ] 5. Client adapter: `useCapabilities`, `RoleGate`, Sidebar, `homeFor`, dashboard redirect, `canNote` — DONE (no visual change), Frontend Review PENDING with sub-task 6
+- [ ] 6. Student detail page + students list + Settings linking: defect 1, mis-shown actions, chosen UI variant — PENDING (blocked on 4)
+
+### Review Notes
+**Backend Review (sub-tasks 1–3, commit 78b95c2, Opus 5.5): APPROVED.** Every removed role list was paired with
+its capability: all 61 admin-only sites map to admin-only capabilities, 41 of 43 admin+teacher sites to staff
+capabilities (the other two are the intended fee-structure tightening), and the scoped sites to the student-scoped
+gates. No function lost its check. Required changes, all applied in 9d0232f: the role-change audit entry now
+records the old and new linked student; tests added for the missing-enrollment branch of
+`getGradesByEnrollmentSemester` and for a pre-provisioned account redeeming a staff invite. Left as is: that
+branch loads the enrollment before the permission check (the reviewer confirmed nothing leaks — an
+unauthenticated caller gets "Unauthenticated" either way, a student "Unauthorized" either way).
+
+**UI prototype (sub-task 4):** three variants — A "Just not there", B "Locked in place", C "Hide, and say so once"
+— of the student page, students list, account-to-student linking and denied states, on mock data. Screenshots and
+the write-up are outside the repo (`firstmate/data/sis-access-policy/prototypes/`); the code is on local branch
+`proto/sis-access-policy-ui` and is not merged.
+
+---
 
 ## Current Feature: Fee ledger — one module owns every money write (architecture review candidate 5, 2026-11-10)
 **Status**: Review — PR open; narrow PR stacked, merges after the migrations run
@@ -540,6 +557,11 @@ Server side (schema, `convex/attendance.ts`, `convex/closures.ts`, roster querie
 - [x] 9. tsc / build / lint / vitest green — 2026-10-15. no-mistakes pipeline review: pending.
 
 ## Decisions Made
+- 2026-11-21 Access Policy: permissions are a capability table (`lib/accessPolicy.ts`), not role lists at call sites. `"own"` grants are checked against `users.studentId`; student-scoped capabilities are a separate type so the student cannot be forgotten.
+- 2026-11-21 Access Policy: fee structures (`feeStructure.list` / `getById`) are admin-only — they were admin+teacher, but no teacher screen reads them and the matrix makes fee structures an admin matter.
+- 2026-11-21 Access Policy: `birthCertificateNumber` joins the NIDs, passport number and family income as a sensitive field (admins only) — the UI already masked it for everyone else.
+- 2026-11-21 Access Policy: a student account must be linked to a student record. `updateUserRole` to student without an existing `studentId` is refused (`STUDENT_REQUIRED`), a student invite without one is dead, and leaving the student role clears the link. Two accounts may share one student (no parent role yet). A link is not cleared when its student is deleted (own-only reads of a missing record return nothing).
+- 2026-11-21 Access Policy: the Assessments list and Class Analytics screens stay admin-only through their own capabilities (`browseAssessments`, `viewClassAnalytics`) although the functions behind them allow teachers; opening them to teachers is Phase 5 item 20's call.
 - 2026-11-10 Fee ledger: a discount never marks a fee `paid`. `paid` is written only by `collect`, so every paid fee has a live transaction + session + receipt. A 100% discount leaves the fee `unpaid` at balance 0; it is settled by a normal ৳0 collect that issues a ৳0 receipt documenting the waiver (chosen over a `waived` status, which would add a third literal to every status reader). Overdue therefore also requires `balance > 0`.
 - 2026-11-10 Fee ledger: voided transactions are kept as ledger history stamped `voidedAt` (never deleted); readers check the field, no session join.
 - 2026-11-10 Fee ledger: re-issue corrects payment method / date / remarks only, for the same fees, filed under the voided session's year and class. Line-item or student corrections = void, then collect from the right student (deferred). A leaver's receipt can be re-issued; a plain collect for a leaver stays refused.
