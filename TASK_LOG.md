@@ -3,7 +3,7 @@
 ---
 
 ## Current Feature: Access Policy module — one capability table for server and client (architecture review candidate 1, 2026-11-21)
-**Status**: In Progress — UI pick received; per-teacher feature access added to scope
+**Status**: In Progress — waiting on the captain's pick for the teacher-access editor (needs-decision `sis-access-policy-grants-ui`)
 **Active Agent**: CODING AGENT
 
 Source: architecture review 2026-11-21, candidate 1, plus live defects 1–4 and issue #122. The CLAUDE.md
@@ -59,9 +59,9 @@ permission matrix is the source of truth for the table. Branch `fm/sis-access-po
 - [x] 1. `lib/accessPolicy.ts` + role × capability × own-or-other table test — APPROVED by Backend Review Agent (2026-11-21)
 - [x] 2. `convex/lib/permissions.ts` adapter (`requireCapability`, `requireStudentAccess`, `readStudent`, `studentLinkFor`) + every `requireRole` call migrated — APPROVED by Backend Review Agent (2026-11-21)
 - [x] 3. Defects 2, 3, 4 server fixes + convex-test parity and regression tests — APPROVED by Backend Review Agent (2026-11-21)
-- [ ] 4. UI prototype (3 variants) + screenshots — DONE, waiting for the captain's pick
-- [ ] 5. Client adapter: `useCapabilities`, `RoleGate`, Sidebar, `homeFor`, dashboard redirect, `canNote` — DONE (no visual change), Frontend Review PENDING with sub-task 6
-- [ ] 6. Student detail page + students list + Settings linking: defect 1, mis-shown actions, chosen UI variant — PENDING (blocked on 4)
+- [x] 4. UI prototype (3 variants) + screenshots — captain picked A + B's Linked-student column (2026-11-21)
+- [ ] 5. Client adapter: `useCapabilities`, `RoleGate`, Sidebar, `homeFor`, dashboard redirect, `canNote` — DONE, Frontend Review PENDING (runs once Settings is built)
+- [ ] 6. Student detail page + students list (variant A): defect 1, mis-shown actions, student landing — DONE (commit 32718eb), Frontend Review PENDING. Settings → Users (Linked-student column) — PENDING with sub-task 9
 
 ### Captain's UI pick and added scope (2026-11-21)
 - **Pick:** variant A "Just not there" — what a role may not do or see is not rendered — with variant B's
@@ -88,10 +88,19 @@ permission matrix is the source of truth for the table. Branch `fm/sis-access-po
 - UI: an editor for a teacher's extra access in Settings → Users — new UI, so it is prototyped first (second UI
   gate); everything already decided is built meanwhile.
 
+### Devil's Advocate Findings — per-teacher feature access (2026-11-21, Opus 5.5 — verdict: mechanism sound, grantable list not)
+- Concern: `importStudents` creates and overwrites student records and hands back stored birth-certificate and passport numbers for any student number sent → Mitigation: not grantable.
+- Concern: `promoteStudents` also assigns next year's fees and graduates students, and its "create year" control needs school setup → Mitigation: stays grantable because the captain named it and the admin is delegating the whole operation — the editor says so in words; the create-year control is hidden unless the caller has `manageSchoolSetup`.
+- Concern: the audit log shows fee amounts, receipt snapshots, emails and role changes; its `limit` was unbounded → Mitigation: stays grantable (captain named it), described as such in the editor; `limit` capped at 500.
+- Concern: the calendar's year-date editor needs school setup; closing a day voids attendance marks → Mitigation: the year editor is hidden unless the caller has `manageSchoolSetup`; the editor text states the voiding.
+- Concern: granting Assessments or Class Analytics changed only the sidebar — the functions behind them accepted any teacher → Mitigation: the functions used only by those screens now require the screen's capability (`getAssessmentsByLevelYear`, `createAssessment`, `bulkCreateAssessments`; `getGradeSpread`, `getStudentsNeedingHelp`).
+- Concern: call sites that would silently keep checking the role only → Mitigation: `can()` no longer accepts a role, only the caller, so every old call failed to compile; Sidebar test covers a granted teacher.
+- Concern: leftover grants → Mitigation: dropped on every role change and when an existing row redeems an invite. Deactivating keeps them (a deactivated account has no capabilities; reactivating restores what it had).
+
 ### Sub-tasks (added)
-- [ ] 7. Per-teacher grants: table + server (`users.grants`, `setTeacherGrants`) + tests — PENDING (Devil's Advocate first)
-- [ ] 8. Grant editor prototype (3 variants) + screenshots + needs-decision — PENDING
-- [ ] 9. Grant editor in Settings → Users — PENDING (blocked on 8)
+- [x] 7. Per-teacher grants: table + server (`users.grants`, `setTeacherGrants`) + tests — APPROVED by Backend Review Agent (2026-11-21)
+- [ ] 8. Grant editor prototype (3 variants) + screenshots — DONE, waiting for the captain's pick
+- [ ] 9. Settings → Users: Linked-student column + grant editor — PENDING (blocked on 8)
 
 ### Review Notes
 **Backend Review (sub-tasks 1–3, commit 78b95c2, Opus 5.5): APPROVED.** Every removed role list was paired with
@@ -102,6 +111,15 @@ records the old and new linked student; tests added for the missing-enrollment b
 `getGradesByEnrollmentSemester` and for a pre-provisioned account redeeming a staff invite. Left as is: that
 branch loads the enrollment before the permission check (the reviewer confirmed nothing leaks — an
 unauthenticated caller gets "Unauthenticated" either way, a student "Unauthorized" either way).
+
+**Backend Review (sub-task 7, commit 0a765cb, Opus 5.5): APPROVED.** No escalation path found: only
+`manageUsers` holders can set grants or roles; every path that writes a role drops grants; `can()` honours a
+grant only for a teacher, only if grantable, only if listed. A teacher holding only one grant can call every
+function its screen uses (bar the two hidden controls). Required change, applied: a test per grantable feature
+that calls every function behind its screen without the grant (refused) and with it (allowed), plus a
+deactivated teacher with a grant (refused). Follow-up, not from this change: any teacher can still edit or delete
+a CA paper from the mark-entry page (`updateAssessment` / `deleteAssessment` / question mutations are
+`manageAssessments`) — noted for the PR.
 
 **UI prototype (sub-task 4):** three variants — A "Just not there", B "Locked in place", C "Hide, and say so once"
 — of the student page, students list, account-to-student linking and denied states, on mock data. Screenshots and
@@ -587,6 +605,8 @@ Server side (schema, `convex/attendance.ts`, `convex/closures.ts`, roster querie
 - [x] 9. tsc / build / lint / vitest green — 2026-10-15. no-mistakes pipeline review: pending.
 
 ## Decisions Made
+- 2026-11-21 Access Policy: a teacher = the teacher role + features an admin granted that teacher (`users.grants`). Grantable: Assessments screen, Class Analytics, Promotions, Subjects, Audit Log, School Calendar. Not grantable: anything about money, user management, student records, identity data, student import. A grant is honoured only if it is in `GRANTABLE_CAPABILITIES` at read time.
+- 2026-11-21 Access Policy: grants are dropped when the role changes; deactivating keeps them and reactivating restores them.
 - 2026-11-21 Access Policy: permissions are a capability table (`lib/accessPolicy.ts`), not role lists at call sites. `"own"` grants are checked against `users.studentId`; student-scoped capabilities are a separate type so the student cannot be forgotten.
 - 2026-11-21 Access Policy: fee structures (`feeStructure.list` / `getById`) are admin-only — they were admin+teacher, but no teacher screen reads them and the matrix makes fee structures an admin matter.
 - 2026-11-21 Access Policy: `birthCertificateNumber` joins the NIDs, passport number and family income as a sensitive field (admins only) — the UI already masked it for everyone else.

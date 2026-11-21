@@ -157,7 +157,7 @@ Sub-tasks are only marked complete when the relevant review agent explicitly app
 **Rules:**
 - Always validate that indexes exist before querying with `withIndex`
 - Never expose sensitive data to roles that shouldn't see it
-- Every mutation must validate input and check permissions via `requireRole()`
+- Every mutation must validate input and check permissions via `requireCapability()`
 - Use `.take(100)` + pagination — never unbounded `.collect()` on large tables
 - Batch lookups with `Promise.all()` — no sequential awaits in loops (N+1)
 - Document every function with a JSDoc comment
@@ -178,7 +178,7 @@ Sub-tasks are only marked complete when the relevant review agent explicitly app
 
 **Checklist (must verify all before approving):**
 - [ ] Auth check at the top of every mutation
-- [ ] `requireRole()` called with correct role list
+- [ ] `requireCapability()` / `requireStudentAccess()` called with the correct capability
 - [ ] No raw user input inserted without validation
 - [ ] Sensitive fields (NID, financial) gated to admin only
 - [ ] Storage uploads validated (file type, size limits)
@@ -329,7 +329,7 @@ sis-v2/
 │   ├── schema.ts
 │   ├── seed.ts
 │   ├── lib/
-│   │   └── permissions.ts          ← requireRole() helper
+│   │   └── permissions.ts          ← requireCapability() / requireStudentAccess() helpers
 │   └── *.ts                        ← one file per domain
 ├── hooks/                          ← Custom React hooks (no business logic in components)
 ├── lib/
@@ -375,27 +375,23 @@ users: defineTable({
 | Manage fee structures | ✅ | ❌ | ❌ |
 | Upload report cards | ✅ | ✅ | ❌ |
 
-### requireRole() Helper
+### requireCapability() Helper
 ```typescript
-// convex/lib/permissions.ts
-export async function requireRole(
+// convex/lib/permissions.ts — who may do what lives in lib/accessPolicy.ts
+export async function requireCapability(
   ctx: MutationCtx | QueryCtx,
-  allowedRoles: ("admin" | "teacher" | "student")[]
-) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Unauthenticated");
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_email", q => q.eq("email", identity.email!))
-    .first();
-  if (!user || !allowedRoles.includes(user.role)) {
-    throw new Error("Unauthorized");
-  }
-  return user;
-}
+  capability: SchoolCapability,
+): Promise<Doc<"users">>;
+
+// For anything keyed by a student (own-only for a student account)
+export async function requireStudentAccess(
+  ctx: MutationCtx | QueryCtx,
+  capability: StudentCapability,
+  studentId: Id<"students">,
+): Promise<Doc<"users">>;
 ```
 
-**Every Convex mutation calls `requireRole()` as the first thing in its handler.**
+**Every Convex mutation calls `requireCapability()` (or `requireStudentAccess()`) as the first thing in its handler.**
 
 ---
 
@@ -405,7 +401,7 @@ The Backend Review Agent will reject code that violates any of these:
 
 1. **No unbounded collects.** Use `.take(n)` + pagination on large tables.
 2. **All `withIndex` calls must have the index declared in `schema.ts`.**
-3. **Every mutation validates permissions** via `requireRole()`.
+3. **Every mutation validates permissions** via `requireCapability()`.
 4. **Input validation** happens explicitly in the handler, not just via Convex types.
 5. **No N+1 queries.** Use `Promise.all()` for batched lookups.
 6. **Error messages** must not reveal schema, table names, or internal state.
@@ -604,7 +600,7 @@ under "Decisions Made" in `TASK_LOG.md`.
 | File | Purpose |
 |------|---------|
 | `convex/schema.ts` | All database table definitions |
-| `convex/lib/permissions.ts` | `requireRole()` helper |
+| `convex/lib/permissions.ts` | `requireCapability()` / `requireStudentAccess()` helpers |
 | `convex/seed.ts` | Seed data (academic years, levels, grade mapping) |
 | `lib/gradeUtils.ts` | `getLetterGradeBadgeColor`, `getTrendIndicator`, `formatPercentage` |
 | `lib/validations/` | Zod schemas, one file per domain |

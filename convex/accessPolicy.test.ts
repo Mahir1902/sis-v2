@@ -5,6 +5,8 @@ import {
   CAPABILITIES,
   type Capability,
   can,
+  GRANTABLE_CAPABILITIES,
+  type GrantableCapability,
   ROLES,
   type Role,
   SENSITIVE_STUDENT_FIELDS,
@@ -617,6 +619,136 @@ describe("per-teacher grants — an admin gives one teacher a feature", () => {
       oldGrants: [],
       newGrants: ["viewAuditLog", "manageSubjects"],
     });
+  });
+});
+
+/**
+ * Every Convex function behind each grantable feature's screen. A teacher
+ * must be refused all of them without the grant and none of them with it —
+ * so a screen can neither leak to an ungranted teacher nor break for a
+ * granted one. (A permitted call may still fail for its own reasons.)
+ */
+function grantedScreenCalls(): Record<GrantableCapability, Call[]> {
+  const paper = {
+    semester: 1 as const,
+    subjectId,
+    standardLevelId: level,
+    academicYearId: year,
+    totalMarks: 10,
+  };
+  const klass = { campus, standardLevelId: level, academicYear: year };
+  return {
+    browseAssessments: [
+      (c) =>
+        c.query(api.assessments.getAssessmentsByLevelYear, {
+          standardLevelId: level,
+          academicYearId: year,
+        }),
+      (c) =>
+        c.mutation(api.assessments.createAssessment, {
+          ...paper,
+          name: "CA-1",
+          assessmentNumber: 1,
+        }),
+      (c) => c.mutation(api.assessments.bulkCreateAssessments, paper),
+    ],
+    viewClassAnalytics: [
+      (c) => c.query(api.computedGrades.getGradeSpread, klass),
+      (c) =>
+        c.query(api.computedGrades.getStudentsNeedingHelp, {
+          ...klass,
+          semester: 1,
+        }),
+    ],
+    promoteStudents: [
+      (c) =>
+        c.query(api.promotions.getPromotionCandidates, {
+          campus,
+          standardLevelId: level,
+          academicYearId: year,
+        }),
+      (c) =>
+        c.mutation(api.promotions.bulkPromote, {
+          sourceAcademicYearId: year,
+          targetAcademicYearId: year,
+          standardLevelId: level,
+          promotions: [],
+          autoAssignFees: false,
+        }),
+    ],
+    manageSubjects: [
+      (c) => c.mutation(api.subjects.create, { name: "Drama", code: "DRA" }),
+      (c) =>
+        c.mutation(api.subjects.toggleActive, { subjectId, isActive: true }),
+    ],
+    viewAuditLog: [(c) => c.query(api.auditLogs.getRecentLogs, {})],
+    manageCalendar: [
+      (c) =>
+        c.mutation(api.closures.create, {
+          startDate: dhakaDate(),
+          endDate: dhakaDate(),
+          campuses: [campus],
+          reason: "Holiday",
+        }),
+      async (c) => {
+        const closureId = await t.run((ctx) =>
+          ctx.db.insert("closures", {
+            date: dhakaDate(),
+            campuses: [campus],
+            reason: "Seeded",
+            createdBy: users.admin,
+            createdAt: Date.now(),
+          }),
+        );
+        return c.mutation(api.closures.remove, { closureId });
+      },
+    ],
+  };
+}
+
+async function isRefused(call: Call, client: TC) {
+  try {
+    await call(client);
+    return false;
+  } catch (error) {
+    return /Unauthorized/.test(error instanceof Error ? error.message : "");
+  }
+}
+
+describe("every function behind a grantable feature follows the grant", () => {
+  it("covers every grantable feature", () => {
+    expect(Object.keys(grantedScreenCalls()).sort()).toEqual(
+      [...GRANTABLE_CAPABILITIES].sort(),
+    );
+  });
+
+  for (const capability of GRANTABLE_CAPABILITIES) {
+    it(`${capability}: refused without the grant, allowed with it`, async () => {
+      const calls = grantedScreenCalls()[capability];
+
+      for (const call of calls) {
+        expect(await isRefused(call, asRole("teacher") as TC)).toBe(true);
+      }
+
+      await asRole("admin").mutation(api.users.setTeacherGrants, {
+        userId: users.teacher,
+        grants: [capability],
+      });
+      for (const call of calls) {
+        expect(await isRefused(call, asRole("teacher") as TC)).toBe(false);
+      }
+    });
+  }
+
+  it("honours no grant while the teacher's account is deactivated", async () => {
+    await asRole("admin").mutation(api.users.setTeacherGrants, {
+      userId: users.teacher,
+      grants: ["viewAuditLog"],
+    });
+    await t.run((ctx) => ctx.db.patch(users.teacher, { isActive: false }));
+    await expect(
+      asRole("teacher").query(api.auditLogs.getRecentLogs, {}),
+    ).rejects.toThrow("Unauthorized");
   });
 });
 

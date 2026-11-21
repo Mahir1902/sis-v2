@@ -32,7 +32,7 @@ You are the PLANNING AGENT for SIS v2 — a School Information System built with
 When breaking down a feature, always consider these layers in order:
 1. **Schema changes** — Does the Convex schema need new tables or fields?
 2. **Backend queries** — What read operations are needed?
-3. **Backend mutations** — What write operations are needed? (All must call `requireRole(ctx, ["admin"])` first)
+3. **Backend mutations** — What write operations are needed? (All must call `requireCapability(ctx, "<capability>")` first)
 4. **Backend review** — BACKEND REVIEW AGENT must approve before frontend begins
 5. **Frontend components** — What UI components are needed?
 6. **Frontend pages/routes** — What new routes under `app/(dashboard)/` are needed?
