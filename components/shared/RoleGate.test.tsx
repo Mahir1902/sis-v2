@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const useQuery = vi.fn();
 vi.mock("convex/react", () => ({
   useQuery: () => useQuery(),
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
 }));
 
 import { RoleGate } from "./RoleGate";
@@ -22,20 +23,20 @@ const me = (over: Partial<{ role: string; isActive: boolean }>) => ({
 afterEach(() => vi.clearAllMocks());
 
 describe("RoleGate", () => {
-  it("renders children for an active user with an allowed role", () => {
+  it("renders children for an active user whose role holds the capability", () => {
     useQuery.mockReturnValue(me({ role: "admin", isActive: true }));
     render(
-      <RoleGate allowedRoles={["admin"]}>
+      <RoleGate capability="viewDashboard">
         <p>secret</p>
       </RoleGate>,
     );
     expect(screen.getByText("secret")).toBeInTheDocument();
   });
 
-  it("denies an active user without an allowed role", () => {
+  it("denies an active user whose role lacks the capability", () => {
     useQuery.mockReturnValue(me({ role: "teacher", isActive: true }));
     render(
-      <RoleGate allowedRoles={["admin"]}>
+      <RoleGate capability="viewDashboard">
         <p>secret</p>
       </RoleGate>,
     );
@@ -49,7 +50,7 @@ describe("RoleGate", () => {
   it("denies a deactivated user even when their role would be allowed", () => {
     useQuery.mockReturnValue(me({ role: "admin", isActive: false }));
     render(
-      <RoleGate allowedRoles={["admin"]}>
+      <RoleGate capability="viewDashboard">
         <p>secret</p>
       </RoleGate>,
     );

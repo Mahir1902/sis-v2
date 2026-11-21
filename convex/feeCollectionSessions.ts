@@ -5,7 +5,7 @@ import {
 } from "../lib/feeCollectionUtils";
 import { mutation, query } from "./_generated/server";
 import { assignFee, collect } from "./lib/feeLedger";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 const paymentModeValidator = v.union(
   v.literal("Cash"),
@@ -31,7 +31,7 @@ export const collectFees = mutation({
     expectedTotal: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudentFees");
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
     if (student.status !== "active") {
@@ -45,7 +45,7 @@ export const collectFees = mutation({
 export const getByStudent = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageStudentFees");
     return await ctx.db
       .query("feeCollectionSessions")
       .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
@@ -66,7 +66,7 @@ export const getFutureMonths = query({
     academicYear: v.id("academicYears"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageStudentFees");
 
     const feeStructure = await ctx.db.get(args.feeStructureId);
     if (!feeStructure || feeStructure.frequency !== "monthly") {
@@ -120,7 +120,7 @@ export const createFutureMonthFees = mutation({
     billingPeriods: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudentFees");
 
     if (args.billingPeriods.length === 0) return [];
 

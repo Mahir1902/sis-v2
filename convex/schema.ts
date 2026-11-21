@@ -59,6 +59,10 @@ export default defineSchema({
     ),
     isActive: v.boolean(),
     studentId: v.optional(v.id("students")), // links student-role users to their record
+    // Extra features an admin granted this teacher (Access Policy). Plain
+    // strings on purpose: only names in `GRANTABLE_CAPABILITIES` are ever
+    // honoured (checked on every read), so retiring one needs no migration.
+    grants: v.optional(v.array(v.string())),
   }).index("by_email", ["email"]),
 
   // ─── Invites (admin-created accounts, self-service redemption) ────────────

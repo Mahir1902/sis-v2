@@ -14,7 +14,7 @@ import {
   attendanceLockReason,
   requireAttendanceWrite,
 } from "./lib/attendancePermissions";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 import { getCurrentPlacement } from "./lib/placement";
 
 /**
@@ -213,7 +213,7 @@ async function loadClassPeriod(
 export const getRegister = query({
   args: { ...classArgs, date: v.string() },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "viewAttendance");
     assertDate(args.date);
 
     const [roster, marks, closureDocs] = await Promise.all([
@@ -400,7 +400,7 @@ export const saveRegister = mutation({
 export const getDay = query({
   args: { date: v.string(), academicYear: v.id("academicYears") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewAttendance");
     assertDate(args.date);
 
     const [rows, classes] = await Promise.all([
@@ -502,7 +502,7 @@ export const getDay = query({
 export const getClassReport = query({
   args: { ...classArgs, semester: v.union(v.literal(1), v.literal(2)) },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewAttendance");
     const year = await ctx.db.get(args.academicYear);
     if (!year) throw new Error("Academic year not found");
 
@@ -580,7 +580,7 @@ export const getStudentAttendance = query({
     semester: v.optional(v.union(v.literal(1), v.literal(2))),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewAttendance");
     const year = await ctx.db.get(args.academicYear);
     if (!year) throw new Error("Academic year not found");
 
@@ -643,7 +643,7 @@ export const getStudentAttendance = query({
 export const setNote = mutation({
   args: { attendanceId: v.id("attendance"), note: v.string() },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "noteAttendance");
     const row = await ctx.db.get(args.attendanceId);
     if (!row) throw new Error("Attendance record not found");
     const note = args.note.trim();

@@ -70,7 +70,7 @@ When updating TASK_LOG.md, use this status notation:
   - Permissions: `convex/lib/permissions.ts`
   - Grade utilities: `lib/gradeUtils.ts`
   - Zod schemas: `lib/validations/`
-- Always remind Backend Agent: `requireRole(ctx, ["admin"])` must be the first call in every mutation
+- Always remind Backend Agent: `requireCapability(ctx, "<capability>")` must be the first call in every mutation
 - Always remind Frontend Agent: use brand colors `school-green` and `school-yellow`, follow shadcn/ui New York style
 
 ## Critical Rules

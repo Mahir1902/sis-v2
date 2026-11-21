@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCapabilities } from "@/hooks/use-capabilities";
+import { homeFor } from "@/lib/accessPolicy";
 import { EditAssessmentDialog } from "./_components/EditAssessmentDialog";
 import { MarkEntryGrid } from "./_components/MarkEntryGrid";
 import { QuestionManager } from "./_components/QuestionManager";
@@ -34,7 +36,7 @@ export default function AssessmentDetailPage({
   const { assessmentId } = use(params);
 
   return (
-    <RoleGate allowedRoles={["admin", "teacher"]}>
+    <RoleGate capability="enterGrades">
       <AssessmentDetailContent
         assessmentId={assessmentId as Id<"assessments">}
       />
@@ -48,6 +50,10 @@ function AssessmentDetailContent({
   assessmentId: Id<"assessments">;
 }) {
   const router = useRouter();
+  // The Assessments list is its own feature; a teacher without it reached
+  // this paper by a link and has no list to go back to.
+  const { me, can } = useCapabilities();
+  const canBrowse = can("browseAssessments");
   const [questionManagerOpen, setQuestionManagerOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -73,14 +79,16 @@ function AssessmentDetailContent({
   if (assessment === null) {
     return (
       <div className="space-y-6">
-        <Link
-          href="/admin/assessments"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          aria-label="Back to all assessments"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          All Assessments
-        </Link>
+        {canBrowse && (
+          <Link
+            href="/admin/assessments"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            aria-label="Back to all assessments"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            All Assessments
+          </Link>
+        )}
         <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-lg border">
           <BookOpen className="h-10 w-10 text-gray-300 mb-3" />
           <p className="text-gray-500 font-medium">Assessment not found</p>
@@ -97,14 +105,16 @@ function AssessmentDetailContent({
   return (
     <div className="space-y-6">
       {/* Back link */}
-      <Link
-        href="/admin/assessments"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        aria-label="Back to all assessments"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        All Assessments
-      </Link>
+      {canBrowse && (
+        <Link
+          href="/admin/assessments"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          aria-label="Back to all assessments"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          All Assessments
+        </Link>
+      )}
 
       {/* Assessment Header Card */}
       <div className="bg-white rounded-lg border p-6">
@@ -277,7 +287,7 @@ function AssessmentDetailContent({
                   toast.success(
                     `Deleted assessment with ${result.deletedQuestions} question${result.deletedQuestions !== 1 ? "s" : ""} and ${result.deletedAnswers} student answer${result.deletedAnswers !== 1 ? "s" : ""}`,
                   );
-                  router.push("/admin/assessments");
+                  router.push(canBrowse ? "/admin/assessments" : homeFor(me));
                 } catch (err: unknown) {
                   const message =
                     err instanceof Error

@@ -7,7 +7,7 @@ import {
   recomputeGrade,
   scheduleRecompute,
 } from "./computedGrades";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /**
  * A grid save for one class recomputes each student's grade in the same
@@ -64,7 +64,7 @@ export const upsertAnswer = mutation({
     remarks: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "enterGrades");
     const assessment = await assertInAssessmentClass(ctx, args.assessmentId, [
       args,
     ]);
@@ -119,7 +119,7 @@ export const bulkMarkEntry = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "enterGrades");
     // Every (student, enrollment) in the payload must be in this assessment's
     // class — validated before any write.
     const assessment = await assertInAssessmentClass(
@@ -212,7 +212,7 @@ export const markStudentAbsent = mutation({
     assessmentId: v.id("assessments"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "enterGrades");
     const assessment = await assertInAssessmentClass(ctx, args.assessmentId, [
       args,
     ]);
@@ -273,7 +273,7 @@ export const markStudentAbsent = mutation({
 export const getAnswersByAssessment = query({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "enterGrades");
     return await ctx.db
       .query("studentAssessmentAnswers")
       .withIndex("by_assessment", (q) =>
@@ -294,7 +294,7 @@ export const getStudentAssessmentDetail = query({
     assessmentNumber: v.union(v.literal(1), v.literal(2), v.literal(3)),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "enterGrades");
 
     // Find the assessment matching subject/semester/level/year/number
     const assessments = await ctx.db
@@ -372,7 +372,7 @@ export const getStudentAssessmentDetail = query({
 export const getAnswersByEnrollment = query({
   args: { enrollmentId: v.id("enrollments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "enterGrades");
     return await ctx.db
       .query("studentAssessmentAnswers")
       .withIndex("by_enrollment", (q) =>

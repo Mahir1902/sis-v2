@@ -242,7 +242,7 @@ describe("public signIn endpoint is gated server-side", () => {
 
 // ── Ticket #57: create / list / regenerate / revoke ────────────────────────────
 
-/** The admin-scoped client. `requireRole` reads userId from `subject`'s prefix. */
+/** The admin-scoped client. `requireCapability` reads userId from `subject`'s prefix. */
 function asAdmin() {
   return t.withIdentity({ subject: `${adminId}|test-session` });
 }
@@ -325,7 +325,7 @@ describe("createInvite", () => {
     ).rejects.toMatchObject({ data: { code: "PENDING_INVITE_EXISTS" } });
   });
 
-  it("is admin-only — a teacher caller is rejected by requireRole", async () => {
+  it("is admin-only — a teacher caller is rejected by requireCapability", async () => {
     const teacherId = await t.run((ctx) =>
       ctx.db.insert("users", {
         name: "Teacher",

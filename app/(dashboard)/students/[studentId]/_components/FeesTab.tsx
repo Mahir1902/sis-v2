@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { formatBillingPeriod } from "@/lib/formatBillingPeriod";
 import { cn } from "@/lib/utils";
 import { AssignFeeDialog } from "./AssignFeeDialog";
@@ -63,6 +64,9 @@ export function FeesTab({ studentId }: FeesTabProps) {
   );
 
   const deleteStudentFee = useMutation(api.studentFees.deleteStudentFee);
+  // Assigning, collecting, deleting and the payment history are admin work;
+  // a student reading their own fees gets the plain list.
+  const canManage = useCapabilities().can("manageStudentFees");
 
   const fees = useQuery(api.studentFees.getByStudent, { studentId });
   const currentEnrollment = useQuery(api.enrollments.getCurrentEnrollment, {
@@ -190,7 +194,7 @@ export function FeesTab({ studentId }: FeesTabProps) {
       </div>
 
       {/* Top action row — Assign Fee */}
-      {currentEnrollment?.academicYearDoc && (
+      {canManage && currentEnrollment?.academicYearDoc && (
         <div className="flex justify-end gap-2">
           <Button
             size="sm"
@@ -241,14 +245,16 @@ export function FeesTab({ studentId }: FeesTabProps) {
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={allUnpaidSelected}
-                  onCheckedChange={toggleAll}
-                  aria-label="Select all unpaid fees"
-                  disabled={unpaidFees.length === 0}
-                />
-              </TableHead>
+              {canManage && (
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allUnpaidSelected}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select all unpaid fees"
+                    disabled={unpaidFees.length === 0}
+                  />
+                </TableHead>
+              )}
               <TableHead>Fee Type</TableHead>
               <TableHead>Academic Year</TableHead>
               <TableHead>Period</TableHead>
@@ -257,7 +263,7 @@ export function FeesTab({ studentId }: FeesTabProps) {
               <TableHead className="text-right">Balance</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Due Date</TableHead>
-              <TableHead className="w-10" />
+              {canManage && <TableHead className="w-10" />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -268,21 +274,26 @@ export function FeesTab({ studentId }: FeesTabProps) {
                 <TableRow
                   key={fee._id}
                   className={cn(
-                    "cursor-pointer hover:bg-gray-50 transition-colors",
+                    "transition-colors",
+                    canManage && "cursor-pointer hover:bg-gray-50",
                     fee.status === "unpaid" && "bg-red-50/50",
                     isSelected && "bg-school-green/5",
                   )}
-                  onClick={() => setDetailFeeId(fee._id)}
+                  onClick={
+                    canManage ? () => setDetailFeeId(fee._id) : undefined
+                  }
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    {isSelectable && (
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleFee(fee._id as string)}
-                        aria-label={`Select ${fee.feeStructureDoc?.feeType ?? "fee"} for collection`}
-                      />
-                    )}
-                  </TableCell>
+                  {canManage && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {isSelectable && (
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleFee(fee._id as string)}
+                          aria-label={`Select ${fee.feeStructureDoc?.feeType ?? "fee"} for collection`}
+                        />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="font-medium capitalize">
                     {fee.feeStructureDoc?.feeType ?? "—"}
                   </TableCell>
@@ -317,47 +328,49 @@ export function FeesTab({ studentId }: FeesTabProps) {
                   <TableCell className="text-sm text-gray-500">
                     {format(new Date(fee.dueDate), "dd/MM/yyyy")}
                   </TableCell>
-                  <TableCell>
-                    {fee.status !== "paid" && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`Actions for ${fee.feeStructureDoc?.feeType ?? "fee"}`}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openCollectForSingle(fee._id);
-                            }}
-                          >
-                            Collect Fee
-                          </DropdownMenuItem>
-                          {fee.status === "unpaid" && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteFeeId(fee._id);
-                                }}
-                                className="text-red-600 focus:text-red-600"
-                              >
-                                Delete Fee
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </TableCell>
+                  {canManage && (
+                    <TableCell>
+                      {fee.status !== "paid" && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Actions for ${fee.feeStructureDoc?.feeType ?? "fee"}`}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCollectForSingle(fee._id);
+                              }}
+                            >
+                              Collect Fee
+                            </DropdownMenuItem>
+                            {fee.status === "unpaid" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteFeeId(fee._id);
+                                  }}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  Delete Fee
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}

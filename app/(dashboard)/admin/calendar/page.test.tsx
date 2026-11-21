@@ -10,6 +10,7 @@ vi.mock("convex/react", () => ({
   useQuery: (ref: Parameters<typeof getFunctionName>[0]) =>
     queries.get(getFunctionName(ref)),
   useMutation: () => create,
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
 }));
 
 import SchoolCalendarPage from "./page";

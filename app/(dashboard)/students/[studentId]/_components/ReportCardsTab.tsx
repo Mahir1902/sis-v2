@@ -35,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCapabilities } from "@/hooks/use-capabilities";
 
 interface ReportCardsTabProps {
   studentId: Id<"students">;
@@ -49,6 +50,9 @@ export function ReportCardsTab({ studentId }: ReportCardsTabProps) {
     studentId,
   });
   const deleteCard = useMutation(api.reportCards.deleteReportCard);
+  const { can } = useCapabilities();
+  const canUpload = can("uploadReportCard");
+  const canDelete = can("deleteReportCard");
 
   if (reportCards === undefined || enrollments === undefined) {
     return (
@@ -80,14 +84,16 @@ export function ReportCardsTab({ studentId }: ReportCardsTabProps) {
         <p className="text-sm text-gray-500">
           {reportCards.length} report card{reportCards.length !== 1 ? "s" : ""}
         </p>
-        <Button
-          size="sm"
-          onClick={() => setUploadOpen(true)}
-          className="bg-school-green hover:bg-school-green/90 text-white"
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          Upload
-        </Button>
+        {canUpload && (
+          <Button
+            size="sm"
+            onClick={() => setUploadOpen(true)}
+            className="bg-school-green hover:bg-school-green/90 text-white"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Upload
+          </Button>
+        )}
       </div>
 
       {/* Grid of cards */}
@@ -95,9 +101,11 @@ export function ReportCardsTab({ studentId }: ReportCardsTabProps) {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <FileText className="h-10 w-10 text-gray-300 mb-3" />
           <p className="text-gray-500 font-medium">No report cards yet</p>
-          <p className="text-sm text-gray-400 mt-1">
-            Upload a PDF report card for this student.
-          </p>
+          {canUpload && (
+            <p className="text-sm text-gray-400 mt-1">
+              Upload a PDF report card for this student.
+            </p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -141,14 +149,17 @@ export function ReportCardsTab({ studentId }: ReportCardsTabProps) {
                   <Download className="h-3 w-3 mr-1" />
                   Download
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
-                  onClick={() => setDeleteId(card._id)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                {canDelete && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
+                    onClick={() => setDeleteId(card._id)}
+                    aria-label={`Delete report card ${card.fileName}`}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                )}
               </div>
             </div>
           ))}

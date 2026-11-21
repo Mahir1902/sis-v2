@@ -1,13 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /** List all discount rules. */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageFeeStructures");
     return await ctx.db.query("discountRules").take(100);
   },
 });
@@ -24,7 +24,7 @@ export const create = mutation({
     endDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageFeeStructures");
     const id = await ctx.db.insert("discountRules", {
       ...args,
       isActive: true,
@@ -44,7 +44,7 @@ export const create = mutation({
 export const toggleActive = mutation({
   args: { discountRuleId: v.id("discountRules"), isActive: v.boolean() },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageFeeStructures");
     const { discountRuleId, isActive } = args;
     const rule = await ctx.db.get(discountRuleId);
     await ctx.db.patch(discountRuleId, { isActive });

@@ -5,7 +5,7 @@ import {
   assignFee,
   applyDiscount as ledgerApplyDiscount,
 } from "./lib/feeLedger";
-import { requireRole } from "./lib/permissions";
+import { requireCapability, requireStudentAccess } from "./lib/permissions";
 
 /**
  * Assigns one fee to a student (admission or mid-year). The amount comes from
@@ -20,7 +20,7 @@ export const createStudentFee = mutation({
     billingPeriod: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudentFees");
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
     return await assignFee(ctx, user, args);
@@ -37,7 +37,7 @@ export const applyDiscount = mutation({
     discountRuleId: v.id("discountRules"),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudentFees");
     return await ledgerApplyDiscount(ctx, user, args);
   },
 });
@@ -46,10 +46,7 @@ export const applyDiscount = mutation({
 export const getByStudent = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "student"]);
-    if (user.role === "student" && user.studentId !== args.studentId) {
-      throw new Error("Unauthorized");
-    }
+    await requireStudentAccess(ctx, "viewStudentFees", args.studentId);
     const fees = await ctx.db
       .query("studentFees")
       .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
@@ -83,7 +80,7 @@ export const getByStudent = query({
 export const getById = query({
   args: { feeId: v.id("studentFees") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageStudentFees");
     return await ctx.db.get(args.feeId);
   },
 });
@@ -96,7 +93,7 @@ export const getById = query({
 export const deleteStudentFee = mutation({
   args: { feeId: v.id("studentFees") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudentFees");
 
     const fee = await ctx.db.get(args.feeId);
     if (!fee) throw new Error("Fee record not found");

@@ -20,7 +20,7 @@ import { getCurrentPlacement } from "./placement";
  * `status`, `appliedDiscounts`), `feeCollectionSessions`, `feeTransactions`,
  * `receipts` and `receiptCounters` goes through one of the five functions
  * here. Public mutations in `studentFees.ts`, `feeCollectionSessions.ts`,
- * `receipts.ts` and `promotions.ts` are thin wrappers that do `requireRole`
+ * `receipts.ts` and `promotions.ts` are thin wrappers that do `requireCapability`
  * and call in with the resulting `actor`.
  *
  * Invariants (ADR-0002, ADR-0003, CONTEXT.md "Fee Billing"):

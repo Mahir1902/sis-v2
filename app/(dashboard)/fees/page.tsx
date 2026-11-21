@@ -15,7 +15,7 @@ import { CreateFeeDialog } from "./_components/CreateFeeDialog";
 
 export default function FeesPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageFeeStructures">
       <FeesPageContent />
     </RoleGate>
   );

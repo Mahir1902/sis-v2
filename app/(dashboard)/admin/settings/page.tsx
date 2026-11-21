@@ -37,6 +37,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import type { Role } from "@/lib/accessPolicy";
 import { InviteUserDialog } from "./_components/InviteUserDialog";
 import { PendingInvitesTable } from "./_components/PendingInvitesTable";
 
@@ -44,7 +45,7 @@ import { PendingInvitesTable } from "./_components/PendingInvitesTable";
 
 export default function AdminSettingsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageUsers">
       {/* Boundary catches a listUsers/listInvites throw → "Try again" (spec #60). */}
       <ErrorBoundary>
         <AdminSettingsPageContent />
@@ -69,10 +70,7 @@ function AdminSettingsPageContent() {
     (i) => i.displayStatus !== "revoked",
   ).length;
 
-  async function handleRoleChange(
-    userId: Id<"users">,
-    role: "admin" | "teacher" | "student",
-  ) {
+  async function handleRoleChange(userId: Id<"users">, role: Role) {
     try {
       await updateRole({ userId, role });
       toast.success("Role updated");
@@ -188,10 +186,7 @@ function AdminSettingsPageContent() {
                           <Select
                             value={user.role}
                             onValueChange={(v) =>
-                              handleRoleChange(
-                                user._id,
-                                v as "admin" | "teacher" | "student",
-                              )
+                              handleRoleChange(user._id, v as Role)
                             }
                           >
                             <SelectTrigger
@@ -203,7 +198,13 @@ function AdminSettingsPageContent() {
                             <SelectContent>
                               <SelectItem value="admin">Admin</SelectItem>
                               <SelectItem value="teacher">Teacher</SelectItem>
-                              <SelectItem value="student">Student</SelectItem>
+                              {/* Making an account a student needs a
+                                  student record to link, which this
+                                  screen cannot pick yet — so the option
+                                  is offered only where it is already set. */}
+                              {user.role === "student" && (
+                                <SelectItem value="student">Student</SelectItem>
+                              )}
                             </SelectContent>
                           </Select>
                         </TableCell>

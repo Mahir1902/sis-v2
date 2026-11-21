@@ -1,12 +1,12 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /** Get all fee transactions for a student. */
 export const getByStudent = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageStudentFees");
     const txns = await ctx.db
       .query("feeTransactions")
       .withIndex("by_student_year", (q) => q.eq("studentId", args.studentId))
@@ -19,7 +19,7 @@ export const getByStudent = query({
 export const getByFee = query({
   args: { feeId: v.id("studentFees") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageStudentFees");
     return await ctx.db
       .query("feeTransactions")
       .withIndex("by_fee", (q) => q.eq("feeId", args.feeId))

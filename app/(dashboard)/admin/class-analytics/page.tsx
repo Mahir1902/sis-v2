@@ -34,7 +34,7 @@ const ALL_SUBJECTS = "__all__";
 
 export default function ClassAnalyticsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="viewClassAnalytics">
       <ClassAnalyticsContent />
     </RoleGate>
   );

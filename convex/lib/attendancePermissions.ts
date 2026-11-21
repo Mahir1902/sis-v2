@@ -4,7 +4,7 @@ import {
   shiftDate,
 } from "../../lib/attendanceDate";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { requireRole } from "./permissions";
+import { requireCapability } from "./permissions";
 
 export type LockReason = "future" | "outside_window";
 
@@ -33,14 +33,14 @@ export function attendanceLockReason(
  * admin   → today or any past date.
  * nobody  → the future.
  *
- * Deliberately NOT in `requireRole` — attendance-specific logic stays beside
+ * The date window is deliberately NOT in the Access Policy table — it stays beside
  * the attendance code so per-class teacher scoping later is a one-file change.
  */
 export async function requireAttendanceWrite(
   ctx: MutationCtx | QueryCtx,
   date: string,
 ) {
-  const user = await requireRole(ctx, ["admin", "teacher"]);
+  const user = await requireCapability(ctx, "writeRegister");
   const reason = attendanceLockReason(user.role, date);
   if (reason === "future") throw new Error("Cannot mark a future date");
   if (reason === "outside_window") {

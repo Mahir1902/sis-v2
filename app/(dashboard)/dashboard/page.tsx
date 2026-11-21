@@ -16,24 +16,26 @@ import { RoleGate } from "@/components/shared/RoleGate";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
-import { homeForRole } from "@/lib/homeForRole";
+import { useCapabilities } from "@/hooks/use-capabilities";
+import { homeFor } from "@/lib/accessPolicy";
 
 export default function DashboardPage() {
-  const me = useQuery(api.users.getMe);
+  const { me, can } = useCapabilities();
   const router = useRouter();
 
   // /dashboard is the default landing page ("/" and the login redirect both
-  // point here), but it is admin-only. Send non-admins to their own home
-  // instead of showing them Access Denied.
-  const shouldRedirect = me?.isActive && me.role !== "admin";
+  // point here), but not every role may open it. Send the others to their
+  // own home instead of showing them Access Denied.
+  const home = me?.isActive && !can("viewDashboard") ? homeFor(me) : null;
+  const shouldRedirect = home !== null;
   useEffect(() => {
-    if (shouldRedirect) router.replace(homeForRole(me?.role));
-  }, [shouldRedirect, me?.role, router]);
+    if (home) router.replace(home);
+  }, [home, router]);
 
   if (shouldRedirect) return null;
 
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="viewDashboard">
       <DashboardContent />
     </RoleGate>
   );

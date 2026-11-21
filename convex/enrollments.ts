@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { type QueryCtx, query } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability, requireStudentAccess } from "./lib/permissions";
 import {
   getClassRoster as classEnrollments,
   getCurrentPlacement,
@@ -15,7 +15,7 @@ import { LEVEL_CODE_ORDER } from "./standardLevels";
 export const getEnrollmentHistory = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher", "student"]);
+    await requireStudentAccess(ctx, "viewStudent", args.studentId);
 
     const enrollments = await ctx.db
       .query("enrollments")
@@ -50,7 +50,7 @@ export const getEnrollmentHistory = query({
 export const getCurrentEnrollment = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher", "student"]);
+    await requireStudentAccess(ctx, "viewStudent", args.studentId);
 
     const current = await getCurrentPlacement(ctx, args.studentId);
     if (!current) return null;
@@ -80,7 +80,7 @@ export const getClassRoster = query({
     academicYear: v.id("academicYears"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewClasses");
     return await loadClassRoster(ctx, args);
   },
 });
@@ -126,7 +126,7 @@ export async function loadClassRoster(
 export const getClassesForYear = query({
   args: { academicYear: v.id("academicYears") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewClasses");
     return await loadClassesForYear(ctx, args.academicYear);
   },
 });

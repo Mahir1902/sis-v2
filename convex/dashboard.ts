@@ -1,5 +1,5 @@
 import { query } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /**
  * Lightweight dashboard summary stats.
@@ -9,7 +9,7 @@ import { requireRole } from "./lib/permissions";
 export const getSummaryStats = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "viewDashboard");
 
     // ponytail: counting means reading every student doc; ceiling is 10k
     // (silent past that). Move the counts to `@convex-dev/aggregate` if the

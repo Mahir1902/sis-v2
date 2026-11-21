@@ -1,13 +1,13 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /** List all fee structures. */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "manageFeeStructures");
     return await ctx.db.query("feeStructure").take(200);
   },
 });
@@ -16,7 +16,7 @@ export const list = query({
 export const getById = query({
   args: { id: v.id("feeStructure") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "manageFeeStructures");
     return await ctx.db.get(args.id);
   },
 });
@@ -28,7 +28,7 @@ export const getById = query({
 export const getFormFeeStructure = query({
   args: { standardLevel: v.id("standardLevels") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageFeeStructures");
     return await ctx.db
       .query("feeStructure")
       .withIndex("by_standard", (q) =>
@@ -69,7 +69,7 @@ export const createFee = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageFeeStructures");
     const id = await ctx.db.insert("feeStructure", { ...args, isActive: true });
     await logAudit(ctx, {
       user,
@@ -118,7 +118,7 @@ export const updateFee = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageFeeStructures");
     const fee = await ctx.db.get(args.feeId);
     if (!fee) throw new ConvexError("Fee structure not found");
 
@@ -142,7 +142,7 @@ export const updateFee = mutation({
 export const toggleActive = mutation({
   args: { feeId: v.id("feeStructure"), isActive: v.boolean() },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageFeeStructures");
     const { feeId, isActive } = args;
     const fee = await ctx.db.get(feeId);
     if (!fee) throw new ConvexError("Fee structure not found");
@@ -166,7 +166,7 @@ export const toggleActive = mutation({
 export const getByLevel = query({
   args: { standardLevel: v.id("standardLevels") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageFeeStructures");
     const fees = await ctx.db
       .query("feeStructure")
       .withIndex("by_standard", (q) =>

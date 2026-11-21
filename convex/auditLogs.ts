@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { query } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 // ─── Audit Log Action Types ──────────────────────────────────────────────────
 
@@ -66,9 +66,9 @@ export const getRecentLogs = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "viewAuditLog");
 
-    const limit = args.limit ?? 100;
+    const limit = Math.min(args.limit ?? 100, 500);
 
     return await ctx.db
       .query("auditLogs")

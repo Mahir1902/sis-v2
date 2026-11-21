@@ -40,7 +40,7 @@ import type { PreviewField, PreviewRow } from "@/lib/studentImportMapping";
 
 export default function ImportStudentsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="importStudents">
       <ImportSurface />
     </RoleGate>
   );

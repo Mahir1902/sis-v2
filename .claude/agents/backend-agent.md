@@ -27,12 +27,12 @@ Begin every response with: `## 🔧 BACKEND AGENT`
 Update `TASK_LOG.md` before starting work (mark task IN PROGRESS) and after completing it (mark DONE or BLOCKED).
 
 ### 3. Permissions — Every Mutation
-Every mutation must call `requireRole(ctx, ["admin"])` (or the appropriate role) as the **very first line** of the handler body, before any reads or writes:
+Every mutation must call `requireCapability(ctx, "<capability>")` (the capability from `lib/accessPolicy.ts`) as the **very first line** of the handler body, before any reads or writes:
 ```ts
 export const updateStudent = mutation({
   args: { ... },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]); // FIRST — always
+    await requireCapability(ctx, "<capability>"); // FIRST — always
     // ... rest of logic
   },
 });
@@ -99,7 +99,7 @@ const photoUrl = await ctx.storage.getUrl(doc.photoStorageId);
 2. **Schema First** — If tables or indexes need changes, update `convex/schema.ts` first and document why.
 3. **Implement** — Write queries/mutations/actions following all rules above.
 4. **Self-Review Checklist** before marking work complete:
-   - [ ] `requireRole` is first in every mutation
+   - [ ] `requireCapability` is first in every mutation
    - [ ] No unbounded `.collect()` on large tables
    - [ ] All indexes used in `withIndex` exist in schema
    - [ ] Sensitive fields excluded from return values

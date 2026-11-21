@@ -54,13 +54,14 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { serverErrorMessage } from "@/lib/placementErrors";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PromotionsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="promoteStudents">
       <PromotionsPageContent />
     </RoleGate>
   );
@@ -131,6 +132,9 @@ function PromotionsPageContent() {
   // ── Mutations ───────────────────────────────────────────────────────────
   const bulkPromote = useMutation(api.promotions.bulkPromote);
   const createYear = useMutation(api.academicYears.create);
+  // Creating a year is school setup; a teacher granted Promotions picks from
+  // the years that exist.
+  const canCreateYear = useCapabilities().can("manageSchoolSetup");
 
   // ── Create Year Form ──────────────────────────────────────────────────
   const createYearForm = useForm<CreateAcademicYearValues>({
@@ -309,19 +313,23 @@ function PromotionsPageContent() {
                       {y.name}
                     </SelectItem>
                   ))}
-                <div className="border-t my-1" />
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-2 py-1.5 text-sm cursor-pointer rounded-sm hover:bg-gray-100 text-school-green"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setCreateYearOpen(true);
-                  }}
-                  aria-label="Create new academic year"
-                >
-                  <Plus className="h-4 w-4" />
-                  New Academic Year
-                </button>
+                {canCreateYear && (
+                  <>
+                    <div className="border-t my-1" />
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-2 py-1.5 text-sm cursor-pointer rounded-sm hover:bg-gray-100 text-school-green"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setCreateYearOpen(true);
+                      }}
+                      aria-label="Create new academic year"
+                    >
+                      <Plus className="h-4 w-4" />
+                      New Academic Year
+                    </button>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -382,14 +390,16 @@ function PromotionsPageContent() {
           <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             <span>No target year available.</span>
-            <Button
-              variant="link"
-              className="text-school-green p-0 h-auto"
-              onClick={() => setCreateYearOpen(true)}
-              aria-label="Create new academic year"
-            >
-              Create a new academic year
-            </Button>
+            {canCreateYear && (
+              <Button
+                variant="link"
+                className="text-school-green p-0 h-auto"
+                onClick={() => setCreateYearOpen(true)}
+                aria-label="Create new academic year"
+              >
+                Create a new academic year
+              </Button>
+            )}
           </div>
         )}
 

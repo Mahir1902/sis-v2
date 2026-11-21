@@ -16,7 +16,7 @@ import {
   type QueryCtx,
   query,
 } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability, requireStudentAccess } from "./lib/permissions";
 
 /**
  * Below this many graded peers a "class average" or "position" identifies a
@@ -80,7 +80,7 @@ export function activeAssessmentsFor(
  * `studentAssessmentAnswers.ts`), question and assessment changes (class-wide,
  * via `scheduleClassRecompute`), and the repair migration. There is no manual
  * trigger any more. Takes a bare `MutationCtx` and does no permission check —
- * the calling mutation is responsible for `requireRole`.
+ * the calling mutation is responsible for `requireCapability`.
  */
 export async function recomputeGrade(
   ctx: MutationCtx,
@@ -338,7 +338,7 @@ export const recomputeGradesBatch = internalMutation({
 export const getComputedGradesByStudent = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireStudentAccess(ctx, "viewStudentGrades", args.studentId);
     const grades = await ctx.db
       .query("computedGrades")
       .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
@@ -360,7 +360,14 @@ export const getGradesByEnrollmentSemester = query({
     semester: v.union(v.literal(1), v.literal(2)),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    // Keyed by enrollment: the access question is about the student behind
+    // it. A missing enrollment has no student to check, so staff only.
+    const enrollment = await ctx.db.get(args.enrollmentId);
+    if (!enrollment) {
+      await requireCapability(ctx, "viewClasses");
+      return [];
+    }
+    await requireStudentAccess(ctx, "viewStudentGrades", enrollment.studentId);
     const grades = await ctx.db
       .query("computedGrades")
       .withIndex("by_enrollment_semester", (q) =>
@@ -493,7 +500,7 @@ export const getClassAverages = query({
     studentId: v.optional(v.id("students")),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewClasses");
     const rows = await classSubjectRows(ctx, args);
 
     const gradedCount = rows.length;
@@ -534,7 +541,7 @@ export const getPerCaClassBaseline = query({
     semester: v.union(v.literal(1), v.literal(2)),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewClasses");
     const rows = await classSubjectRows(ctx, args);
 
     const baseline = (
@@ -575,7 +582,7 @@ export const getClassPositions = query({
     studentId: v.id("students"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewClasses");
     const rows = await classTermRows(ctx, args);
 
     // "Expected CA" count = the stored `expectedCaCount`, which every CA
@@ -706,7 +713,7 @@ export const getGradeSpread = query({
     subjectId: v.optional(v.id("subjects")),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewClassAnalytics");
     const raw = await ctx.db
       .query("computedGrades")
       .withIndex("by_class_subject_semester", (q) =>
@@ -743,7 +750,7 @@ export const getStudentsNeedingHelp = query({
     subjectId: v.optional(v.id("subjects")),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewClassAnalytics");
     const rows = (await classTermRows(ctx, args)).filter(
       (r) =>
         r.weightedAverage < 50 &&

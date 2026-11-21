@@ -3,13 +3,13 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { getCurrentAcademicYear, yearsOverlap } from "./lib/academicYear";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /** List all academic years, sorted by start date descending. */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin", "teacher", "student"]);
+    await requireCapability(ctx, "viewReferenceData");
     const years = await ctx.db.query("academicYears").take(100);
     return years.sort((a, b) => b.startDate - a.startDate);
   },
@@ -28,7 +28,7 @@ export const list = query({
 export const getCurrent = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin", "teacher", "student"]);
+    await requireCapability(ctx, "viewReferenceData");
     return await getCurrentAcademicYear(ctx);
   },
 });
@@ -57,7 +57,7 @@ export const create = mutation({
     endDate: v.float64(),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageSchoolSetup");
 
     if (args.startDate >= args.endDate) {
       throw new Error("Start date must be before end date");
@@ -100,7 +100,7 @@ export const update = mutation({
     semester1EndDate: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageSchoolSetup");
 
     const year = await ctx.db.get(args.academicYearId);
     if (!year) throw new Error("Academic year not found");

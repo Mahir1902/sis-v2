@@ -13,7 +13,7 @@ import { recomputeGrade } from "./computedGrades";
  * so the fixture owns the whole (subject, level, year, semester) space and no
  * shared data is mutated. Every student/enrollment/assessment/answer is inserted
  * directly via `ctx.db.insert` (this is an internalMutation, so it bypasses
- * `requireRole` — fine, it is not reachable from the client), then the EXPORTED
+ * `requireCapability` — fine, it is not reachable from the client), then the EXPORTED
  * `recomputeGrade` helper is called per (student, subject) to write the real
  * `computedGrades` rows using the same math the app uses.
  *

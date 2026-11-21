@@ -12,16 +12,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { cn } from "@/lib/utils";
 
 interface StudentInfoSidebarProps {
   studentId: Id<"students">;
-}
-
-function maskSensitive(value: string | undefined): string {
-  if (!value) return "—";
-  if (value.length <= 4) return "****";
-  return `****${value.slice(-4)}`;
 }
 
 /**
@@ -86,18 +81,34 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 }
 
 export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
-  const student = useQuery(api.students.getStudentById, { studentId });
-  const me = useQuery(api.users.getMe);
-  const currentEnrollment = useQuery(api.enrollments.getCurrentEnrollment, {
-    studentId,
-  });
-  const siblings = useQuery(api.students.getSiblingsByStudent, { studentId });
-  const fees = useQuery(api.studentFees.getByStudent, { studentId });
-  const allGrades = useQuery(api.computedGrades.getComputedGradesByStudent, {
-    studentId,
-  });
+  const { can, canOnStudent } = useCapabilities();
+  // Ask only for what this role may have (Access Policy); the identity
+  // numbers and family income arrive on `student` only for a role that may
+  // see them, so those rows are simply absent for everyone else.
+  const seesFees = canOnStudent("viewStudentFees", studentId);
+  const seesSensitive = canOnStudent("viewStudentSensitive", studentId);
 
-  const isAdmin = me?.role === "admin";
+  const mayView = canOnStudent("viewStudent", studentId);
+  const student = useQuery(
+    api.students.getStudentById,
+    mayView ? { studentId } : "skip",
+  );
+  const currentEnrollment = useQuery(
+    api.enrollments.getCurrentEnrollment,
+    mayView ? { studentId } : "skip",
+  );
+  const siblings = useQuery(
+    api.students.getSiblingsByStudent,
+    can("listStudents") ? { studentId } : "skip",
+  );
+  const fees = useQuery(
+    api.studentFees.getByStudent,
+    seesFees ? { studentId } : "skip",
+  );
+  const allGrades = useQuery(
+    api.computedGrades.getComputedGradesByStudent,
+    canOnStudent("viewStudentGrades", studentId) ? { studentId } : "skip",
+  );
 
   if (student === undefined) {
     return (
@@ -134,12 +145,8 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
   // Count documents
   const docCount = [
     student.birthCertificateNumber,
-    "passportNumber" in student
-      ? (student as Record<string, unknown>).passportNumber
-      : null,
-    "passportValidTill" in student
-      ? (student as Record<string, unknown>).passportValidTill
-      : null,
+    student.passportNumber,
+    student.passportValidTill,
   ].filter(Boolean).length;
 
   const siblingCount = siblings?.length ?? 0;
@@ -147,7 +154,7 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
   return (
     <div className="flex flex-col gap-3 p-3.5 text-xs overflow-y-auto">
       {/* ── Metrics ── */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className={cn("grid gap-2", seesFees && "grid-cols-2")}>
         <div className="bg-white border rounded-lg p-3">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
             Avg Grade
@@ -156,24 +163,28 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
             {avgGrade !== null ? `${avgGrade.toFixed(1)}%` : "—"}
           </div>
         </div>
-        <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-            Fees Due
-          </div>
-          <div
-            className={cn(
-              "text-xl font-bold mt-0.5",
-              totalBalance > 0 ? "text-red-600" : "text-foreground",
-            )}
-          >
-            {totalBalance > 0 ? `৳${(totalBalance / 1000).toFixed(0)}K` : "৳0"}
-          </div>
-          {unpaidCount > 0 && (
-            <div className="text-[10px] text-red-600 mt-0.5">
-              {unpaidCount} unpaid
+        {seesFees && (
+          <div className="bg-white border rounded-lg p-3">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+              Fees Due
             </div>
-          )}
-        </div>
+            <div
+              className={cn(
+                "text-xl font-bold mt-0.5",
+                totalBalance > 0 ? "text-red-600" : "text-foreground",
+              )}
+            >
+              {totalBalance > 0
+                ? `৳${(totalBalance / 1000).toFixed(0)}K`
+                : "৳0"}
+            </div>
+            {unpaidCount > 0 && (
+              <div className="text-[10px] text-red-600 mt-0.5">
+                {unpaidCount} unpaid
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Accordion Sections ── */}
@@ -275,19 +286,8 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
                     value={student.fatherOccupation}
                   />
                   <PhoneRow phone={student.fatherPhoneNumber} />
-                  {"fatherNidNumber" in student && (
-                    <InfoRow
-                      label="NID"
-                      value={
-                        isAdmin
-                          ? ((student as Record<string, unknown>)
-                              .fatherNidNumber as string)
-                          : maskSensitive(
-                              (student as Record<string, unknown>)
-                                .fatherNidNumber as string | undefined,
-                            )
-                      }
-                    />
+                  {seesSensitive && (
+                    <InfoRow label="NID" value={student.fatherNidNumber} />
                   )}
                 </div>
               </div>
@@ -311,19 +311,8 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
                     value={student.motherOccupation}
                   />
                   <PhoneRow phone={student.motherPhoneNumber} />
-                  {"motherNidNumber" in student && (
-                    <InfoRow
-                      label="NID"
-                      value={
-                        isAdmin
-                          ? ((student as Record<string, unknown>)
-                              .motherNidNumber as string)
-                          : maskSensitive(
-                              (student as Record<string, unknown>)
-                                .motherNidNumber as string | undefined,
-                            )
-                      }
-                    />
+                  {seesSensitive && (
+                    <InfoRow label="NID" value={student.motherNidNumber} />
                   )}
                 </div>
               </div>
@@ -347,30 +336,18 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
                 </div>
                 <div className="flex flex-col gap-1 pl-9">
                   <PhoneRow phone={student.guardianPhoneNumber} />
-                  {"guardianNidNumber" in student && (
-                    <InfoRow
-                      label="NID"
-                      value={
-                        isAdmin
-                          ? ((student as Record<string, unknown>)
-                              .guardianNidNumber as string)
-                          : maskSensitive(
-                              (student as Record<string, unknown>)
-                                .guardianNidNumber as string | undefined,
-                            )
-                      }
-                    />
+                  {seesSensitive && (
+                    <InfoRow label="NID" value={student.guardianNidNumber} />
                   )}
                 </div>
               </div>
 
               {/* Income */}
-              {"familyAnnualIncome" in student && isAdmin && (
+              {seesSensitive && (
                 <div className="flex justify-between gap-2 border-t pt-2">
                   <span className="text-muted-foreground">Annual Income</span>
                   <span className="font-medium">
-                    {((student as Record<string, unknown>)
-                      .familyAnnualIncome as string) || "—"}
+                    {student.familyAnnualIncome || "—"}
                   </span>
                 </div>
               )}
@@ -425,43 +402,18 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
           </AccordionTrigger>
           <AccordionContent className="px-3.5 pb-3 pt-0">
             <div className="flex flex-col gap-1.5">
-              <InfoRow
-                label="Birth Cert"
-                value={
-                  isAdmin
-                    ? student.birthCertificateNumber
-                    : maskSensitive(student.birthCertificateNumber)
-                }
-              />
-              <InfoRow
-                label="Passport"
-                value={
-                  "passportNumber" in student
-                    ? isAdmin
-                      ? ((student as Record<string, unknown>)
-                          .passportNumber as string)
-                      : maskSensitive(
-                          (student as Record<string, unknown>).passportNumber as
-                            | string
-                            | undefined,
-                        )
-                    : "—"
-                }
-              />
+              {seesSensitive && (
+                <>
+                  <InfoRow
+                    label="Birth Cert"
+                    value={student.birthCertificateNumber}
+                  />
+                  <InfoRow label="Passport" value={student.passportNumber} />
+                </>
+              )}
               <InfoRow
                 label="Passport Expiry"
-                value={
-                  "passportValidTill" in student &&
-                  (student as Record<string, unknown>).passportValidTill
-                    ? format(
-                        new Date(
-                          (student as Record<string, unknown>)
-                            .passportValidTill as number,
-                        ),
-                        "dd MMM yyyy",
-                      )
-                    : "—"
-                }
+                value={formatDate(student.passportValidTill)}
               />
             </div>
           </AccordionContent>

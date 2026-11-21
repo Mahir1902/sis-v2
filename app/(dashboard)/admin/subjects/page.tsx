@@ -47,7 +47,7 @@ type CreateSubjectValues = z.infer<typeof createSubjectSchema>;
 
 export default function SubjectsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageSubjects">
       <SubjectsPageContent />
     </RoleGate>
   );

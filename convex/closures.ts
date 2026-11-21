@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { dhakaDate, isDateLabel, shiftDate } from "../lib/attendanceDate";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type QueryCtx, query } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /**
  * School closures (attendance spec §4.2). One row per closed date carrying a
@@ -40,7 +40,7 @@ export function closedDatesFor(
 export const list = query({
   args: { academicYear: v.id("academicYears") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewAttendance");
     const year = await ctx.db.get(args.academicYear);
     if (!year) throw new Error("Academic year not found");
 
@@ -79,7 +79,7 @@ export const create = mutation({
     confirmVoid: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageCalendar");
 
     if (!isDateLabel(args.startDate) || !isDateLabel(args.endDate)) {
       throw new Error("Dates must be real calendar days as YYYY-MM-DD");
@@ -154,7 +154,7 @@ export const create = mutation({
 export const remove = mutation({
   args: { closureId: v.id("closures") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageCalendar");
     const closure = await ctx.db.get(args.closureId);
     if (!closure) throw new Error("Closure not found");
     await ctx.db.delete(args.closureId);

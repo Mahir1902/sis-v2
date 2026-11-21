@@ -1,11 +1,15 @@
 "use client";
 
-import { useConvexAuth, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { UserX } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "@/components/DataTable";
+import { AccessDenied } from "@/components/shared/RoleGate";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
+import { useCapabilities } from "@/hooks/use-capabilities";
+import { homeFor } from "@/lib/accessPolicy";
 import { AddStudentButton } from "./_components/AddStudentButton";
 import {
   type StudentsFilters,
@@ -40,9 +44,27 @@ function StudentsTableSkeleton() {
   );
 }
 
+/** Shown to an account that may not open the roster and has no record of its own. */
+function NoStudentRecord() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <UserX className="h-10 w-10 text-gray-300 mb-3" />
+      <h2 className="text-lg font-semibold text-gray-900">
+        No student record linked
+      </h2>
+      <p className="text-sm text-gray-500 mt-1 max-w-sm">
+        Your account is not linked to a student record yet. Please contact the
+        school office.
+      </p>
+    </div>
+  );
+}
+
 export default function StudentsPage() {
   const router = useRouter();
-  const { isAuthenticated } = useConvexAuth();
+  const { me, isLoading: isRoleLoading, can } = useCapabilities();
+  const canList = can("listStudents");
+  const canAdmit = can("manageStudents");
   const [filters, setFilters] = useState<StudentsFilters>({
     standardLevel: new Set(),
     status: new Set(),
@@ -64,8 +86,27 @@ export default function StudentsPage() {
 
   const students = useQuery(
     api.students.getAllStudents,
-    isAuthenticated ? queryArgs : "skip",
+    canList ? queryArgs : "skip",
   );
+
+  // The roster is not this account's page: a student account goes to its own
+  // record (homeFor), and one linked to no record is told so below.
+  const ownHome = me?.isActive && !canList ? homeFor(me) : null;
+  const redirectTo = ownHome && ownHome !== "/students" ? ownHome : null;
+  useEffect(() => {
+    if (redirectTo) router.replace(redirectTo);
+  }, [redirectTo, router]);
+
+  if (redirectTo) return null;
+  if (!isRoleLoading && !canList) {
+    // An unlinked student account is told what is missing; anyone else
+    // (a deactivated account) gets the gate's message.
+    return me?.isActive && me.role === "student" ? (
+      <NoStudentRecord />
+    ) : (
+      <AccessDenied />
+    );
+  }
 
   const isLoading = students === undefined;
 
@@ -87,7 +128,7 @@ export default function StudentsPage() {
               : `${students.length} student${students.length !== 1 ? "s" : ""}${hasActiveFilters ? " (filtered)" : ""}`}
           </p>
         </div>
-        <AddStudentButton />
+        {canAdmit && <AddStudentButton />}
       </div>
 
       {/* Table */}
@@ -96,10 +137,14 @@ export default function StudentsPage() {
       ) : students.length === 0 && !hasActiveFilters ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <p className="text-lg font-medium text-gray-900">No students yet</p>
-          <p className="text-sm text-gray-500 mt-1 mb-6">
-            Add your first student to get started.
-          </p>
-          <AddStudentButton />
+          {canAdmit && (
+            <>
+              <p className="text-sm text-gray-500 mt-1 mb-6">
+                Add your first student to get started.
+              </p>
+              <AddStudentButton />
+            </>
+          )}
         </div>
       ) : (
         <div className="flex-1 min-h-0">
