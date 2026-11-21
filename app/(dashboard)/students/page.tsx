@@ -5,6 +5,7 @@ import { UserX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "@/components/DataTable";
+import { AccessDenied } from "@/components/shared/RoleGate";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import { useCapabilities } from "@/hooks/use-capabilities";
@@ -90,14 +91,22 @@ export default function StudentsPage() {
 
   // The roster is not this account's page: a student account goes to its own
   // record (homeFor), and one linked to no record is told so below.
-  const ownHome = me && !canList ? homeFor(me) : null;
+  const ownHome = me?.isActive && !canList ? homeFor(me) : null;
   const redirectTo = ownHome && ownHome !== "/students" ? ownHome : null;
   useEffect(() => {
     if (redirectTo) router.replace(redirectTo);
   }, [redirectTo, router]);
 
   if (redirectTo) return null;
-  if (!isRoleLoading && !canList) return <NoStudentRecord />;
+  if (!isRoleLoading && !canList) {
+    // An unlinked student account is told what is missing; anyone else
+    // (a deactivated account) gets the gate's message.
+    return me?.isActive && me.role === "student" ? (
+      <NoStudentRecord />
+    ) : (
+      <AccessDenied />
+    );
+  }
 
   const isLoading = students === undefined;
 

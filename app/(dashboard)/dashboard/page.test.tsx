@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const useQuery = vi.fn();
 vi.mock("convex/react", () => ({
   useQuery: (ref: unknown) => useQuery(ref),
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
 }));
 
 const replace = vi.fn();

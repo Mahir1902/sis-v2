@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { getFunctionName } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +21,7 @@ vi.mock("convex/react", () => ({
     return data.get(name);
   },
   useMutation: () => vi.fn(),
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
 }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ studentId }),
@@ -119,6 +120,49 @@ describe("student page — what each role is shown and asks for", () => {
       screen.queryByRole("button", { name: "Edit student" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("All Students")).not.toBeInTheDocument();
+  });
+
+  it("asks the server for nothing but the account while the role is unknown", () => {
+    // getMe still loading: no role-dependent query may fire yet.
+    render(<StudentDetailPage />);
+    expect([...new Set(subscribed)]).toEqual(["users:getMe"]);
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.queryByText("Access Denied")).not.toBeInTheDocument();
+  });
+
+  it("lets a student open their Grades tab without a staff-only query", () => {
+    signInAs({ role: "student", studentId: "s1" });
+    data.set("enrollments:getEnrollmentHistory", []);
+    data.set("enrollments:getCurrentEnrollment", null);
+    render(<StudentDetailPage />);
+
+    const grades = screen.getByRole("tab", { name: "Grades" });
+    // Radix Tabs activates on mouse down / focus rather than click.
+    fireEvent.mouseDown(grades, { button: 0 });
+    fireEvent.focus(grades);
+
+    expect(grades).toHaveAttribute("aria-selected", "true");
+    const allowed = new Set([
+      "users:getMe",
+      "students:getStudentById",
+      "enrollments:getCurrentEnrollment",
+      "enrollments:getEnrollmentHistory",
+      "studentFees:getByStudent",
+      "computedGrades:getComputedGradesByStudent",
+      "computedGrades:getGradesByEnrollmentSemester",
+    ]);
+    expect(subscribed.filter((name) => !allowed.has(name))).toEqual([]);
+  });
+
+  it("tells a deactivated account so instead of showing the student", () => {
+    signInAs({ role: "admin" });
+    data.set("users:getMe", {
+      ...(data.get("users:getMe") as object),
+      isActive: false,
+    });
+    render(<StudentDetailPage />);
+    expect(screen.getByText("Account Deactivated")).toBeInTheDocument();
+    expect(subscribed).not.toContain("students:getStudentById");
   });
 
   it("refuses a student another student's page without asking the server", () => {

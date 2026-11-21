@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { useRef } from "react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -26,19 +26,26 @@ import {
  * UI guard only — every Convex function enforces the same table itself.
  */
 export function useCapabilities() {
+  const { isAuthenticated } = useConvexAuth();
   const me = useQuery(api.users.getMe);
 
   // `getMe` is briefly null while the auth token refreshes; keep the last
   // known account so gated UI does not flash "denied" (as DashboardWrapper).
   const lastMe = useRef(me);
   if (me) lastMe.current = me;
-  const account = me ?? lastMe.current;
+
+  // No session → no account, so every gated query skips instead of reaching
+  // the server with no identity. Until an account is known we are loading,
+  // never "denied": DashboardWrapper owns the redirect to /login.
+  const account = isAuthenticated
+    ? (me ?? lastMe.current ?? undefined)
+    : undefined;
 
   // A deactivated account is refused by every Convex function: no capabilities.
   const caller = account?.isActive ? account : undefined;
 
   return {
-    /** The account, `null` when signed out. */
+    /** The signed-in account, `null` while it is not known. */
     me: account ?? null,
     /** True until the account is known — render nothing role-dependent yet. */
     isLoading: account === undefined,

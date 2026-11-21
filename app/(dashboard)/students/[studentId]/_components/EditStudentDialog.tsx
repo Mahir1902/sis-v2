@@ -151,10 +151,8 @@ export function EditStudentDialog({
 
   useEffect(() => {
     if (student && open) {
-      // Some fields may be stripped for student-role callers.
-      // Cast to a wider type so we can safely access optional sensitive fields.
-      const data = student as Record<string, unknown>;
-
+      // Only a role that may edit opens this dialog, and it receives the
+      // full record (identity numbers and income included).
       form.reset({
         studentFullName: student.studentFullName,
         gender: student.gender,
@@ -164,10 +162,10 @@ export function EditStudentDialog({
         religion: student.religion,
         bloodGroup: student.bloodGroup,
         birthCertificateNumber: student.birthCertificateNumber,
-        passportNumber: (data.passportNumber as string) ?? "",
+        passportNumber: student.passportNumber ?? "",
         passportValidTill:
-          typeof data.passportValidTill === "number"
-            ? formatTimestampToDateString(data.passportValidTill)
+          typeof student.passportValidTill === "number"
+            ? formatTimestampToDateString(student.passportValidTill)
             : "",
         standardLevel: student.placement?.standardLevelId ?? "",
         campus: student.placement?.campus ?? "",
@@ -183,17 +181,17 @@ export function EditStudentDialog({
         healthIssueDescription: student.healthIssue?.issueDescription ?? "",
         fatherName: student.fatherName,
         fatherOccupation: student.fatherOccupation,
-        fatherNidNumber: (data.fatherNidNumber as string) ?? "",
+        fatherNidNumber: student.fatherNidNumber ?? "",
         fatherPhoneNumber: student.fatherPhoneNumber,
         motherName: student.motherName,
         motherOccupation: student.motherOccupation,
-        motherNidNumber: (data.motherNidNumber as string) ?? "",
+        motherNidNumber: student.motherNidNumber ?? "",
         motherPhoneNumber: student.motherPhoneNumber,
         guardianName: student.guardianName,
         guardianRelation: student.guardianRelation,
-        guardianNidNumber: (data.guardianNidNumber as string) ?? "",
+        guardianNidNumber: student.guardianNidNumber ?? "",
         guardianPhoneNumber: student.guardianPhoneNumber,
-        familyAnnualIncome: (data.familyAnnualIncome as string) ?? "",
+        familyAnnualIncome: student.familyAnnualIncome ?? "",
         consultantName: student.consultantName,
       });
     }

@@ -270,11 +270,13 @@ export function StudentHeader({
         </div>
       </div>
 
-      <EditStudentDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        studentId={studentId}
-      />
+      {canManage && (
+        <EditStudentDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          studentId={studentId}
+        />
+      )}
     </div>
   );
 }

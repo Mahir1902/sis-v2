@@ -17,6 +17,7 @@ vi.mock("convex/react", () => ({
     return data.get(name);
   },
   useMutation: () => vi.fn(),
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace }),
@@ -66,6 +67,21 @@ describe("students list", () => {
     expect(replace).toHaveBeenCalledWith("/students/s1");
     expect(subscribed).not.toContain("students:getAllStudents");
     expect(screen.queryByText("All Students")).not.toBeInTheDocument();
+  });
+
+  it("tells a deactivated teacher their account is deactivated, not unlinked", () => {
+    signInAs({ role: "teacher" });
+    data.set("users:getMe", {
+      ...(data.get("users:getMe") as object),
+      isActive: false,
+    });
+    render(<StudentsPage />);
+    expect(screen.getByText("Account Deactivated")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No student record linked"),
+    ).not.toBeInTheDocument();
+    expect(subscribed).not.toContain("students:getAllStudents");
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("tells a student account with no linked record so, without asking for the roster", () => {

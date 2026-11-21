@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const useQuery = vi.fn();
 vi.mock("convex/react", () => ({
   useQuery: () => useQuery(),
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
 }));
 
 import { RoleGate } from "./RoleGate";

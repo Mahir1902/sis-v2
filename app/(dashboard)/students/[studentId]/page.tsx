@@ -3,14 +3,16 @@
 import { useQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AccessDenied } from "@/components/shared/RoleGate";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useCapabilities } from "@/hooks/use-capabilities";
+import {
+  type StudentTab,
+  useStudentPageAccess,
+} from "@/hooks/use-student-page-access";
 import { AcademicHistoryTab } from "./_components/AcademicHistoryTab";
 import { AttendanceTab } from "./_components/AttendanceTab";
 import { FeesTab } from "./_components/FeesTab";
@@ -19,9 +21,7 @@ import { ReportCardsTab } from "./_components/ReportCardsTab";
 import { StudentHeader } from "./_components/StudentHeader";
 import { StudentInfoSidebar } from "./_components/StudentInfoSidebar";
 
-type Tab = "fees" | "academic" | "grades" | "reports" | "attendance";
-
-const tabLabels: Record<Tab, string> = {
+const tabLabels: Record<StudentTab, string> = {
   fees: "Fees",
   grades: "Grades",
   academic: "Academic History",
@@ -33,22 +33,15 @@ export default function StudentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const studentId = params.studentId as Id<"students">;
-  const [chosenTab, setChosenTab] = useState<Tab | null>(null);
-  const { isLoading, can, canOnStudent } = useCapabilities();
-
-  // A role is shown — and subscribes to — only what the Access Policy grants
-  // it. One refused query would take the whole page to "Access denied".
-  const mayView = canOnStudent("viewStudent", studentId);
-  const access: Record<Tab, boolean> = {
-    fees: canOnStudent("viewStudentFees", studentId),
-    grades: canOnStudent("viewStudentGrades", studentId),
-    academic: mayView && can("viewClasses"),
-    reports: mayView && can("viewReportCards"),
-    attendance: mayView && can("viewAttendance"),
-  };
-  const tabs = (Object.keys(tabLabels) as Tab[]).filter((id) => access[id]);
-  const activeTab = chosenTab && access[chosenTab] ? chosenTab : tabs[0];
-  const canListStudents = can("listStudents");
+  const {
+    isLoading,
+    mayView,
+    canListStudents,
+    access,
+    tabs,
+    activeTab,
+    setActiveTab,
+  } = useStudentPageAccess(studentId);
 
   const student = useQuery(
     api.students.getStudentById,
@@ -147,13 +140,13 @@ export default function StudentDetailPage() {
           {/* Tab navigation */}
           <Tabs
             value={activeTab}
-            onValueChange={(tab) => setChosenTab(tab as Tab)}
+            onValueChange={(tab) => setActiveTab(tab as StudentTab)}
             className="gap-0"
           >
             <TabsList
               variant="line"
               aria-label="Student detail tabs"
-              className="h-auto w-full justify-start gap-0 overflow-x-auto rounded-t-lg border-b bg-white p-0"
+              className="w-full justify-start gap-0 overflow-x-auto rounded-t-lg border-b bg-white p-0 group-data-[orientation=horizontal]/tabs:h-auto"
             >
               {tabs.map((id) => (
                 <TabsTrigger
@@ -165,11 +158,13 @@ export default function StudentDetailPage() {
                   {id === "fees" && unpaidCount > 0 && (
                     <span className="bg-red-50 text-red-600 rounded-full px-1.5 text-[9px] font-medium">
                       {unpaidCount}
+                      <span className="sr-only"> unpaid</span>
                     </span>
                   )}
                   {id === "reports" && reportCardCount > 0 && (
                     <span className="text-muted-foreground text-[9px]">
                       {reportCardCount}
+                      <span className="sr-only"> report cards</span>
                     </span>
                   )}
                 </TabsTrigger>

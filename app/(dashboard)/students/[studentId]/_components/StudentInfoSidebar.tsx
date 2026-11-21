@@ -88,10 +88,15 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
   const seesFees = canOnStudent("viewStudentFees", studentId);
   const seesSensitive = canOnStudent("viewStudentSensitive", studentId);
 
-  const student = useQuery(api.students.getStudentById, { studentId });
-  const currentEnrollment = useQuery(api.enrollments.getCurrentEnrollment, {
-    studentId,
-  });
+  const mayView = canOnStudent("viewStudent", studentId);
+  const student = useQuery(
+    api.students.getStudentById,
+    mayView ? { studentId } : "skip",
+  );
+  const currentEnrollment = useQuery(
+    api.enrollments.getCurrentEnrollment,
+    mayView ? { studentId } : "skip",
+  );
   const siblings = useQuery(
     api.students.getSiblingsByStudent,
     can("listStudents") ? { studentId } : "skip",

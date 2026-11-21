@@ -82,7 +82,10 @@ export function DashboardWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-screen bg-gray-50 overflow-hidden">
-      <Sidebar caller={displayUser} email={displayUser.email} />
+      <Sidebar
+        caller={displayUser.isActive ? displayUser : undefined}
+        email={displayUser.email}
+      />
       <main
         className={cn(
           "transition-all duration-300 h-full flex flex-col overflow-hidden",

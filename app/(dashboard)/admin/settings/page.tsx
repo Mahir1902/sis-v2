@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { ConvexError } from "convex/values";
 import { Shield, UserCheck, UserPlus, UserX } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -38,6 +37,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import type { Role } from "@/lib/accessPolicy";
 import { InviteUserDialog } from "./_components/InviteUserDialog";
 import { PendingInvitesTable } from "./_components/PendingInvitesTable";
 
@@ -70,23 +70,13 @@ function AdminSettingsPageContent() {
     (i) => i.displayStatus !== "revoked",
   ).length;
 
-  async function handleRoleChange(
-    userId: Id<"users">,
-    role: "admin" | "teacher" | "student",
-  ) {
+  async function handleRoleChange(userId: Id<"users">, role: Role) {
     try {
       await updateRole({ userId, role });
       toast.success("Role updated");
     } catch (err: unknown) {
-      // The server refuses a student account with no student record behind
-      // it; this screen cannot link one yet (the access sheet will).
-      const needsStudent =
-        err instanceof ConvexError && err.data?.code === "STUDENT_REQUIRED";
-      const message = needsStudent
-        ? "A student account must be linked to a student record, which this screen cannot do yet."
-        : err instanceof Error
-          ? err.message
-          : "Failed to update role";
+      const message =
+        err instanceof Error ? err.message : "Failed to update role";
       toast.error(message);
     }
   }
@@ -196,10 +186,7 @@ function AdminSettingsPageContent() {
                           <Select
                             value={user.role}
                             onValueChange={(v) =>
-                              handleRoleChange(
-                                user._id,
-                                v as "admin" | "teacher" | "student",
-                              )
+                              handleRoleChange(user._id, v as Role)
                             }
                           >
                             <SelectTrigger
@@ -211,7 +198,13 @@ function AdminSettingsPageContent() {
                             <SelectContent>
                               <SelectItem value="admin">Admin</SelectItem>
                               <SelectItem value="teacher">Teacher</SelectItem>
-                              <SelectItem value="student">Student</SelectItem>
+                              {/* Making an account a student needs a
+                                  student record to link, which this
+                                  screen cannot pick yet — so the option
+                                  is offered only where it is already set. */}
+                              {user.role === "student" && (
+                                <SelectItem value="student">Student</SelectItem>
+                              )}
                             </SelectContent>
                           </Select>
                         </TableCell>

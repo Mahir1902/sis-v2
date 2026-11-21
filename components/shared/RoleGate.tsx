@@ -19,17 +19,28 @@ interface RoleGateProps {
  * enforce the same table via requireCapability() independently.
  */
 export function RoleGate({ capability, children }: RoleGateProps) {
-  const { me, isLoading, can } = useCapabilities();
+  const { isLoading, can } = useCapabilities();
 
   // Still loading — DashboardWrapper already shows a spinner,
   // so return null to avoid a flash of "Access Denied"
   if (isLoading) return null;
 
-  // Deactivated account: every server query/mutation rejects these users
-  // (requireCapability checks isActive), so deny at the gate too. Otherwise a
-  // still-"admin"-by-role but deactivated user renders admin content whose
-  // queries then throw Unauthorized — e.g. the settings page's ErrorBoundary
-  // showing "Something went wrong". Give an honest message instead.
+  if (!can(capability)) return <AccessDenied />;
+
+  return <>{children}</>;
+}
+
+/**
+ * The "you may not open this" message, for the gate above and for pages that
+ * gate on more than a capability.
+ *
+ * A deactivated account is told so honestly: every server query/mutation
+ * rejects it (requireCapability checks isActive), so it holds no capability —
+ * and without this a still-"admin"-by-role but deactivated user would be told
+ * they merely lack permission.
+ */
+export function AccessDenied() {
+  const { me } = useCapabilities();
   if (me && !me.isActive) {
     return (
       <GateMessage
@@ -39,14 +50,6 @@ export function RoleGate({ capability, children }: RoleGateProps) {
       />
     );
   }
-
-  if (!can(capability)) return <AccessDenied />;
-
-  return <>{children}</>;
-}
-
-/** The "you may not open this" message, for pages that gate on more than a capability. */
-export function AccessDenied() {
   return (
     <GateMessage
       icon={<ShieldAlert className="h-10 w-10 text-red-400 mb-3" />}
