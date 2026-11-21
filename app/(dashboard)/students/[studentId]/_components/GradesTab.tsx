@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import {
   calculateLetterGrade,
   getLetterGradeBadgeColor,
@@ -50,6 +51,8 @@ export function GradesTab({ studentId }: GradesTabProps) {
   const [detailDialog, setDetailDialog] = useState<DetailDialogState | null>(
     null,
   );
+  // The per-question breakdown is a mark-entry read; a student sees totals.
+  const canDrillIn = useCapabilities().can("enterGrades");
 
   const activeEnrollmentId = (selectedEnrollmentId ||
     (currentEnrollment
@@ -219,10 +222,24 @@ export function GradesTab({ studentId }: GradesTabProps) {
                           ? g.ca2Percentage
                           : g.ca3Percentage;
                     const hasData = marks !== undefined && total;
+                    const score = (
+                      <>
+                        {marks}/{total}
+                        {pct !== undefined && (
+                          <span className="text-gray-400 text-xs block">
+                            {pct.toFixed(1)}%
+                          </span>
+                        )}
+                      </>
+                    );
 
                     return (
                       <TableCell key={caNum} className="text-center text-sm">
-                        {hasData ? (
+                        {!hasData ? (
+                          "—"
+                        ) : !canDrillIn ? (
+                          score
+                        ) : (
                           <button
                             type="button"
                             className="hover:bg-gray-100 rounded px-1.5 py-0.5 transition-colors cursor-pointer"
@@ -235,15 +252,8 @@ export function GradesTab({ studentId }: GradesTabProps) {
                               })
                             }
                           >
-                            {marks}/{total}
-                            {pct !== undefined && (
-                              <span className="text-gray-400 text-xs block">
-                                {pct.toFixed(1)}%
-                              </span>
-                            )}
+                            {score}
                           </button>
-                        ) : (
-                          "—"
                         )}
                       </TableCell>
                     );

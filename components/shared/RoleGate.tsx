@@ -40,17 +40,20 @@ export function RoleGate({ capability, children }: RoleGateProps) {
     );
   }
 
-  if (!can(capability)) {
-    return (
-      <GateMessage
-        icon={<ShieldAlert className="h-10 w-10 text-red-400 mb-3" />}
-        title="Access Denied"
-        message="You do not have permission to view this page."
-      />
-    );
-  }
+  if (!can(capability)) return <AccessDenied />;
 
   return <>{children}</>;
+}
+
+/** The "you may not open this" message, for pages that gate on more than a capability. */
+export function AccessDenied() {
+  return (
+    <GateMessage
+      icon={<ShieldAlert className="h-10 w-10 text-red-400 mb-3" />}
+      title="Access Denied"
+      message="You do not have permission to view this page."
+    />
+  );
 }
 
 function GateMessage({

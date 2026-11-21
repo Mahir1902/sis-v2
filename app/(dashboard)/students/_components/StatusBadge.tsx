@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { placementErrorMessage } from "@/lib/placementErrors";
 import { cn } from "@/lib/utils";
 import { ReadmitDialog } from "./ReadmitDialog";
@@ -70,8 +71,10 @@ interface StatusBadgeProps {
 export function StatusBadge({
   studentId,
   status,
-  readonly = false,
+  readonly: readonlyProp = false,
 }: StatusBadgeProps) {
+  // Changing a status is an admin action; everyone else gets a plain badge.
+  const readonly = !useCapabilities().can("manageStudents") || readonlyProp;
   const [pendingStatus, setPendingStatus] = useState<Status | null>(null);
   const [readmitOpen, setReadmitOpen] = useState(false);
   const updateStatus = useMutation(api.students.updateStudentStatus);
