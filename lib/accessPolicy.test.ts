@@ -3,6 +3,7 @@ import {
   CAPABILITIES,
   can,
   canOnStudent,
+  GRANTABLE_CAPABILITIES,
   homeFor,
   ROLES,
   type Role,
@@ -32,6 +33,7 @@ const STUDENT_SCOPED: Record<string, Row> = {
 const SCHOOL_WIDE: Record<string, Row> = {
   viewReferenceData: ["any", "any", "any"],
   manageSchoolSetup: ["any", "-", "-"],
+  manageSubjects: ["any", "-", "-"],
   listStudents: ["any", "any", "-"], // "View all students": student ❌
   manageStudents: ["any", "-", "-"], // "Create/edit students"
   importStudents: ["any", "-", "-"],
@@ -79,16 +81,17 @@ describe("access policy table", () => {
       for (const role of ROLES) {
         const expected = cell(row, role) !== "-";
         it(`${role} ${expected ? "can" : "cannot"} ${capability}`, () => {
-          expect(can(role, capability as (typeof CAPABILITIES)[number])).toBe(
-            expected,
-          );
+          expect(
+            can({ role }, capability as (typeof CAPABILITIES)[number]),
+          ).toBe(expected);
         });
       }
     }
 
     it("denies everything to a missing or unknown role", () => {
       expect(can(undefined, "viewReferenceData")).toBe(false);
-      expect(can("janitor" as Role, "viewReferenceData")).toBe(false);
+      expect(can(null, "viewReferenceData")).toBe(false);
+      expect(can({ role: "janitor" as Role }, "viewReferenceData")).toBe(false);
     });
 
     it("never grants a school-wide capability as own-only", () => {
@@ -128,6 +131,59 @@ describe("access policy table", () => {
       expect(canOnStudent(undefined, "viewStudent", OWN)).toBe(false);
       expect(canOnStudent(null, "viewStudent", OWN)).toBe(false);
     });
+  });
+});
+
+describe("per-teacher grants — features an admin gives one teacher", () => {
+  it("lists exactly the features that can be granted", () => {
+    // Money, user management, student records and identity data are never
+    // grantable: this list is the whole of what a grant can reach.
+    expect([...GRANTABLE_CAPABILITIES].sort()).toEqual([
+      "browseAssessments",
+      "manageCalendar",
+      "manageSubjects",
+      "promoteStudents",
+      "viewAuditLog",
+      "viewClassAnalytics",
+    ]);
+  });
+
+  it("gives a teacher a granted feature on top of the teacher role", () => {
+    const plain = { role: "teacher" as const };
+    const granted = { role: "teacher" as const, grants: ["viewAuditLog"] };
+    expect(can(plain, "viewAuditLog")).toBe(false);
+    expect(can(granted, "viewAuditLog")).toBe(true);
+    // Only what was granted, and nothing lost.
+    expect(can(granted, "promoteStudents")).toBe(false);
+    expect(can(granted, "listStudents")).toBe(true);
+  });
+
+  it("ignores a stored grant for anything outside the grantable list", () => {
+    const sneaky = {
+      role: "teacher" as const,
+      grants: ["manageUsers", "manageStudentFees", "viewDashboard", "nonsense"],
+    };
+    expect(can(sneaky, "manageUsers")).toBe(false);
+    expect(can(sneaky, "manageStudentFees")).toBe(false);
+    expect(can(sneaky, "viewDashboard")).toBe(false);
+  });
+
+  it("never widens a student record: grants do not reach student-scoped capabilities", () => {
+    const teacher = {
+      role: "teacher" as const,
+      grants: ["viewStudentFees", "viewStudentSensitive"],
+    };
+    expect(canOnStudent(teacher, "viewStudentFees", OTHER)).toBe(false);
+    expect(canOnStudent(teacher, "viewStudentSensitive", OTHER)).toBe(false);
+  });
+
+  it("applies to teachers only", () => {
+    const student = { role: "student" as const, grants: ["viewAuditLog"] };
+    expect(can(student, "viewAuditLog")).toBe(false);
+    // An admin already holds everything grantable.
+    for (const capability of GRANTABLE_CAPABILITIES) {
+      expect(can({ role: "admin" }, capability)).toBe(true);
+    }
   });
 });
 

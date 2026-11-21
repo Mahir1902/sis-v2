@@ -40,8 +40,10 @@ const STUDENT_POLICY = {
 const SCHOOL_POLICY = {
   /** Campuses, standard levels, academic years. */
   viewReferenceData: EVERYONE,
-  /** Create campuses, academic years and subjects. */
+  /** Create campuses and academic years; edit a year's dates. */
   manageSchoolSetup: ADMIN,
+  /** Create subjects and switch them on or off. */
+  manageSubjects: ADMIN,
 
   /** The student roster, and who a student's siblings are. */
   listStudents: STAFF,
@@ -68,11 +70,11 @@ const SCHOOL_POLICY = {
   /** CA papers and their questions. */
   manageAssessments: STAFF,
   /**
-   * The Assessments and Class Analytics admin screens. Admin-only today even
-   * though the functions behind them allow teachers, who reach mark entry by
-   * link — Phase 5 item 20 gives teachers their own class-scoped screens.
+   * The Assessments screen: every level's CA papers, and creating them. A
+   * teacher without it still reaches mark entry for a paper by its link.
    */
   browseAssessments: ADMIN,
+  /** The Class Analytics screen: grade spread and students needing help. */
   viewClassAnalytics: ADMIN,
   /** Marks per student per question. */
   enterGrades: STAFF,
@@ -103,20 +105,51 @@ export const STUDENT_CAPABILITIES = Object.keys(
 ) as StudentCapability[];
 export const CAPABILITIES = Object.keys(POLICY) as Capability[];
 
+/**
+ * Features an admin may give to an individual teacher on top of the teacher
+ * role (`users.grants`). This list is the whole reach of a grant: money, user
+ * management, student records and identity data are deliberately absent, so
+ * no grant — however it got stored — can open them.
+ */
+export const GRANTABLE_CAPABILITIES = [
+  "browseAssessments",
+  "viewClassAnalytics",
+  "promoteStudents",
+  "manageSubjects",
+  "viewAuditLog",
+  "manageCalendar",
+] as const satisfies readonly SchoolCapability[];
+export type GrantableCapability = (typeof GRANTABLE_CAPABILITIES)[number];
+
+const isGrantable = (capability: string): capability is GrantableCapability =>
+  (GRANTABLE_CAPABILITIES as readonly string[]).includes(capability);
+
 /** The part of a user account the policy needs. */
 export type PolicyCaller = {
   role: Role;
   /** The student record a student-role account is linked to. */
   studentId?: string;
+  /** Extra features an admin granted this teacher. */
+  grants?: readonly string[];
 };
 
 /**
- * May this role ever use the capability? For a student-scoped capability this
- * is "for at least one student" — decide a specific student with
- * `canOnStudent`. Use for nav entries, page gates and school-wide actions.
+ * May this account ever use the capability — by its role, or (a teacher) by
+ * a grant? For a student-scoped capability this is "for at least one
+ * student"; decide a specific student with `canOnStudent`. Use for nav
+ * entries, page gates and school-wide actions.
  */
-export function can(role: Role | undefined, capability: Capability): boolean {
-  return role !== undefined && POLICY[capability][role] !== undefined;
+export function can(
+  caller: PolicyCaller | null | undefined,
+  capability: Capability,
+): boolean {
+  if (!caller) return false;
+  if (POLICY[capability][caller.role] !== undefined) return true;
+  return (
+    caller.role === "teacher" &&
+    isGrantable(capability) &&
+    (caller.grants?.includes(capability) ?? false)
+  );
 }
 
 /** May this caller use the capability on this particular student? */
@@ -154,7 +187,7 @@ export function withoutSensitiveFields<T extends object>(student: T): T {
  * (or an unknown account) falls through to `/students`, which explains.
  */
 export function homeFor(caller: PolicyCaller | null | undefined): string {
-  if (can(caller?.role, "viewDashboard")) return "/dashboard";
-  if (can(caller?.role, "listStudents")) return "/students";
+  if (can(caller, "viewDashboard")) return "/dashboard";
+  if (can(caller, "listStudents")) return "/students";
   return caller?.studentId ? `/students/${caller.studentId}` : "/students";
 }

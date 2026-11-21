@@ -72,6 +72,8 @@ export async function redeemInvite(
       role: invite.role,
       isActive: true,
       studentId,
+      // Granted features belong to whoever held the row before.
+      grants: undefined,
     });
     return existing._id;
   }

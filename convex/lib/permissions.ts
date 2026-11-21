@@ -49,7 +49,7 @@ export async function requireCapability(
   capability: SchoolCapability,
 ): Promise<Doc<"users">> {
   const user = await requireUser(ctx);
-  if (!can(user.role, capability)) throw new Error("Unauthorized");
+  if (!can(user, capability)) throw new Error("Unauthorized");
   return user;
 }
 

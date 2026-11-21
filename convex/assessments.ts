@@ -27,7 +27,7 @@ export const createAssessment = mutation({
     assessmentDate: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    const user = await requireCapability(ctx, "manageAssessments");
+    const user = await requireCapability(ctx, "browseAssessments");
     // Prevent duplicate CA-X for same subject/semester/level/year
     const existing = await ctx.db
       .query("assessments")
@@ -81,7 +81,7 @@ export const bulkCreateAssessments = mutation({
     totalMarks: v.float64(),
   },
   handler: async (ctx, args) => {
-    const user = await requireCapability(ctx, "manageAssessments");
+    const user = await requireCapability(ctx, "browseAssessments");
     const ids = [];
     for (const num of [1, 2, 3] as const) {
       // Prevent duplicate CA-X for same subject/semester/level/year
@@ -143,7 +143,7 @@ export const getAssessmentsByLevelYear = query({
     semester: v.optional(v.union(v.literal(1), v.literal(2))),
   },
   handler: async (ctx, args) => {
-    await requireCapability(ctx, "manageAssessments");
+    await requireCapability(ctx, "browseAssessments");
     const q = ctx.db
       .query("assessments")
       .withIndex("by_standard_year", (q) =>

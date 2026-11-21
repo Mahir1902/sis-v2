@@ -713,7 +713,7 @@ export const getGradeSpread = query({
     subjectId: v.optional(v.id("subjects")),
   },
   handler: async (ctx, args) => {
-    await requireCapability(ctx, "viewClasses");
+    await requireCapability(ctx, "viewClassAnalytics");
     const raw = await ctx.db
       .query("computedGrades")
       .withIndex("by_class_subject_semester", (q) =>
@@ -750,7 +750,7 @@ export const getStudentsNeedingHelp = query({
     subjectId: v.optional(v.id("subjects")),
   },
   handler: async (ctx, args) => {
-    await requireCapability(ctx, "viewClasses");
+    await requireCapability(ctx, "viewClassAnalytics");
     const rows = (await classTermRows(ctx, args)).filter(
       (r) =>
         r.weightedAverage < 50 &&

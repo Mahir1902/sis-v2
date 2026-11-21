@@ -18,6 +18,7 @@ import {
   Receipt,
   Settings,
   Upload,
+  UserRound,
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -28,7 +29,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSidebar } from "@/hooks/use-sidebar";
-import { type Capability, can, type Role } from "@/lib/accessPolicy";
+import { type Capability, can, type PolicyCaller } from "@/lib/accessPolicy";
 import { cn } from "@/lib/utils";
 import { SidebarItem } from "./SidebarItem";
 
@@ -123,7 +124,7 @@ const navGroups: NavGroup[] = [
         href: "/admin/subjects",
         label: "Subjects",
         icon: BookOpen,
-        capability: "manageSchoolSetup",
+        capability: "manageSubjects",
       },
       {
         href: "/admin/import-students",
@@ -154,11 +155,12 @@ const navGroups: NavGroup[] = [
 ];
 
 interface SidebarProps {
-  role?: Role;
+  /** The signed-in account: its role, granted features and linked student. */
+  caller?: PolicyCaller;
   email?: string;
 }
 
-export function Sidebar({ role, email }: SidebarProps) {
+export function Sidebar({ caller, email }: SidebarProps) {
   const { isCollapsed, onToggle } = useSidebar();
   const { signOut } = useAuthActions();
   const router = useRouter();
@@ -168,13 +170,28 @@ export function Sidebar({ role, email }: SidebarProps) {
     router.replace("/login");
   }
 
-  // A role is offered exactly the screens the Access Policy lets it open.
+  // An account is offered exactly the screens the Access Policy lets it open
+  // — its role's, plus any feature granted to this teacher.
   const visibleGroups = navGroups
     .map((g) => ({
       ...g,
-      items: g.items.filter((item) => can(role, item.capability)),
+      items: g.items.filter((item) => can(caller, item.capability)),
     }))
     .filter((g) => g.items.length > 0);
+  // A student account has one screen: its own record.
+  if (caller?.role === "student" && caller.studentId) {
+    visibleGroups.unshift({
+      label: "My School",
+      items: [
+        {
+          href: `/students/${caller.studentId}`,
+          label: "My Record",
+          icon: UserRound,
+          capability: "viewReferenceData",
+        },
+      ],
+    });
+  }
 
   return (
     <TooltipProvider delayDuration={0}>

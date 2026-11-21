@@ -35,9 +35,7 @@ export function useCapabilities() {
   const account = me ?? lastMe.current;
 
   // A deactivated account is refused by every Convex function: no capabilities.
-  const caller = account?.isActive
-    ? { role: account.role, studentId: account.studentId }
-    : undefined;
+  const caller = account?.isActive ? account : undefined;
 
   return {
     /** The account, `null` when signed out. */
@@ -45,7 +43,7 @@ export function useCapabilities() {
     /** True until the account is known — render nothing role-dependent yet. */
     isLoading: account === undefined,
     /** May this role ever use the capability? (nav, page gates, actions) */
-    can: (capability: Capability) => can(caller?.role, capability),
+    can: (capability: Capability) => can(caller, capability),
     /** May this account use the capability on this particular student? */
     canOnStudent: (capability: StudentCapability, studentId: string) =>
       canOnStudent(caller, capability, studentId),

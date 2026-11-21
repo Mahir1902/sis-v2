@@ -47,7 +47,7 @@ type CreateSubjectValues = z.infer<typeof createSubjectSchema>;
 
 export default function SubjectsPage() {
   return (
-    <RoleGate capability="manageSchoolSetup">
+    <RoleGate capability="manageSubjects">
       <SubjectsPageContent />
     </RoleGate>
   );

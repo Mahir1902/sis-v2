@@ -39,6 +39,7 @@ let year: Id<"academicYears">;
 let own: Id<"students">;
 /** Somebody else. */
 let other: Id<"students">;
+let subjectId: Id<"subjects">;
 let ownEnrollment: Id<"enrollments">;
 let otherEnrollment: Id<"enrollments">;
 
@@ -69,6 +70,12 @@ beforeEach(async () => {
       startDate: now - 100 * DAY,
       semester1EndDate: now + 10 * DAY,
       endDate: now + 200 * DAY,
+    });
+
+    subjectId = await ctx.db.insert("subjects", {
+      name: "Mathematics",
+      code: "MATH",
+      isActive: true,
     });
 
     const seedStudent = async (studentNumber: string, name: string) => {
@@ -484,6 +491,135 @@ describe("an enrollment-keyed read with no enrollment behind it", () => {
   });
 });
 
+describe("per-teacher grants — an admin gives one teacher a feature", () => {
+  const auditLog = (userId: Id<"users">) =>
+    as(userId).query(api.auditLogs.getRecentLogs, {});
+  const grant = (
+    userId: Id<"users">,
+    grants: ("viewAuditLog" | "manageSubjects")[],
+  ) => asRole("admin").mutation(api.users.setTeacherGrants, { userId, grants });
+
+  it("opens the granted feature to that teacher, and only that teacher", async () => {
+    const colleague = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Colleague",
+        email: "colleague@school.edu",
+        role: "teacher",
+        isActive: true,
+      }),
+    );
+    await expect(auditLog(users.teacher)).rejects.toThrow("Unauthorized");
+
+    await grant(users.teacher, ["viewAuditLog"]);
+
+    await expect(auditLog(users.teacher)).resolves.toBeDefined();
+    await expect(auditLog(colleague)).rejects.toThrow("Unauthorized");
+    // Nothing else came with it.
+    await expect(
+      asRole("teacher").query(api.users.listUsers, {}),
+    ).rejects.toThrow("Unauthorized");
+    expect(await asRole("teacher").query(api.users.getMe, {})).toMatchObject({
+      role: "teacher",
+      grants: ["viewAuditLog"],
+    });
+  });
+
+  it("takes the feature away the moment the grant is removed", async () => {
+    await grant(users.teacher, ["viewAuditLog"]);
+    await grant(users.teacher, []);
+    await expect(auditLog(users.teacher)).rejects.toThrow("Unauthorized");
+  });
+
+  it("lets a teacher granted Subjects manage subjects but not the rest of school setup", async () => {
+    await grant(users.teacher, ["manageSubjects"]);
+    await expect(
+      asRole("teacher").mutation(api.subjects.create, {
+        name: "Art",
+        code: "ART",
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      asRole("teacher").mutation(api.campus.create, { name: "X", address: "" }),
+    ).rejects.toThrow("Unauthorized");
+  });
+
+  it("is an admin's decision only", async () => {
+    await expect(
+      asRole("teacher").mutation(api.users.setTeacherGrants, {
+        userId: users.teacher,
+        grants: ["viewAuditLog"],
+      }),
+    ).rejects.toThrow("Unauthorized");
+  });
+
+  it("refuses a feature that is not grantable", async () => {
+    await expect(
+      asRole("admin").mutation(api.users.setTeacherGrants, {
+        userId: users.teacher,
+        // @ts-expect-error — user management can never be granted
+        grants: ["manageUsers"],
+      }),
+    ).rejects.toThrow();
+    await expect(
+      asRole("teacher").query(api.users.listUsers, {}),
+    ).rejects.toThrow("Unauthorized");
+  });
+
+  it("gives a stored grant outside the grantable list no effect", async () => {
+    // However it got into the row, it must never open anything.
+    await t.run((ctx) =>
+      ctx.db.patch(users.teacher, {
+        grants: ["manageUsers", "manageStudentFees"],
+      }),
+    );
+    await expect(
+      asRole("teacher").query(api.users.listUsers, {}),
+    ).rejects.toThrow("Unauthorized");
+    await expect(
+      asRole("teacher").query(api.studentFees.getByStudent, {
+        studentId: other,
+      }),
+    ).rejects.toThrow("Unauthorized");
+  });
+
+  it("only applies to teacher accounts", async () => {
+    await expect(grant(users.student, ["viewAuditLog"])).rejects.toThrow(
+      "NOT_A_TEACHER",
+    );
+    await expect(grant(users.admin, ["viewAuditLog"])).rejects.toThrow();
+  });
+
+  it("drops the grants when the account stops being a teacher", async () => {
+    await grant(users.teacher, ["viewAuditLog"]);
+    await asRole("admin").mutation(api.users.updateUserRole, {
+      userId: users.teacher,
+      role: "student",
+      studentId: other,
+    });
+    await asRole("admin").mutation(api.users.updateUserRole, {
+      userId: users.teacher,
+      role: "teacher",
+    });
+    await expect(auditLog(users.teacher)).rejects.toThrow("Unauthorized");
+    const me = await asRole("teacher").query(api.users.getMe, {});
+    expect(me?.grants ?? []).toEqual([]);
+  });
+
+  it("records the change in the audit log", async () => {
+    await grant(users.teacher, ["viewAuditLog", "manageSubjects"]);
+    const entries = await t.run((ctx) =>
+      ctx.db
+        .query("auditLogs")
+        .withIndex("by_entity", (q) => q.eq("entityType", "users"))
+        .collect(),
+    );
+    expect(entries.at(-1)?.metadata).toMatchObject({
+      oldGrants: [],
+      newGrants: ["viewAuditLog", "manageSubjects"],
+    });
+  });
+});
+
 describe("an inactive or signed-out caller has no capabilities", () => {
   it("refuses a deactivated admin", async () => {
     await t.run((ctx) => ctx.db.patch(users.admin, { isActive: false }));
@@ -506,9 +642,6 @@ describe("an inactive or signed-out caller has no capabilities", () => {
  * row, a business rule) — only the permission verdict is asserted here.
  */
 type Call = (as: TC) => Promise<unknown>;
-
-/** Capabilities that gate a screen only; no Convex function is behind them. */
-const SCREEN_ONLY: Capability[] = ["browseAssessments", "viewClassAnalytics"];
 
 function parityCalls(): Partial<Record<Capability, Call>> {
   return {
@@ -541,11 +674,26 @@ function parityCalls(): Partial<Record<Capability, Call>> {
     viewDashboard: (c) => c.query(api.dashboard.getSummaryStats, {}),
     viewAuditLog: (c) => c.query(api.auditLogs.getRecentLogs, {}),
     manageUsers: (c) => c.query(api.users.listUsers, {}),
+    manageSubjects: (c) =>
+      c.mutation(api.subjects.create, { name: "Music", code: "MUS" }),
     viewClasses: (c) => c.query(api.subjects.list, {}),
     manageAssessments: (c) =>
+      c.query(api.assessments.getAssessmentsBySubjectSemester, {
+        subjectId,
+        standardLevelId: level,
+        academicYearId: year,
+        semester: 1,
+      }),
+    browseAssessments: (c) =>
       c.query(api.assessments.getAssessmentsByLevelYear, {
         standardLevelId: level,
         academicYearId: year,
+      }),
+    viewClassAnalytics: (c) =>
+      c.query(api.computedGrades.getGradeSpread, {
+        campus,
+        standardLevelId: level,
+        academicYear: year,
       }),
     enterGrades: (c) =>
       c.query(api.studentAssessmentAnswers.getAnswersByEnrollment, {
@@ -622,7 +770,6 @@ describe("parity — every capability is enforced by Convex as the table says", 
   it("covers every capability in the table", () => {
     const covered = [
       ...Object.keys(parityCalls()),
-      ...SCREEN_ONLY,
       // Enforced inside the student-scoped read; see defect 2.
       "viewStudentSensitive",
     ].sort();
@@ -632,11 +779,12 @@ describe("parity — every capability is enforced by Convex as the table says", 
   for (const capability of CAPABILITIES) {
     for (const role of ROLES) {
       const expected =
-        EXPECTED_FOR_OTHER[capability]?.includes(role) ?? can(role, capability);
+        EXPECTED_FOR_OTHER[capability]?.includes(role) ??
+        can({ role }, capability);
 
       it(`${capability}: ${role} is ${expected ? "allowed" : "refused"}`, async () => {
         const call = parityCalls()[capability];
-        if (!call) return; // screen-only, or covered by the defect suites
+        if (!call) return; // viewStudentSensitive: covered by the defect suites
         let refused = false;
         try {
           await call(asRole(role) as TC);

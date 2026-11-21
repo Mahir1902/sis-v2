@@ -18,7 +18,7 @@ export const list = query({
 export const toggleActive = mutation({
   args: { subjectId: v.id("subjects"), isActive: v.boolean() },
   handler: async (ctx, args) => {
-    await requireCapability(ctx, "manageSchoolSetup");
+    await requireCapability(ctx, "manageSubjects");
     await ctx.db.patch(args.subjectId, { isActive: args.isActive });
   },
 });
@@ -31,7 +31,7 @@ export const create = mutation({
     displayOrder: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    await requireCapability(ctx, "manageSchoolSetup");
+    await requireCapability(ctx, "manageSubjects");
     return await ctx.db.insert("subjects", { ...args, isActive: true });
   },
 });

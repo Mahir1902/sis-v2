@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { dhakaDate, formatDisplayDate } from "@/lib/attendanceDate";
 import {
   closureVoidMessage,
@@ -67,6 +68,9 @@ export default function SchoolCalendarPage() {
 }
 
 function SchoolCalendarContent() {
+  // A year's dates are school setup; a teacher granted the calendar manages
+  // closures only.
+  const canEditYear = useCapabilities().can("manageSchoolSetup");
   const years = useQuery(api.academicYears.list);
   const current = useQuery(api.academicYears.getCurrent);
   const campuses = useQuery(api.campus.list);
@@ -104,7 +108,7 @@ function SchoolCalendarContent() {
 
       {year && campuses ? (
         <>
-          <SemesterBoundary key={year._id} year={year} />
+          {canEditYear && <SemesterBoundary key={year._id} year={year} />}
           <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
             <ClosureList yearId={year._id} campuses={campuses} />
             <AddClosureForm yearId={year._id} campuses={campuses} />

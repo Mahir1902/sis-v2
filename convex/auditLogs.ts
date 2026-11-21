@@ -68,7 +68,7 @@ export const getRecentLogs = query({
   handler: async (ctx, args) => {
     await requireCapability(ctx, "viewAuditLog");
 
-    const limit = args.limit ?? 100;
+    const limit = Math.min(args.limit ?? 100, 500);
 
     return await ctx.db
       .query("auditLogs")
