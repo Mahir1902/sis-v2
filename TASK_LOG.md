@@ -3,7 +3,7 @@
 ---
 
 ## Current Feature: Access Policy module — one capability table for server and client (architecture review candidate 1, 2026-11-21)
-**Status**: In Progress — waiting on the captain's pick for the teacher-access editor (needs-decision `sis-access-policy-grants-ui`)
+**Status**: Complete on this branch — Settings → Users (access sheet, variant B) is handed to a separate session
 **Active Agent**: CODING AGENT
 
 Source: architecture review 2026-11-21, candidate 1, plus live defects 1–4 and issue #122. The CLAUDE.md
@@ -60,8 +60,8 @@ permission matrix is the source of truth for the table. Branch `fm/sis-access-po
 - [x] 2. `convex/lib/permissions.ts` adapter (`requireCapability`, `requireStudentAccess`, `readStudent`, `studentLinkFor`) + every `requireRole` call migrated — APPROVED by Backend Review Agent (2026-11-21)
 - [x] 3. Defects 2, 3, 4 server fixes + convex-test parity and regression tests — APPROVED by Backend Review Agent (2026-11-21)
 - [x] 4. UI prototype (3 variants) + screenshots — captain picked A + B's Linked-student column (2026-11-21)
-- [ ] 5. Client adapter: `useCapabilities`, `RoleGate`, Sidebar, `homeFor`, dashboard redirect, `canNote` — DONE, Frontend Review PENDING (runs once Settings is built)
-- [ ] 6. Student detail page + students list (variant A): defect 1, mis-shown actions, student landing — DONE (commit 32718eb), Frontend Review PENDING. Settings → Users (Linked-student column) — PENDING with sub-task 9
+- [x] 5. Client adapter: `useCapabilities`, `RoleGate`, Sidebar, `homeFor`, dashboard redirect, `canNote` — APPROVED by Frontend Review Agent (2026-11-21)
+- [x] 6. Student detail page + students list (variant A): defect 1, mis-shown actions, student landing — APPROVED by Frontend Review Agent (2026-11-21)
 
 ### Captain's UI pick and added scope (2026-11-21)
 - **Pick:** variant A "Just not there" — what a role may not do or see is not rendered — with variant B's
@@ -99,8 +99,8 @@ permission matrix is the source of truth for the table. Branch `fm/sis-access-po
 
 ### Sub-tasks (added)
 - [x] 7. Per-teacher grants: table + server (`users.grants`, `setTeacherGrants`) + tests — APPROVED by Backend Review Agent (2026-11-21)
-- [ ] 8. Grant editor prototype (3 variants) + screenshots — DONE, waiting for the captain's pick
-- [ ] 9. Settings → Users: Linked-student column + grant editor — PENDING (blocked on 8)
+- [x] 8. Grant editor prototype (3 variants) + screenshots — captain picked B "Access sheet per account" (2026-11-21)
+- [ ] 9. Settings → Users: the access sheet (role, linked student, a teacher's extra features) — NOT ON THIS BRANCH. The captain asked for it to be built in a separate session; brief: `firstmate/data/sis-access-policy/handoff-settings-access-sheet.md`. Until then the role dropdown offers "Student" only on rows that are already students, and grants can be set only through `users.setTeacherGrants`.
 
 ### Review Notes
 **Backend Review (sub-tasks 1–3, commit 78b95c2, Opus 5.5): APPROVED.** Every removed role list was paired with
@@ -120,6 +120,29 @@ that calls every function behind its screen without the grant (refused) and with
 deactivated teacher with a grant (refused). Follow-up, not from this change: any teacher can still edit or delete
 a CA paper from the mark-entry page (`updateAssessment` / `deleteAssessment` / question mutations are
 `manageAssessments`) — noted for the PR.
+
+**Frontend Review (sub-tasks 5–6, Opus 5.5): CHANGES REQUIRED → APPROVED after bff2a01.** First pass found no
+forbidden query for any settled role, but required: the student page's access logic in a hook
+(`hooks/use-student-page-access.ts`, tested per role); `useCapabilities` to follow the auth session so sign-out
+and a token refresh neither reach the server unauthenticated nor flash "Access Denied"; a deactivated account
+told so on the students pages and offered no sidebar entries; the mark-entry page's "All Assessments" link only
+for accounts that can open the list; the edit dialog mounted only for those who may edit; casts and duplicate
+role unions removed; tab height and badge names; tests for the loading window, a student on the Grades tab and
+deactivated accounts. All applied; second pass approved with nothing outstanding.
+
+### Follow-ups for the PR description (found, not fixed here)
+- Settings → Users access sheet (sub-task 9) — separate session.
+- Any teacher can still edit or delete a CA paper and its questions from the mark-entry page
+  (`updateAssessment`, `deleteAssessment`, question mutations are `manageAssessments`); only creating and listing
+  papers follow the Assessments grant.
+- A signed-in user whose `users` row is missing sees the dashboard spinner forever
+  (`components/layout/DashboardWrapper.tsx`) — predates this change.
+- A link to a since-deleted student is not cleared from `users.studentId` (harmless: own-only reads return
+  nothing); needs a `users.by_student` index to tidy.
+- Money screens and Import Students are not grantable; each needs its own piece of work (import creates and
+  overwrites student records and returns stored identity numbers).
+- Teachers still receive parents' phone numbers, addresses and health notes — not settled by the matrix.
+- Other review candidates and defects 5–11 of the 2026-11-21 architecture review are untouched.
 
 **UI prototype (sub-task 4):** three variants — A "Just not there", B "Locked in place", C "Hide, and say so once"
 — of the student page, students list, account-to-student linking and denied states, on mock data. Screenshots and
