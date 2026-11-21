@@ -2,7 +2,7 @@ import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type QueryCtx, query } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 const paymentModeValidator = v.union(
   v.literal("Cash"),
@@ -85,7 +85,7 @@ function matchesFilters(s: Session, args: SessionFilterArgs): boolean {
 export const getTransactionLogTotals = query({
   args: sessionFilterArgs,
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "viewTransactionLog");
 
     let totalAmount = 0;
     let sessionCount = 0;
@@ -140,7 +140,7 @@ export const getTransactionLogTotals = query({
 export const getTransactionLog = query({
   args: { ...sessionFilterArgs, paginationOpts: paginationOptsValidator },
   handler: async (ctx, { paginationOpts, ...args }) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "viewTransactionLog");
 
     const result = await sessionRange(ctx, args).paginate(paginationOpts);
     const filtered = result.page.filter((s) => matchesFilters(s, args));
@@ -219,7 +219,7 @@ export const getSessionDetail = query({
     sessionId: v.id("feeCollectionSessions"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "viewTransactionLog");
 
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
@@ -314,7 +314,7 @@ export const EXPORT_MAX_SESSIONS = 2000;
 export const getTransactionLogExport = query({
   args: sessionFilterArgs,
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "viewTransactionLog");
 
     const filtered: Session[] = [];
     for await (const s of sessionRange(ctx, args)) {
@@ -454,7 +454,7 @@ export const searchStudents = query({
     nameQuery: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "viewTransactionLog");
 
     const nameQuery = args.nameQuery.trim();
     if (nameQuery.length === 0) {

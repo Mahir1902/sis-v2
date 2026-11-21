@@ -2,6 +2,67 @@
 
 ---
 
+## Current Feature: Access Policy module — one capability table for server and client (architecture review candidate 1, 2026-11-21)
+**Status**: Devil's Advocate Review
+**Active Agent**: PLANNING AGENT
+
+Source: architecture review 2026-11-21, candidate 1, plus live defects 1–4 and issue #122. The CLAUDE.md
+permission matrix is the source of truth for the table. Branch `fm/sis-access-policy`.
+
+### Plan
+- `lib/accessPolicy.ts` (pure, shared by Convex and the app, like the receipt helpers): the one `Role`
+  type, and a capability table `capability → { role → "any" | "own" }`. `"own"` means "only the student
+  record linked to the caller" (`users.studentId`). Interface: `can(role, capability)` (may this role
+  ever do it — nav, page gates, buttons), `canOnStudent(caller, capability, studentId)` (own-or-other),
+  `SENSITIVE_STUDENT_FIELDS` + `withoutSensitiveFields()`, `homeFor(caller)`.
+- `convex/lib/permissions.ts` becomes the server adapter: `requireCapability(ctx, capability)` replaces
+  all ~111 `requireRole(ctx, [...])` calls; `requireStudentAccess(ctx, capability, studentId)` is the
+  own-only gate for every `studentId`-keyed read; `readStudent(ctx, studentId)` is the student-scoped
+  read (resolve caller → decide visibility → return the record shaped for their role);
+  `linkedStudentFor(role, studentId)` is the one rule for writing `users.studentId`, used by invite
+  redemption (`auth.ts`) and `users.updateUserRole`. `requireRole` is deleted.
+- Student-scoped capabilities are a separate type, so `requireCapability(ctx, "viewStudent")` (forgetting
+  the student) does not compile.
+- Server behaviour is preserved 1:1 except the four defects:
+  1. (defect 2) sensitive fields (three NIDs, passport number, family income) go to `viewStudentSensitive`
+     holders only (admin) — teachers no longer receive them.
+  2. (defect 3) `getEnrollmentHistory` / `getCurrentEnrollment` are own-only for the student role.
+  3. (defect 4) `users.studentId` is written at invite redemption (from `invite.studentId`) and on role
+     change (`updateUserRole` takes `studentId`; leaving the student role clears it).
+  4. (defect 1, client) the student page skips the fees query for a role without `viewStudentFees`.
+  Matrix alignment: "View grades — student ✅ own only" → `getComputedGradesByStudent` and
+  `getGradesByEnrollmentSemester` become student-scoped (`viewStudentGrades`), own-only for students.
+- Client adapter: `hooks/use-capabilities.ts` (`useCapabilities()` → `can`, `canOnStudent`, `me`);
+  `RoleGate` takes `capability`; Sidebar nav items carry `capability`; `homeForRole`, the dashboard
+  redirect, `isAdmin` in StudentInfoSidebar, `canNote` in attendance/today and the three `type Role`
+  copies all read the table. `users.getMe` also returns `studentId`.
+- Mis-shown actions (#122 and friends): Add Student, Edit/Delete student, Delete report card, Collect Fee,
+  Assign Fee read the table. How they look when not permitted is the UI gate below.
+- **UI gate**: every user-visible change (forbidden actions, Fees tab for teachers, missing sensitive
+  rows, student-role landing, role-change student picker) is prototyped first (`prototype` skill, 3
+  variants, shadcn, mock data) and waits for the captain's pick. Backend + non-visual work lands first.
+
+### Devil's Advocate Findings (2026-11-21, Opus 5.5 — verdict: approve with caution)
+- Concern: `createInvite` only issues admin/teacher invites, so `invite.studentId` is always empty and the invite half of defect 4 is unreachable from the UI → Mitigation: still carry `invite.studentId` at redemption (two lines, and the schema field exists for it), but the reachable fix is `updateUserRole`: `role === "student"` requires an existing `studentId`. Student-invite UI stays out of scope.
+- Concern: a linked student still cannot use their own detail page — it subscribes to staff-only queries (`reportCards.getByStudent`, `getSiblingsByStudent`, `subjects.list`, class positions/baseline/averages, `getStudentAssessmentDetail`, `getStudentAttendance`) and any one throwing sends the page to `error.tsx` → Mitigation: every tab and query on the page is gated by a capability, so a role only subscribes to what it may call. A student gets what the matrix settles (own profile, own fees, own grades); report cards, attendance, class comparisons stay staff-only until the captain says otherwise.
+- Concern: client and server gates disagree today, so one table cannot keep both: `/admin/assessments` and `/admin/class-analytics` are admin-only pages over admin+teacher server functions; `/fees` is admin-only over `feeStructure.list` (admin+teacher) → Mitigation: fee structures are financial data (backend rule 7, matrix "Manage fee structures: admin") and no teacher screen reads them, so `feeStructure.list/getById` tighten to `manageFeeStructures` (logged under Decisions). The two academic screens keep today's audience through their own admin-only capabilities (`browseAssessments`, `viewClassAnalytics`); opening them to teachers is put to the captain with the UI gate.
+- Concern: `homeForRole("student")` is `/students`, which a student cannot load → Mitigation: `homeFor(caller)` sends a linked student to `/students/{studentId}` and an unlinked one to a "no linked record" state (UI gate).
+- Concern: link edge cases → Mitigation: `updateUserRole` to student without a `studentId`, or with one that no longer exists, is rejected (`ConvexError` code); leaving the student role clears the link; the pre-provisioned-row branch of `redeemInvite` writes/clears the link too; two accounts on one student are allowed (no parent role yet — logged). A link to a since-deleted student goes stale but leaks nothing (own-only reads return null) — left alone, noted as follow-up.
+- Concern: the sensitive set — `birthCertificateNumber` is sent to every role and only masked on screen, the same pattern as defect 2 → Mitigation: add it to `SENSITIVE_STUDENT_FIELDS` (the UI already treats it exactly like the NIDs). Phone numbers, addresses and health notes stay visible to teachers; flagged for the captain.
+- Concern: with the sensitive keys absent, a teacher's masked NID rows disappear — a visible change; `EditStudentDialog` requires the NIDs → Mitigation: that look is part of the UI gate; Edit is `manageStudents` (admin), who always receive the full record. One record type (the fields are optional in the schema) instead of a union, so the `in` checks and casts go.
+- Concern: swapping ~111 `requireRole` calls can drift → Mitigation: `requireCapability` keeps the `isActive` check, the plain `Unauthenticated` / `Unauthorized` errors `error.tsx` matches, and returns the same user doc; a convex-test parity check runs one function per capability for every role.
+- Concern: `getMe` is `undefined` while loading and briefly `null` during a JWT refresh, so a gate can flash "Access Denied" or fire a forbidden query → Mitigation: `useCapabilities()` holds the last known user and reports `isLoading`; role-dependent queries pass `"skip"` until the capability is known and granted.
+- Concern: `getGradesByEnrollmentSemester` is keyed by `enrollmentId` → Mitigation: it loads the enrollment and checks access on its `studentId`.
+- Rejected: merging the admin-only capabilities into one (they map 1:1 to nav entries and Phase 5 will split them); a discriminated union for the student record.
+
+### Sub-tasks
+- [ ] 1. `lib/accessPolicy.ts` + role × capability × own-or-other table test — PENDING
+- [ ] 2. `convex/lib/permissions.ts` adapter (`requireCapability`, `requireStudentAccess`, `readStudent`, `linkedStudentFor`) + migrate every `requireRole` call — PENDING
+- [ ] 3. Defects 2, 3, 4 server fixes + convex-test parity and regression tests — PENDING
+- [ ] 4. UI prototype (3 variants) + screenshots + needs-decision — PENDING
+- [ ] 5. Client adapter: `useCapabilities`, `RoleGate`, Sidebar, `homeFor`, role copies removed — PENDING
+- [ ] 6. Student detail page + students list: defect 1, mis-shown actions, chosen UI variant — PENDING
+
 ## Current Feature: Fee ledger — one module owns every money write (architecture review candidate 5, 2026-11-10)
 **Status**: Review — PR open; narrow PR stacked, merges after the migrations run
 **Active Agent**: CODING AGENT

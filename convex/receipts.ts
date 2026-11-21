@@ -10,7 +10,7 @@ import {
   voidReceipt as ledgerVoidReceipt,
   voidAndReissue,
 } from "./lib/feeLedger";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /**
  * Maximum number of receipts fetched from the most-selective index before
@@ -38,7 +38,7 @@ const LIST_RECEIPTS_FETCH_LIMIT = 500;
 export const getReceipt = query({
   args: { receiptId: v.id("receipts") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageReceipts");
     const receipt = await ctx.db.get(args.receiptId);
     if (!receipt) {
       throw new Error("Receipt not found");
@@ -66,7 +66,7 @@ export const getReceipt = query({
 export const getBySession = query({
   args: { sessionId: v.id("feeCollectionSessions") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageReceipts");
     return await ctx.db
       .query("receipts")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
@@ -96,7 +96,7 @@ export const listReceipts = query({
     status: v.optional(v.union(v.literal("issued"), v.literal("voided"))),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageReceipts");
 
     let fetched: ReceiptListRow[];
 
@@ -181,7 +181,7 @@ export const editReceipt = mutation({
     remarks: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageReceipts");
 
     const receipt = await ctx.db.get(args.receiptId);
     if (!receipt) throw new Error("Receipt not found");
@@ -244,7 +244,7 @@ export const editReceipt = mutation({
 export const voidReceipt = mutation({
   args: { receiptId: v.id("receipts"), reason: v.string() },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageReceipts");
     const { restoredFeeIds, skippedFeeIds } = await ledgerVoidReceipt(
       ctx,
       user,
@@ -274,7 +274,7 @@ export const voidAndReissueReceipt = mutation({
     remarks: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageReceipts");
     const result = await voidAndReissue(ctx, user, args);
     return { receiptId: result.receiptId, receiptNumber: result.receiptNumber };
   },

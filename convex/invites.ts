@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { deriveInviteState, INVITE_TTL_MS } from "../lib/inviteStatus";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /**
  * Admin-only invite lifecycle (spec #55 / ticket #57). Issues, lists, regenerates
@@ -37,7 +37,7 @@ export const createInvite = mutation({
     role: v.union(v.literal("admin"), v.literal("teacher")),
   },
   handler: async (ctx, args) => {
-    const me = await requireRole(ctx, ["admin"]);
+    const me = await requireCapability(ctx, "manageUsers");
 
     const name = args.name.trim();
     const email = args.email.trim();
@@ -100,7 +100,7 @@ export const createInvite = mutation({
 export const listInvites = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageUsers");
     const now = Date.now();
 
     // Invites are bounded by staff headcount; take() keeps it honestly bounded.
@@ -138,7 +138,7 @@ export const listInvites = query({
 export const regenerateInvite = mutation({
   args: { id: v.id("invites") },
   handler: async (ctx, args) => {
-    const me = await requireRole(ctx, ["admin"]);
+    const me = await requireCapability(ctx, "manageUsers");
     const invite = await ctx.db.get(args.id);
     if (invite === null) throw new ConvexError({ code: "INVITE_NOT_FOUND" });
     if (invite.status !== "pending") {
@@ -169,7 +169,7 @@ export const regenerateInvite = mutation({
 export const revokeInvite = mutation({
   args: { id: v.id("invites") },
   handler: async (ctx, args) => {
-    const me = await requireRole(ctx, ["admin"]);
+    const me = await requireCapability(ctx, "manageUsers");
     const invite = await ctx.db.get(args.id);
     if (invite === null) throw new ConvexError({ code: "INVITE_NOT_FOUND" });
     if (invite.status !== "pending") {

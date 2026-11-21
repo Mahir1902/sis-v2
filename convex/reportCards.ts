@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /** Upload a report card PDF for an enrollment+semester. */
 export const uploadReportCard = mutation({
@@ -14,7 +14,7 @@ export const uploadReportCard = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "uploadReportCard");
     // Enforce uniqueness: one report card per enrollment+semester
     const existing = await ctx.db
       .query("reportCards")
@@ -53,7 +53,7 @@ export const uploadReportCard = mutation({
 export const getByStudent = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewReportCards");
     const cards = await ctx.db
       .query("reportCards")
       .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
@@ -83,7 +83,7 @@ export const getByStudent = query({
 export const getByEnrollment = query({
   args: { enrollmentId: v.id("enrollments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewReportCards");
     return await ctx.db
       .query("reportCards")
       .withIndex("by_enrollment_semester", (q) =>
@@ -97,7 +97,7 @@ export const getByEnrollment = query({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "uploadReportCard");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -106,7 +106,7 @@ export const generateUploadUrl = mutation({
 export const deleteReportCard = mutation({
   args: { reportCardId: v.id("reportCards") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "deleteReportCard");
     const card = await ctx.db.get(args.reportCardId);
     if (!card) throw new Error("Report card not found");
     await ctx.db.delete(args.reportCardId);

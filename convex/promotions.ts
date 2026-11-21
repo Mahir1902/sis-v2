@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { assignFee } from "./lib/feeLedger";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 import { changeStatus, getClassRoster, moveToNextYear } from "./lib/placement";
 
 /**
@@ -18,7 +18,7 @@ export const getPromotionCandidates = query({
     academicYearId: v.id("academicYears"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "promoteStudents");
 
     // Fetch current level and resolve next level if it exists
     const currentLevel = await ctx.db.get(args.standardLevelId);
@@ -98,7 +98,7 @@ export const bulkPromote = mutation({
     autoAssignFees: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "promoteStudents");
 
     // ── Validation ─────────────────────────────────────────────────────
     if (args.sourceAcademicYearId === args.targetAcademicYearId) {

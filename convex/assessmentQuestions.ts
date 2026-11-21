@@ -4,7 +4,7 @@ import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { classKeyOf, scheduleClassRecompute } from "./computedGrades";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 // Every change to a paper's questions moves the denominator of every student's
 // CA percentage, so each mutation below schedules a class-wide recompute
@@ -22,7 +22,7 @@ export const createQuestion = mutation({
     displayOrder: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     const assessment = await validateQuestionTotal(
       ctx,
       args.assessmentId,
@@ -62,7 +62,7 @@ export const bulkCreateQuestions = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) throw new Error("Assessment not found");
     const totalNewMarks = args.questions.reduce(
@@ -118,7 +118,7 @@ export const bulkCreateQuestions = mutation({
 export const getByAssessment = query({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "manageAssessments");
     return await ctx.db
       .query("assessmentQuestions")
       .withIndex("by_assessment_order", (q) =>
@@ -136,7 +136,7 @@ export const updateQuestion = mutation({
     questionText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     const question = await ctx.db.get(args.questionId);
     if (!question) throw new Error("Question not found");
 
@@ -192,7 +192,7 @@ export const deleteQuestion = mutation({
     questionId: v.id("assessmentQuestions"),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     const question = await ctx.db.get(args.questionId);
     if (!question) throw new Error("Question not found");
 

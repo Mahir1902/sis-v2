@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
-import { requireRole } from "./lib/permissions";
+import { readStudent, requireCapability } from "./lib/permissions";
 import {
   admit,
   amend,
@@ -27,7 +27,7 @@ const studentStatus = v.union(
 export const generateStudentPhotoUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageStudents");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -94,7 +94,7 @@ export const createStudent = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudents");
 
     const { standardLevel, academicYear, campus, ...studentFields } = args;
     const now = Date.now();
@@ -179,7 +179,7 @@ export const getAllStudents = query({
     ),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "listStudents");
 
     // Pre-fetch ALL lookup tables (3 reads total, not 4 per student)
     const [allLevels, allYears] = await Promise.all([
@@ -258,21 +258,16 @@ export const getAllStudents = query({
 });
 
 /**
- * Get a single student by ID with all refs and photo URLs resolved.
+ * Get a single student by ID with all refs and photo URLs resolved. Staff see
+ * any student, a student account only its own record; identity numbers and
+ * family income are included for admins only.
  */
 export const getStudentById = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    const caller = await requireRole(ctx, ["admin", "teacher", "student"]);
-
-    // Students can only view their own profile
-    if (caller.role === "student") {
-      if (!caller.studentId || caller.studentId !== args.studentId) {
-        throw new Error("Unauthorized");
-      }
-    }
-
-    const doc = await ctx.db.get(args.studentId);
+    // Own-only for a student account, and already without the sensitive
+    // fields for anyone who may not see them (Access Policy).
+    const { student: doc } = await readStudent(ctx, args.studentId);
     if (!doc) return null;
     // Drop the deprecated student-record copy of the class (narrow PR deletes
     // it); the class comes from the Current Placement below.
@@ -308,7 +303,7 @@ export const getStudentById = query({
         : null,
     ]);
 
-    const result = {
+    return {
       ...student,
       studentPhotoUrl: studentPhoto,
       fatherPhotoUrl: fatherPhoto,
@@ -326,21 +321,6 @@ export const getStudentById = query({
       academicYearDoc: academicYear,
       campusDoc: campus,
     };
-
-    // Strip sensitive fields for student callers
-    if (caller.role === "student") {
-      const {
-        fatherNidNumber: _fn,
-        motherNidNumber: _mn,
-        guardianNidNumber: _gn,
-        familyAnnualIncome: _fi,
-        passportNumber: _pp,
-        ...safe
-      } = result;
-      return safe;
-    }
-
-    return result;
   },
 });
 
@@ -357,7 +337,7 @@ export const updateStudentStatus = mutation({
     status: studentStatus,
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudents");
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
 
@@ -392,7 +372,7 @@ export const readmitStudent = mutation({
     campus: v.id("campuses"),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudents");
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
 
@@ -441,7 +421,7 @@ export const updateBillingContactEmail = mutation({
     email: v.string(),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudents");
     const trimmed = args.email.trim();
     if (trimmed.length === 0) throw new Error("Email is required");
 
@@ -476,7 +456,7 @@ export const updateBillingContactEmail = mutation({
 export const getSiblingsByStudent = query({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "listStudents");
 
     const student = await ctx.db.get(args.studentId);
     if (!student || !student.siblingIds?.length) return [];
@@ -521,7 +501,7 @@ export const getSiblingsByStudent = query({
 export const deleteStudent = mutation({
   args: { studentId: v.id("students") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudents");
 
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");
@@ -717,7 +697,7 @@ export const updateStudent = mutation({
     siblingIds: v.optional(v.array(v.id("students"))),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "manageStudents");
 
     const student = await ctx.db.get(args.studentId);
     if (!student) throw new Error("Student not found");

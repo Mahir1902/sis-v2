@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 const ADMIN_EMAIL = "admin@school.edu";
 
@@ -213,7 +213,7 @@ export const seedReferenceData = internalMutation({
 export const backfillAcademicYears = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageSchoolSetup");
 
     // Bounded reference table — one row per academic year, a few dozen at most.
     const existing = await ctx.db.query("academicYears").collect();

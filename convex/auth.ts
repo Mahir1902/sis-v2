@@ -3,6 +3,7 @@ import { convexAuth } from "@convex-dev/auth/server";
 import { deriveInviteState } from "../lib/inviteStatus";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { studentLinkFor } from "./lib/permissions";
 
 /**
  * The invite-only account-creation gate, as a plain helper so it can be driven
@@ -44,6 +45,13 @@ export async function redeemInvite(
     throw new Error("Invalid invite");
   }
 
+  // A student account is born linked to its student record (Access Policy):
+  // one with no record could see nothing, so such an invite is dead too.
+  const studentId = await studentLinkFor(db, invite.role, invite.studentId);
+  if (invite.role === "student" && studentId === undefined) {
+    throw new Error("Invalid invite");
+  }
+
   // Single-use: flip pending → accepted in the SAME transaction as the user
   // insert. A concurrent second redemption either re-reads `accepted` and fails
   // the `valid` precondition above, or loses the Convex OCC race on this patch
@@ -63,6 +71,7 @@ export async function redeemInvite(
       name: invite.name,
       role: invite.role,
       isActive: true,
+      studentId,
     });
     return existing._id;
   }
@@ -71,6 +80,7 @@ export async function redeemInvite(
     email: invite.email,
     role: invite.role,
     isActive: true,
+    studentId,
   });
 }
 

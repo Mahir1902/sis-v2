@@ -1,5 +1,5 @@
 import { query } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /** Progression order of level codes (PG → Grade 12). */
 export const LEVEL_CODE_ORDER = [
@@ -25,7 +25,7 @@ export const LEVEL_CODE_ORDER = [
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin", "teacher", "student"]);
+    await requireCapability(ctx, "viewReferenceData");
     const levels = await ctx.db.query("standardLevels").take(100);
 
     // Sort by walking the linked list from the root (level with no predecessor)

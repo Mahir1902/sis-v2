@@ -6,7 +6,7 @@ import {
   classKeyOf,
   scheduleClassRecompute,
 } from "./computedGrades";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 // Adding or removing a CA changes every classmate's `expectedCaCount` (and,
 // for a removal with marks, the grade itself), so those mutations schedule a
@@ -27,7 +27,7 @@ export const createAssessment = mutation({
     assessmentDate: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     // Prevent duplicate CA-X for same subject/semester/level/year
     const existing = await ctx.db
       .query("assessments")
@@ -81,7 +81,7 @@ export const bulkCreateAssessments = mutation({
     totalMarks: v.float64(),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     const ids = [];
     for (const num of [1, 2, 3] as const) {
       // Prevent duplicate CA-X for same subject/semester/level/year
@@ -143,7 +143,7 @@ export const getAssessmentsByLevelYear = query({
     semester: v.optional(v.union(v.literal(1), v.literal(2))),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "manageAssessments");
     const q = ctx.db
       .query("assessments")
       .withIndex("by_standard_year", (q) =>
@@ -182,7 +182,7 @@ export const getAssessmentsByLevelYear = query({
 export const getAssessmentById = query({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "manageAssessments");
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) return null;
     const questions = await ctx.db
@@ -205,7 +205,7 @@ export const getAssessmentsBySubjectSemester = query({
     academicYearId: v.id("academicYears"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "manageAssessments");
     const assessments = await activeAssessmentsFor(ctx, {
       subjectId: args.subjectId,
       semester: args.semester,
@@ -220,7 +220,7 @@ export const getAssessmentsBySubjectSemester = query({
 export const deactivateAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) throw new Error("Assessment not found");
     await ctx.db.patch(args.assessmentId, { isActive: false });
@@ -246,7 +246,7 @@ export const updateAssessment = mutation({
     assessmentDate: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) throw new Error("Assessment not found");
 
@@ -303,7 +303,7 @@ export const updateAssessment = mutation({
 export const deleteAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin", "teacher"]);
+    const user = await requireCapability(ctx, "manageAssessments");
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) throw new Error("Assessment not found");
 

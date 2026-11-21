@@ -1,12 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 
 /** List all subjects (including inactive) — alias: list. */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["admin", "teacher"]);
+    await requireCapability(ctx, "viewClasses");
     const subjects = await ctx.db.query("subjects").take(200);
     return subjects.sort(
       (a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999),
@@ -18,7 +18,7 @@ export const list = query({
 export const toggleActive = mutation({
   args: { subjectId: v.id("subjects"), isActive: v.boolean() },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageSchoolSetup");
     await ctx.db.patch(args.subjectId, { isActive: args.isActive });
   },
 });
@@ -31,7 +31,7 @@ export const create = mutation({
     displayOrder: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "manageSchoolSetup");
     return await ctx.db.insert("subjects", { ...args, isActive: true });
   },
 });

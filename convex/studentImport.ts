@@ -7,7 +7,7 @@ import {
   query,
 } from "./_generated/server";
 import { logAudit } from "./auditLogs";
-import { requireRole } from "./lib/permissions";
+import { requireCapability } from "./lib/permissions";
 import { getCurrentPlacement, placeFromImport } from "./lib/placement";
 
 /**
@@ -296,7 +296,7 @@ export const commitImportBatch = mutation({
     academicYear: v.id("academicYears"),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["admin"]);
+    const user = await requireCapability(ctx, "importStudents");
 
     const runId = args.runId.trim();
     if (!runId) throw new Error("Missing run id");
@@ -394,7 +394,7 @@ export const getExistingStudents = query({
     academicYear: v.id("academicYears"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin"]);
+    await requireCapability(ctx, "importStudents");
 
     const unique = [...new Set(args.studentNumbers.map(normalise))];
     const [found, names] = await Promise.all([
