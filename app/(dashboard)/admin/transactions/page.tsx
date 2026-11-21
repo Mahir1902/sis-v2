@@ -26,7 +26,7 @@ import { columns, type SessionRow } from "./columns";
 
 export default function TransactionLogPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="viewTransactionLog">
       <TransactionLogContent />
     </RoleGate>
   );

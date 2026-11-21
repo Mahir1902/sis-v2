@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAttendanceClass } from "@/hooks/use-attendance-class";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { dhakaDate, isDateLabel } from "@/lib/attendanceDate";
 import { formatLongDate, plural } from "@/lib/attendanceView";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,7 @@ import { cn } from "@/lib/utils";
 
 export default function AttendanceTodayPage() {
   const picker = useAttendanceClass();
-  const me = useQuery(api.users.getMe);
+  const { can } = useCapabilities();
   const today = dhakaDate();
   const [date, setDate] = useState(today);
   const year = picker.selection.academicYear;
@@ -64,7 +65,7 @@ export default function AttendanceTodayPage() {
           <CallList
             date={date}
             academicYear={year}
-            canNote={me?.role === "admin"}
+            canNote={can("noteAttendance")}
           />
         </ErrorBoundary>
       ) : (

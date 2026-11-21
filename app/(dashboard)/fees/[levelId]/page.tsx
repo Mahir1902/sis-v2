@@ -99,7 +99,7 @@ export default function FeeDetailPage({
   const { levelId } = use(params);
 
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageFeeStructures">
       <FeeDetailContent levelId={levelId as Id<"standardLevels">} />
     </RoleGate>
   );

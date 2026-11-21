@@ -1,32 +1,32 @@
 "use client";
 
-import { useQuery } from "convex/react";
 import { ShieldAlert, UserX } from "lucide-react";
-import { api } from "@/convex/_generated/api";
-
-type Role = "admin" | "teacher" | "student";
+import { useCapabilities } from "@/hooks/use-capabilities";
+import type { Capability } from "@/lib/accessPolicy";
 
 interface RoleGateProps {
-  allowedRoles: Role[];
+  /** What the signed-in role must be able to do to see the children. */
+  capability: Capability;
   children: React.ReactNode;
 }
 
 /**
- * Client-side role gate. Renders children only if the current user
- * has one of the allowed roles. Shows "Access Denied" otherwise.
+ * Client-side page gate. Renders children only if the current user's role
+ * holds the capability in the Access Policy table (`lib/accessPolicy.ts`).
+ * Shows "Access Denied" otherwise.
  *
  * Note: this is a UI guard only. Server-side mutations/queries
- * enforce permissions via requireRole() independently.
+ * enforce the same table via requireCapability() independently.
  */
-export function RoleGate({ allowedRoles, children }: RoleGateProps) {
-  const me = useQuery(api.users.getMe);
+export function RoleGate({ capability, children }: RoleGateProps) {
+  const { me, isLoading, can } = useCapabilities();
 
   // Still loading — DashboardWrapper already shows a spinner,
   // so return null to avoid a flash of "Access Denied"
-  if (me === undefined) return null;
+  if (isLoading) return null;
 
   // Deactivated account: every server query/mutation rejects these users
-  // (requireRole checks isActive), so deny at the gate too. Otherwise a
+  // (requireCapability checks isActive), so deny at the gate too. Otherwise a
   // still-"admin"-by-role but deactivated user renders admin content whose
   // queries then throw Unauthorized — e.g. the settings page's ErrorBoundary
   // showing "Something went wrong". Give an honest message instead.
@@ -40,7 +40,7 @@ export function RoleGate({ allowedRoles, children }: RoleGateProps) {
     );
   }
 
-  if (!me || !allowedRoles.includes(me.role as Role)) {
+  if (!can(capability)) {
     return (
       <GateMessage
         icon={<ShieldAlert className="h-10 w-10 text-red-400 mb-3" />}

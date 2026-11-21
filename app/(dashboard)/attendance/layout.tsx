@@ -19,7 +19,7 @@ export default function AttendanceLayout({
 }) {
   const pathname = usePathname();
   return (
-    <RoleGate allowedRoles={["admin", "teacher"]}>
+    <RoleGate capability="viewAttendance">
       <div className="space-y-4">
         <nav
           aria-label="Attendance sections"

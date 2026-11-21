@@ -47,7 +47,7 @@ const statusStyles: Record<string, string> = {
 
 export default function StudentFeesPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageStudentFees">
       <StudentFeesPageContent />
     </RoleGate>
   );

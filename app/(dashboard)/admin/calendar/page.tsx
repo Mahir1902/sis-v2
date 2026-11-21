@@ -58,7 +58,7 @@ type Pending = ClosureValues & { markCount: number; classCount: number };
 
 export default function SchoolCalendarPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageCalendar">
       <ErrorBoundary>
         <SchoolCalendarContent />
       </ErrorBoundary>

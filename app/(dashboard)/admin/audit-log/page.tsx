@@ -68,7 +68,7 @@ function formatActionLabel(action: AuditAction): string {
 
 export default function AuditLogPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="viewAuditLog">
       <AuditLogPageContent />
     </RoleGate>
   );

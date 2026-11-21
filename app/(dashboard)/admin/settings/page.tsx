@@ -44,7 +44,7 @@ import { PendingInvitesTable } from "./_components/PendingInvitesTable";
 
 export default function AdminSettingsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageUsers">
       {/* Boundary catches a listUsers/listInvites throw → "Try again" (spec #60). */}
       <ErrorBoundary>
         <AdminSettingsPageContent />

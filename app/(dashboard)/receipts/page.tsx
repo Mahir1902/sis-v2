@@ -13,7 +13,7 @@ import { columns } from "./columns";
 
 export default function ReceiptsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageReceipts">
       <ReceiptsPageContent />
     </RoleGate>
   );

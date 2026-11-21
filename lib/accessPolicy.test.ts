@@ -3,6 +3,7 @@ import {
   CAPABILITIES,
   can,
   canOnStudent,
+  homeFor,
   ROLES,
   type Role,
   SENSITIVE_STUDENT_FIELDS,
@@ -163,5 +164,25 @@ describe("withoutSensitiveFields", () => {
     const original = { fatherNidNumber: "NID-F" };
     withoutSensitiveFields(original);
     expect(original).toEqual({ fatherNidNumber: "NID-F" });
+  });
+});
+
+describe("homeFor — where an account lands after sign-in", () => {
+  it("sends an admin to the dashboard", () => {
+    expect(homeFor({ role: "admin" })).toBe("/dashboard");
+  });
+
+  it("sends a teacher to the student roster", () => {
+    expect(homeFor({ role: "teacher" })).toBe("/students");
+  });
+
+  it("sends a student to their own record, never the roster", () => {
+    expect(homeFor({ role: "student", studentId: "s1" })).toBe("/students/s1");
+  });
+
+  it("sends an unlinked student or an unknown account to /students, which explains", () => {
+    expect(homeFor({ role: "student" })).toBe("/students");
+    expect(homeFor(undefined)).toBe("/students");
+    expect(homeFor(null)).toBe("/students");
   });
 });

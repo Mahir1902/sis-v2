@@ -86,7 +86,7 @@ type CreateValues = z.infer<typeof createSchema>;
 
 export default function AssessmentsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="browseAssessments">
       <AssessmentsPageContent />
     </RoleGate>
   );

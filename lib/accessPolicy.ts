@@ -147,3 +147,14 @@ export function withoutSensitiveFields<T extends object>(student: T): T {
   for (const field of SENSITIVE_STUDENT_FIELDS) delete shaped[field];
   return shaped as T;
 }
+
+/**
+ * Where an account lands after sign-in: the first screen its role can load.
+ * A student goes to their own record, never the roster; an unlinked student
+ * (or an unknown account) falls through to `/students`, which explains.
+ */
+export function homeFor(caller: PolicyCaller | null | undefined): string {
+  if (can(caller?.role, "viewDashboard")) return "/dashboard";
+  if (can(caller?.role, "listStudents")) return "/students";
+  return caller?.studentId ? `/students/${caller.studentId}` : "/students";
+}

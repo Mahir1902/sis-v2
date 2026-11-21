@@ -60,7 +60,7 @@ import { serverErrorMessage } from "@/lib/placementErrors";
 
 export default function PromotionsPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="promoteStudents">
       <PromotionsPageContent />
     </RoleGate>
   );

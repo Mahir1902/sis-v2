@@ -37,7 +37,7 @@ import { VoidReceiptDialog } from "./_components/VoidReceiptDialog";
 
 export default function ReceiptDetailPage() {
   return (
-    <RoleGate allowedRoles={["admin"]}>
+    <RoleGate capability="manageReceipts">
       <ReceiptDetailContent />
     </RoleGate>
   );

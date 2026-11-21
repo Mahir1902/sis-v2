@@ -28,22 +28,21 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSidebar } from "@/hooks/use-sidebar";
+import { type Capability, can, type Role } from "@/lib/accessPolicy";
 import { cn } from "@/lib/utils";
 import { SidebarItem } from "./SidebarItem";
-
-type Role = "admin" | "teacher" | "student";
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  roles?: Role[]; // if omitted, visible to all roles
+  /** What a role must be able to do to be offered this screen. */
+  capability: Capability;
 }
 
 interface NavGroup {
   label: string;
   items: NavItem[];
-  roles?: Role[]; // if omitted, group visible to all roles
 }
 
 const navGroups: NavGroup[] = [
@@ -54,53 +53,102 @@ const navGroups: NavGroup[] = [
         href: "/dashboard",
         label: "Dashboard",
         icon: LayoutDashboard,
-        roles: ["admin"],
+        capability: "viewDashboard",
       },
     ],
   },
   {
     label: "Student Management",
     items: [
-      { href: "/students", label: "Students", icon: Users },
-      // roles written explicitly (spec §5.1): a future student account must
-      // not inherit this the way the /students line above would let it.
+      {
+        href: "/students",
+        label: "Students",
+        icon: Users,
+        capability: "listStudents",
+      },
       {
         href: "/attendance",
         label: "Attendance",
         icon: ClipboardCheck,
-        roles: ["admin", "teacher"],
+        capability: "viewAttendance",
       },
       {
         href: "/student-fees",
         label: "Student Fees",
         icon: DollarSign,
-        roles: ["admin"],
+        capability: "manageStudentFees",
       },
     ],
   },
   {
     label: "Administration",
-    roles: ["admin"],
     items: [
-      { href: "/fees", label: "Fee Structures", icon: BookOpen },
-      { href: "/receipts", label: "Receipts", icon: Receipt },
-      { href: "/admin/transactions", label: "Transaction Log", icon: Receipt },
-      { href: "/admin/assessments", label: "Assessments", icon: GraduationCap },
+      {
+        href: "/fees",
+        label: "Fee Structures",
+        icon: BookOpen,
+        capability: "manageFeeStructures",
+      },
+      {
+        href: "/receipts",
+        label: "Receipts",
+        icon: Receipt,
+        capability: "manageReceipts",
+      },
+      {
+        href: "/admin/transactions",
+        label: "Transaction Log",
+        icon: Receipt,
+        capability: "viewTransactionLog",
+      },
+      {
+        href: "/admin/assessments",
+        label: "Assessments",
+        icon: GraduationCap,
+        capability: "browseAssessments",
+      },
       {
         href: "/admin/class-analytics",
         label: "Class Analytics",
         icon: BarChart3,
+        capability: "viewClassAnalytics",
       },
-      { href: "/admin/promotions", label: "Promotions", icon: ArrowUpCircle },
-      { href: "/admin/subjects", label: "Subjects", icon: BookOpen },
+      {
+        href: "/admin/promotions",
+        label: "Promotions",
+        icon: ArrowUpCircle,
+        capability: "promoteStudents",
+      },
+      {
+        href: "/admin/subjects",
+        label: "Subjects",
+        icon: BookOpen,
+        capability: "manageSchoolSetup",
+      },
       {
         href: "/admin/import-students",
         label: "Import Students",
         icon: Upload,
+        capability: "importStudents",
       },
-      { href: "/admin/audit-log", label: "Audit Log", icon: ClipboardList },
-      { href: "/admin/calendar", label: "School Calendar", icon: CalendarOff },
-      { href: "/admin/settings", label: "Settings", icon: Settings },
+      {
+        href: "/admin/audit-log",
+        label: "Audit Log",
+        icon: ClipboardList,
+        capability: "viewAuditLog",
+      },
+      {
+        href: "/admin/calendar",
+        label: "School Calendar",
+        icon: CalendarOff,
+        capability: "manageCalendar",
+      },
+      {
+        href: "/admin/settings",
+        label: "Settings",
+        icon: Settings,
+        capability: "manageUsers",
+      },
     ],
   },
 ];
@@ -120,13 +168,11 @@ export function Sidebar({ role, email }: SidebarProps) {
     router.replace("/login");
   }
 
+  // A role is offered exactly the screens the Access Policy lets it open.
   const visibleGroups = navGroups
-    .filter((g) => !g.roles || !role || g.roles.includes(role))
     .map((g) => ({
       ...g,
-      items: g.items.filter(
-        (item) => !item.roles || !role || item.roles.includes(role),
-      ),
+      items: g.items.filter((item) => can(role, item.capability)),
     }))
     .filter((g) => g.items.length > 0);
 

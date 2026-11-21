@@ -34,7 +34,7 @@ export default function AssessmentDetailPage({
   const { assessmentId } = use(params);
 
   return (
-    <RoleGate allowedRoles={["admin", "teacher"]}>
+    <RoleGate capability="enterGrades">
       <AssessmentDetailContent
         assessmentId={assessmentId as Id<"assessments">}
       />
