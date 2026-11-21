@@ -3,7 +3,7 @@
 ---
 
 ## Current Feature: Access Policy module — one capability table for server and client (architecture review candidate 1, 2026-11-21)
-**Status**: In Progress — waiting on the captain's UI pick (needs-decision `sis-access-policy-ui`)
+**Status**: In Progress — UI pick received; per-teacher feature access added to scope
 **Active Agent**: CODING AGENT
 
 Source: architecture review 2026-11-21, candidate 1, plus live defects 1–4 and issue #122. The CLAUDE.md
@@ -62,6 +62,36 @@ permission matrix is the source of truth for the table. Branch `fm/sis-access-po
 - [ ] 4. UI prototype (3 variants) + screenshots — DONE, waiting for the captain's pick
 - [ ] 5. Client adapter: `useCapabilities`, `RoleGate`, Sidebar, `homeFor`, dashboard redirect, `canNote` — DONE (no visual change), Frontend Review PENDING with sub-task 6
 - [ ] 6. Student detail page + students list + Settings linking: defect 1, mis-shown actions, chosen UI variant — PENDING (blocked on 4)
+
+### Captain's UI pick and added scope (2026-11-21)
+- **Pick:** variant A "Just not there" — what a role may not do or see is not rendered — with variant B's
+  "Linked student" column in Settings → Users. The product-question defaults stand (Assessments list and Class
+  Analytics stay admin-only by default; a student account sees profile, own fees, own grades).
+- **Added:** per-teacher feature access. An admin can give an individual teacher access to features beyond the
+  teacher role ("audit logs or promotions or assessments or whatever it is"); a teacher's sidebar shows the
+  features they have and hides the rest.
+
+### Plan — per-teacher feature access
+- The capability table stays the one source: a teacher holds the teacher role's capabilities **plus** the
+  capabilities an admin granted them (`users.grants`). `can()` / `canOnStudent()` take the caller (role + grants),
+  so the server gates, the sidebar, page gates and buttons all follow a grant with no other change.
+- Only capabilities listed in `GRANTABLE_CAPABILITIES` can be granted, and the check is made when a grant is
+  *read*, not only when it is written — a stored grant outside the list never works.
+- First grantable set — the academic/admin screens whose other queries a teacher can already call:
+  Assessments list, Class Analytics, Promotions, Subjects, Import Students, Audit Log, School Calendar.
+  Money screens (fees, receipts, transaction log, dashboard) and user management are **not** grantable in this
+  change: each money screen pulls in several other finance functions, and granting user management would let a
+  teacher grant themself anything. `manageSubjects` splits out of `manageSchoolSetup` so "Subjects" does not carry
+  campus/academic-year creation with it.
+- `users.setTeacherGrants({ userId, grants })` (needs `manageUsers`), audit-logged; grants are cleared when an
+  account stops being a teacher. `getMe` / `listUsers` return grants.
+- UI: an editor for a teacher's extra access in Settings → Users — new UI, so it is prototyped first (second UI
+  gate); everything already decided is built meanwhile.
+
+### Sub-tasks (added)
+- [ ] 7. Per-teacher grants: table + server (`users.grants`, `setTeacherGrants`) + tests — PENDING (Devil's Advocate first)
+- [ ] 8. Grant editor prototype (3 variants) + screenshots + needs-decision — PENDING
+- [ ] 9. Grant editor in Settings → Users — PENDING (blocked on 8)
 
 ### Review Notes
 **Backend Review (sub-tasks 1–3, commit 78b95c2, Opus 5.5): APPROVED.** Every removed role list was paired with
