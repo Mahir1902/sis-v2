@@ -107,9 +107,15 @@ export const CAPABILITIES = Object.keys(POLICY) as Capability[];
 
 /**
  * Features an admin may give to an individual teacher on top of the teacher
- * role (`users.grants`). This list is the whole reach of a grant: money, user
- * management, student records and identity data are deliberately absent, so
- * no grant — however it got stored — can open them.
+ * role (`users.grants`). This list is the whole reach of a grant: fee
+ * management, user management, student records and identity data are absent,
+ * so no grant — however it got stored — can open them directly.
+ *
+ * Two entries do reach money and account data, deliberately: `viewAuditLog`
+ * shows audit metadata including fee amounts, receipt edits, account emails
+ * and role changes, and `promoteStudents` assigns next year's fees (and
+ * graduates leavers) while promoting. The captain kept both grantable knowing
+ * this (TASK_LOG.md, 2026-11-21), and the grant editor discloses it.
  */
 export const GRANTABLE_CAPABILITIES = [
   "browseAssessments",
