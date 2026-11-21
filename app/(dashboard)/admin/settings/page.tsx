@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { Shield, UserCheck, UserPlus, UserX } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -77,8 +78,15 @@ function AdminSettingsPageContent() {
       await updateRole({ userId, role });
       toast.success("Role updated");
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to update role";
+      // The server refuses a student account with no student record behind
+      // it; this screen cannot link one yet (the access sheet will).
+      const needsStudent =
+        err instanceof ConvexError && err.data?.code === "STUDENT_REQUIRED";
+      const message = needsStudent
+        ? "A student account must be linked to a student record, which this screen cannot do yet."
+        : err instanceof Error
+          ? err.message
+          : "Failed to update role";
       toast.error(message);
     }
   }
