@@ -353,6 +353,58 @@ describe("defect 4 — a student account is linked to its student record", () =>
     });
   });
 
+  it("records which student an account was linked to in the audit log", async () => {
+    await asRole("admin").mutation(api.users.updateUserRole, {
+      userId: users.student,
+      role: "student",
+      studentId: other,
+    });
+    const [entry] = await t.run((ctx) =>
+      ctx.db
+        .query("auditLogs")
+        .withIndex("by_entity", (q) => q.eq("entityType", "users"))
+        .collect(),
+    );
+    expect(entry.metadata).toMatchObject({
+      oldRole: "student",
+      newRole: "student",
+      oldStudentId: own,
+      newStudentId: other,
+    });
+  });
+
+  it("clears a stale link when an existing account redeems a staff invite", async () => {
+    // A pre-provisioned row for the invited email that was once a student.
+    const userId = await t.run(async (ctx) => {
+      const existing = await ctx.db.insert("users", {
+        name: "Old",
+        email: "returning@school.edu",
+        role: "student",
+        isActive: false,
+        studentId: own,
+      });
+      await ctx.db.insert("invites", {
+        token: "returning-token",
+        email: "returning@school.edu",
+        role: "teacher",
+        name: "Returning Teacher",
+        status: "pending",
+        expiresAt: Date.now() + DAY,
+        invitedBy: users.admin,
+      });
+      const redeemed = await redeemInvite(
+        ctx.db,
+        { email: "returning@school.edu", inviteToken: "returning-token" },
+        Date.now(),
+      );
+      expect(redeemed).toBe(existing);
+      return redeemed;
+    });
+    const me = await as(userId).query(api.users.getMe, {});
+    expect(me).toMatchObject({ role: "teacher", isActive: true });
+    expect(me?.studentId).toBeUndefined();
+  });
+
   it("drops the link when the account stops being a student", async () => {
     await asRole("admin").mutation(api.users.updateUserRole, {
       userId: users.student,
@@ -407,6 +459,28 @@ describe("grades follow the matrix (a student sees only their own)", () => {
         { enrollmentId: otherEnrollment, semester: 1 },
       ),
     ).resolves.toBeDefined();
+  });
+});
+
+describe("an enrollment-keyed read with no enrollment behind it", () => {
+  it("is empty for staff and refused for a student account", async () => {
+    const gone = await t.run(async (ctx) => {
+      await ctx.db.delete(otherEnrollment);
+      return otherEnrollment;
+    });
+    const args = { enrollmentId: gone, semester: 1 as const };
+    await expect(
+      asRole("teacher").query(
+        api.computedGrades.getGradesByEnrollmentSemester,
+        args,
+      ),
+    ).resolves.toEqual([]);
+    await expect(
+      asRole("student").query(
+        api.computedGrades.getGradesByEnrollmentSemester,
+        args,
+      ),
+    ).rejects.toThrow("Unauthorized");
   });
 });
 

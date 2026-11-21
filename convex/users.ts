@@ -79,7 +79,13 @@ export const updateUserRole = mutation({
       entityType: "users",
       entityId: args.userId,
       description: `Changed user ${target.email} role from ${oldRole} to ${args.role}`,
-      metadata: { oldRole, newRole: args.role },
+      metadata: {
+        oldRole,
+        newRole: args.role,
+        // Which student record the account can read is part of the change.
+        oldStudentId: target.studentId,
+        newStudentId: studentId,
+      },
     });
   },
 });
