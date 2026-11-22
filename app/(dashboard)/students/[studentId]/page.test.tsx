@@ -228,6 +228,27 @@ describe("student page — sibling links (#89)", () => {
     });
   });
 
+  it("drops an Undo whose student is no longer the one on the page", async () => {
+    signInAs({ role: "admin" });
+    data.set("students:getSiblingsByStudent", [zara]);
+    const { rerender } = render(<StudentDetailPage />);
+    openSiblings();
+    fireEvent.click(screen.getByRole("button", { name: "Unlink Zara Uddin" }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+
+    // Navigate to Zara's page without remounting, then press the old Undo.
+    studentId = "s2";
+    signInAs({ role: "admin" });
+    data.set("students:getSiblingsByStudent", [
+      { _id: "s1", studentNumber: "S-1", studentFullName: "Rahim Uddin" },
+    ]);
+    rerender(<StudentDetailPage />);
+    mutate.mockClear();
+    toastSuccess.mock.calls[0][1].action.onClick();
+
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
   it("lets an admin link a student, offering neither this student nor one already linked", () => {
     signInAs({ role: "admin" });
     data.set("students:getSiblingsByStudent", [zara]);

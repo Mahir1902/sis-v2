@@ -34,22 +34,29 @@ export function useSiblingLinks(
   const [isPending, setIsPending] = useState(false);
 
   // Kept in a ref so Undo, fired from a toast after later renders, edits the
-  // current list rather than the one it closed over.
+  // current list rather than the one it closed over — and only while that
+  // list still belongs to the student the toast was made for.
   // ponytail: the whole list is sent, so two admins editing one student at
   // the same moment can overwrite each other; add link/unlink mutations if
   // that ever matters.
-  const linked = useRef<Id<"students">[] | undefined>(undefined);
-  linked.current = siblings?.flatMap((s) => (s ? [s._id] : []));
+  const linked = useRef<{ studentId: Id<"students">; ids?: Id<"students">[] }>(
+    { studentId },
+  );
+  linked.current = {
+    studentId,
+    ids: siblings?.flatMap((s) => (s ? [s._id] : [])),
+  };
 
   const save = async (
     next: (current: Id<"students">[]) => Id<"students">[],
     success: string,
     undo?: () => void,
   ) => {
-    if (!linked.current) return;
+    const { studentId: current, ids } = linked.current;
+    if (!ids || current !== studentId) return;
     setIsPending(true);
     try {
-      await updateStudent({ studentId, siblingIds: next(linked.current) });
+      await updateStudent({ studentId, siblingIds: next(ids) });
       toast.success(
         success,
         undo ? { action: { label: "Undo", onClick: undo } } : undefined,
@@ -74,7 +81,7 @@ export function useSiblingLinks(
   return {
     /** Students that can still be linked; `undefined` while loading. */
     candidates: roster?.filter(
-      (s) => s._id !== studentId && !linked.current?.includes(s._id),
+      (s) => s._id !== studentId && !linked.current.ids?.includes(s._id),
     ),
     link,
     unlink,
