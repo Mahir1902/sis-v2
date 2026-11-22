@@ -1,56 +1,16 @@
-import { ConvexError, v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
-import { type MutationCtx, mutation, query } from "./_generated/server";
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import {
-  type GradeTarget,
-  recomputeGrade,
-  scheduleRecompute,
-} from "./computedGrades";
+  enterMarks,
+  markAbsent,
+  paperQuestions,
+  questionTotal,
+} from "./lib/caPaper";
 import { requireCapability } from "./lib/permissions";
 
-/**
- * A grid save for one class recomputes each student's grade in the same
- * transaction up to this many students (≈ 100 docs read per student, so a
- * 50-student class stays well under the per-transaction ceiling). Larger
- * payloads are recomputed by the scheduled, chunked batch instead.
- */
-const INLINE_RECOMPUTE_MAX = 50;
-
-/**
- * Rejects marks for a student who is not in the assessment's class: every
- * entry's enrollment must be that student's, in the assessment's level and
- * year. Open is not required — a late CA mark for a closed enrollment of
- * that year is legitimate. Without it the recompute would write (or delete)
- * a grade row in the wrong class. Returns the assessment, whose subject +
- * semester key the recompute.
- */
-async function assertInAssessmentClass(
-  ctx: MutationCtx,
-  assessmentId: Id<"assessments">,
-  entries: { studentId: Id<"students">; enrollmentId: Id<"enrollments"> }[],
-): Promise<Doc<"assessments">> {
-  const assessment = await ctx.db.get(assessmentId);
-  if (!assessment) throw new ConvexError("Assessment not found");
-  const ids = [...new Set(entries.map((e) => e.enrollmentId))];
-  const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
-  const byId = new Map(ids.map((id, i) => [id, docs[i]]));
-  const misplaced = entries.some((e) => {
-    const en = byId.get(e.enrollmentId);
-    return (
-      !en ||
-      en.studentId !== e.studentId ||
-      en.standardLevelId !== assessment.standardLevelId ||
-      en.academicYear !== assessment.academicYearId
-    );
-  });
-  if (misplaced) {
-    throw new ConvexError(
-      "A student here is not in this assessment's class. Reload the page and try again.",
-    );
-  }
-  return assessment;
-}
+// Thin public mutations: check the role, then hand the write to the CA Paper
+// module (`lib/caPaper.ts`), which owns the rules and the grade recompute.
 
 /** Upsert a single student's answer for a question. */
 export const upsertAnswer = mutation({
@@ -63,43 +23,10 @@ export const upsertAnswer = mutation({
     isAbsent: v.optional(v.boolean()),
     remarks: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { assessmentId, ...entry }) => {
     await requireCapability(ctx, "enterGrades");
-    const assessment = await assertInAssessmentClass(ctx, args.assessmentId, [
-      args,
-    ]);
-    const target = {
-      studentId: args.studentId,
-      enrollmentId: args.enrollmentId,
-      subjectId: assessment.subjectId,
-      semester: assessment.semester,
-    };
-    const existing = await ctx.db
-      .query("studentAssessmentAnswers")
-      .withIndex("by_student_assessment", (q) =>
-        q.eq("studentId", args.studentId).eq("assessmentId", args.assessmentId),
-      )
-      .filter((q) => q.eq(q.field("questionId"), args.questionId))
-      .first();
-
-    let id: Id<"studentAssessmentAnswers">;
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        marksObtained: args.marksObtained,
-        isAbsent: args.isAbsent,
-        remarks: args.remarks,
-        enteredAt: Date.now(),
-      });
-      id = existing._id;
-    } else {
-      id = await ctx.db.insert("studentAssessmentAnswers", {
-        ...args,
-        enteredAt: Date.now(),
-      });
-    }
-    // Same transaction: the grade never lags the mark.
-    await recomputeGrade(ctx, target);
-    return id;
+    const { ids } = await enterMarks(ctx, assessmentId, [entry]);
+    return ids[0];
   },
 });
 
@@ -120,86 +47,18 @@ export const bulkMarkEntry = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireCapability(ctx, "enterGrades");
-    // Every (student, enrollment) in the payload must be in this assessment's
-    // class — validated before any write.
-    const assessment = await assertInAssessmentClass(
+    const { studentCount } = await enterMarks(
       ctx,
       args.assessmentId,
       args.entries,
     );
-    const now = Date.now();
-
-    // The distinct (student, enrollment) pairs are the recompute targets.
-    const targetMap = new Map<string, GradeTarget>();
-    for (const e of args.entries) {
-      targetMap.set(`${e.studentId}|${e.enrollmentId}`, {
-        studentId: e.studentId,
-        enrollmentId: e.enrollmentId,
-      });
-    }
-    const targets = [...targetMap.values()];
-
-    // Pre-load all existing answers for this assessment (avoid N+1)
-    const allExisting = await ctx.db
-      .query("studentAssessmentAnswers")
-      .withIndex("by_assessment", (q) =>
-        q.eq("assessmentId", args.assessmentId),
-      )
-      .collect();
-    const existingMap = new Map(
-      allExisting.map((a) => [`${a.studentId}|${a.questionId}`, a]),
-    );
-
-    // Count distinct students for the audit description
-    const distinctStudents = new Set(args.entries.map((e) => e.studentId));
-
-    for (const entry of args.entries) {
-      const key = `${entry.studentId}|${entry.questionId}`;
-      const existing = existingMap.get(key);
-
-      if (existing) {
-        await ctx.db.patch(existing._id, {
-          marksObtained: entry.marksObtained,
-          isAbsent: entry.isAbsent,
-          remarks: entry.remarks,
-          enteredAt: now,
-        });
-      } else {
-        await ctx.db.insert("studentAssessmentAnswers", {
-          studentId: entry.studentId,
-          enrollmentId: entry.enrollmentId,
-          assessmentId: args.assessmentId,
-          questionId: entry.questionId,
-          marksObtained: entry.marksObtained,
-          isAbsent: entry.isAbsent,
-          remarks: entry.remarks,
-          enteredAt: now,
-        });
-      }
-    }
-
-    // Recompute the affected grades: inline for a normal class save, scheduled
-    // (chunked) when the payload is too large for one transaction.
-    const key = {
-      subjectId: assessment.subjectId,
-      semester: assessment.semester,
-    };
-    if (targets.length <= INLINE_RECOMPUTE_MAX) {
-      await Promise.all(
-        targets.map((t) => recomputeGrade(ctx, { ...t, ...key })),
-      );
-    } else {
-      await scheduleRecompute(ctx, key, targets);
-    }
-
     await logAudit(ctx, {
       user,
       action: "update",
       entityType: "studentAssessmentAnswers",
       entityId: args.assessmentId,
-      description: `Entered marks for ${distinctStudents.size} students`,
+      description: `Entered marks for ${studentCount} students`,
     });
-
     return { count: args.entries.length };
   },
 });
@@ -213,59 +72,7 @@ export const markStudentAbsent = mutation({
   },
   handler: async (ctx, args) => {
     await requireCapability(ctx, "enterGrades");
-    const assessment = await assertInAssessmentClass(ctx, args.assessmentId, [
-      args,
-    ]);
-    const target = {
-      studentId: args.studentId,
-      enrollmentId: args.enrollmentId,
-      subjectId: assessment.subjectId,
-      semester: assessment.semester,
-    };
-    const questions = await ctx.db
-      .query("assessmentQuestions")
-      .withIndex("by_assessment", (q) =>
-        q.eq("assessmentId", args.assessmentId),
-      )
-      .collect();
-
-    // Pre-load existing answers for this student+assessment (avoid N+1)
-    const existingAnswers = await ctx.db
-      .query("studentAssessmentAnswers")
-      .withIndex("by_student_assessment", (qb) =>
-        qb
-          .eq("studentId", args.studentId)
-          .eq("assessmentId", args.assessmentId),
-      )
-      .collect();
-    const answerMap = new Map(
-      existingAnswers.map((a) => [a.questionId.toString(), a]),
-    );
-
-    const now = Date.now();
-    for (const q of questions) {
-      const existing = answerMap.get(q._id.toString());
-
-      if (existing) {
-        await ctx.db.patch(existing._id, {
-          marksObtained: 0,
-          isAbsent: true,
-          enteredAt: now,
-        });
-      } else {
-        await ctx.db.insert("studentAssessmentAnswers", {
-          studentId: args.studentId,
-          enrollmentId: args.enrollmentId,
-          assessmentId: args.assessmentId,
-          questionId: q._id,
-          marksObtained: 0,
-          isAbsent: true,
-          enteredAt: now,
-        });
-      }
-    }
-    // Absent = a present 0 (CONTEXT.md): the grade drops in the same transaction.
-    await recomputeGrade(ctx, target);
+    await markAbsent(ctx, args);
   },
 });
 
@@ -316,12 +123,7 @@ export const getStudentAssessmentDetail = query({
 
     // Fetch questions and answers in parallel
     const [questions, answers] = await Promise.all([
-      ctx.db
-        .query("assessmentQuestions")
-        .withIndex("by_assessment_order", (q) =>
-          q.eq("assessmentId", assessments._id),
-        )
-        .take(200),
+      paperQuestions(ctx, assessments._id),
       ctx.db
         .query("studentAssessmentAnswers")
         .withIndex("by_student_assessment", (q) =>
@@ -348,10 +150,7 @@ export const getStudentAssessmentDetail = query({
       (s, q) => s + (q.marksObtained ?? 0),
       0,
     );
-    const totalPossible = enrichedQuestions.reduce(
-      (s, q) => s + q.marksAllocated,
-      0,
-    );
+    const totalPossible = questionTotal(questions);
     const isAbsent = answers.length > 0 && answers.every((a) => a.isAbsent);
 
     return {

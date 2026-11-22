@@ -1,14 +1,17 @@
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
-import { classKeyOf, scheduleClassRecompute } from "./computedGrades";
+import {
+  addQuestions,
+  deleteQuestion as deletePaperQuestion,
+  paperQuestions,
+  updateQuestion as updatePaperQuestion,
+} from "./lib/caPaper";
 import { requireCapability } from "./lib/permissions";
 
-// Every change to a paper's questions moves the denominator of every student's
-// CA percentage, so each mutation below schedules a class-wide recompute
-// (chunked, see computedGrades.ts) for the assessment's subject + term.
+// Thin public mutations: check the role, then hand the write to the CA Paper
+// module (`lib/caPaper.ts`), which owns the allocation rules, the cascade and
+// the class-wide grade recompute.
 
 /** Create a single question for an assessment. */
 export const createQuestion = mutation({
@@ -21,19 +24,9 @@ export const createQuestion = mutation({
     conceptTag: v.optional(v.string()),
     displayOrder: v.optional(v.float64()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { assessmentId, ...question }) => {
     const user = await requireCapability(ctx, "manageAssessments");
-    const assessment = await validateQuestionTotal(
-      ctx,
-      args.assessmentId,
-      args.marksAllocated,
-    );
-    const id = await ctx.db.insert("assessmentQuestions", {
-      ...args,
-      isActive: true,
-      createdAt: Date.now(),
-    });
-    await scheduleClassRecompute(ctx, classKeyOf(assessment), assessment._id);
+    const [id] = await addQuestions(ctx, assessmentId, [question]);
 
     await logAudit(ctx, {
       user,
@@ -63,44 +56,7 @@ export const bulkCreateQuestions = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireCapability(ctx, "manageAssessments");
-    const assessment = await ctx.db.get(args.assessmentId);
-    if (!assessment) throw new Error("Assessment not found");
-    const totalNewMarks = args.questions.reduce(
-      (s, q) => s + q.marksAllocated,
-      0,
-    );
-    const existingQuestions = await ctx.db
-      .query("assessmentQuestions")
-      .withIndex("by_assessment", (q) =>
-        q.eq("assessmentId", args.assessmentId),
-      )
-      .take(200);
-    const existingTotal = existingQuestions.reduce(
-      (s, q) => s + q.marksAllocated,
-      0,
-    );
-    if (existingTotal + totalNewMarks > assessment.totalMarks) {
-      throw new Error(
-        `Adding ${totalNewMarks} marks would exceed assessment total of ${assessment.totalMarks} (currently allocated: ${existingTotal})`,
-      );
-    }
-    const ids = [];
-    for (let i = 0; i < args.questions.length; i++) {
-      const q = args.questions[i];
-      const id = await ctx.db.insert("assessmentQuestions", {
-        assessmentId: args.assessmentId,
-        questionNumber: q.questionNumber,
-        marksAllocated: q.marksAllocated,
-        questionText: q.questionText,
-        learningObjective: q.learningObjective,
-        conceptTag: q.conceptTag,
-        displayOrder: existingQuestions.length + i + 1,
-        isActive: true,
-        createdAt: Date.now(),
-      });
-      ids.push(id);
-    }
-    await scheduleClassRecompute(ctx, classKeyOf(assessment), assessment._id);
+    const ids = await addQuestions(ctx, args.assessmentId, args.questions);
 
     await logAudit(ctx, {
       user,
@@ -119,12 +75,7 @@ export const getByAssessment = query({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
     await requireCapability(ctx, "manageAssessments");
-    return await ctx.db
-      .query("assessmentQuestions")
-      .withIndex("by_assessment_order", (q) =>
-        q.eq("assessmentId", args.assessmentId),
-      )
-      .take(200);
+    return await paperQuestions(ctx, args.assessmentId);
   },
 });
 
@@ -135,46 +86,9 @@ export const updateQuestion = mutation({
     marksAllocated: v.optional(v.float64()),
     questionText: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { questionId, ...updates }) => {
     const user = await requireCapability(ctx, "manageAssessments");
-    const question = await ctx.db.get(args.questionId);
-    if (!question) throw new Error("Question not found");
-
-    // Validate marks won't exceed assessment total
-    if (args.marksAllocated !== undefined) {
-      const assessment = await ctx.db.get(question.assessmentId);
-      if (!assessment) throw new Error("Assessment not found");
-      const siblings = await ctx.db
-        .query("assessmentQuestions")
-        .withIndex("by_assessment", (q) =>
-          q.eq("assessmentId", question.assessmentId),
-        )
-        .take(200);
-      const othersTotal = siblings
-        .filter((q) => q._id !== args.questionId)
-        .reduce((sum, q) => sum + q.marksAllocated, 0);
-      if (othersTotal + args.marksAllocated > assessment.totalMarks) {
-        throw new Error(
-          `Updating to ${args.marksAllocated} marks would exceed assessment total of ${assessment.totalMarks} (other questions: ${othersTotal})`,
-        );
-      }
-    }
-
-    const { questionId, ...updates } = args;
-    await ctx.db.patch(questionId, updates);
-    if (
-      args.marksAllocated !== undefined &&
-      args.marksAllocated !== question.marksAllocated
-    ) {
-      const assessment = await ctx.db.get(question.assessmentId);
-      if (assessment) {
-        await scheduleClassRecompute(
-          ctx,
-          classKeyOf(assessment),
-          assessment._id,
-        );
-      }
-    }
+    const question = await updatePaperQuestion(ctx, questionId, updates);
 
     await logAudit(ctx, {
       user,
@@ -193,55 +107,14 @@ export const deleteQuestion = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireCapability(ctx, "manageAssessments");
-    const question = await ctx.db.get(args.questionId);
-    if (!question) throw new Error("Question not found");
-
-    // Capture question number before cascade-delete
-    const questionNumber = question.questionNumber;
-
-    // Cascade-delete all student answers for this question
-    const answers = await ctx.db
-      .query("studentAssessmentAnswers")
-      .withIndex("by_question", (q) => q.eq("questionId", args.questionId))
-      .take(5000);
-    for (const answer of answers) {
-      await ctx.db.delete(answer._id);
-    }
-
-    await ctx.db.delete(args.questionId);
-
-    const assessment = await ctx.db.get(question.assessmentId);
-    if (assessment) {
-      await scheduleClassRecompute(ctx, classKeyOf(assessment));
-    }
+    const question = await deletePaperQuestion(ctx, args.questionId);
 
     await logAudit(ctx, {
       user,
       action: "delete",
       entityType: "assessmentQuestions",
       entityId: args.questionId,
-      description: `Deleted question #${questionNumber}`,
+      description: `Deleted question #${question.questionNumber}`,
     });
   },
 });
-
-/** Internal helper — validates marks don't overflow assessment totalMarks. */
-async function validateQuestionTotal(
-  ctx: MutationCtx,
-  assessmentId: Id<"assessments">,
-  newMarks: number,
-): Promise<Doc<"assessments">> {
-  const assessment = await ctx.db.get(assessmentId);
-  if (!assessment) throw new Error("Assessment not found");
-  const existing = await ctx.db
-    .query("assessmentQuestions")
-    .withIndex("by_assessment", (q) => q.eq("assessmentId", assessmentId))
-    .take(200);
-  const currentTotal = existing.reduce((s, q) => s + q.marksAllocated, 0);
-  if (currentTotal + newMarks > assessment.totalMarks) {
-    throw new Error(
-      `Adding ${newMarks} marks would exceed assessment total of ${assessment.totalMarks} (current: ${currentTotal})`,
-    );
-  }
-  return assessment;
-}

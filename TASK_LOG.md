@@ -2,6 +2,40 @@
 
 ---
 
+## Current Feature: CA Paper module — what makes an Assessment's questions and marks valid (architecture review candidate 2, 2026-11-21)
+**Status**: Implemented on branch `fm/sis-ca-paper` — awaiting the no-mistakes review pipeline
+**Active Agent**: CODING AGENT
+
+Source: architecture review 2026-11-21, candidate 2, plus live defect 5 (a teacher stored 55 on a
+10-mark question through `bulkMarkEntry`; the Computed Grade became `weightedAverage 550`, `A+`).
+Enforces ADR-0004. `lib/gradeComputation` is unchanged.
+
+### Devil's Advocate Findings
+- Concern: a mark above the allocation, or on another paper's question, reaches the grade → Mitigation: `enterMarks` validates the whole payload against the paper's own questions before any write.
+- Concern: lowering an allocation under entered marks gives percentages over 100 → Mitigation: `updateQuestion` refuses below the highest entered mark.
+- Concern: the same grid save sent twice, or one (student, question) twice in a payload → Mitigation: upsert keyed by (student, question); a repeat inside one payload is collapsed (last wins), so no duplicate rows.
+- Concern: a delete cascades the answers before the recompute looks for affected students → Mitigation: targets are gathered before the cascade; the batch runs after commit.
+- Concern: existing rows that already break the rules (legacy marks above allocation) → Mitigation: none here, writes only. Listed as a follow-up.
+
+### Sub-tasks
+- [x] 1. `convex/lib/caPaper.ts`: the one module that writes `assessments`, `assessmentQuestions`, `studentAssessmentAnswers`. Mark within 0..allocation; question on the paper; Absent forces 0; allocation > 0, not below entered marks, sum ≤ paper total (one copy, both directions); one active CA-N (a deactivated one no longer blocks); cascades; recompute always names the changed paper.
+- [x] 2. `convex/studentAssessmentAnswers.ts`, `assessmentQuestions.ts`, `assessments.ts`: same public names and shapes, now role check → module → audit log.
+- [x] 3. `getAssessmentById` returns `questionTotal` (sum of question marks); the mark sheet shows `/questionTotal` instead of `/totalMarks`. Number only, no layout or styling change.
+- [x] 4. `convex/caPaper.test.ts` (8 tests): 550% regression as a teacher; question from another paper; Absent → 0; bad allocations and the cap in both directions; lowering below entered marks; recreate after deactivate; delete-question recompute; `questionTotal`.
+- [x] 5. Deleted `lib/validations/gradeEntrySchema.ts` (no importers before or after).
+
+### Verification (2026-11-22)
+- `npx vitest run` → 62 files / 759 passed. `npx tsc --noEmit` clean. `npm run lint` exit 0. `npm run build` exit 0.
+- convex-test only; nothing was run against a Convex deployment.
+
+### Follow-ups (not built)
+- Existing answers above their allocation, or on a question of another paper, are not repaired: a one-off audit/migration is needed before the stored grades can be trusted.
+- No reactivate for a deactivated CA: recreating makes a new empty paper and the old marks stay on the deactivated one.
+- `QuestionManager` still measures progress against `totalMarks`; ADR-0004 suggests dropping the field. UI change, needs a prototype first.
+- Campus scoping of the mark-entry roster (separate in-flight work).
+
+---
+
 ## Current Feature: Access Policy module — one capability table for server and client (architecture review candidate 1, 2026-11-21)
 **Status**: Complete on this branch — Settings → Users (access sheet, variant B) is handed to a separate session
 **Active Agent**: CODING AGENT

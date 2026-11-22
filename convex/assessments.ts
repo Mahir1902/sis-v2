@@ -1,17 +1,20 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import { activeAssessmentsFor } from "./computedGrades";
 import {
-  activeAssessmentsFor,
-  classKeyOf,
-  scheduleClassRecompute,
-} from "./computedGrades";
+  createPapers,
+  deactivatePaper,
+  deletePaper,
+  paperQuestions,
+  questionTotal,
+  updatePaper,
+} from "./lib/caPaper";
 import { requireCapability } from "./lib/permissions";
 
-// Adding or removing a CA changes every classmate's `expectedCaCount` (and,
-// for a removal with marks, the grade itself), so those mutations schedule a
-// class-wide recompute (computedGrades.ts). `updateAssessment` does not:
-// name / totalMarks / passingMarks / date play no part in the math (ADR-0004).
+// Thin public mutations: check the role, then hand the write to the CA Paper
+// module (`lib/caPaper.ts`), which owns the duplicate-CA rule, the cascade and
+// the class-wide grade recompute.
 
 /** Create a single assessment (CA-1, CA-2, or CA-3). */
 export const createAssessment = mutation({
@@ -26,45 +29,23 @@ export const createAssessment = mutation({
     passingMarks: v.optional(v.float64()),
     assessmentDate: v.optional(v.float64()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    { semester, subjectId, standardLevelId, academicYearId, ...paper },
+  ) => {
     const user = await requireCapability(ctx, "browseAssessments");
-    // Prevent duplicate CA-X for same subject/semester/level/year
-    const existing = await ctx.db
-      .query("assessments")
-      .withIndex("by_subject_semester", (q) =>
-        q.eq("subjectId", args.subjectId).eq("semester", args.semester),
-      )
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("standardLevelId"), args.standardLevelId),
-          q.eq(q.field("academicYearId"), args.academicYearId),
-          q.eq(q.field("assessmentNumber"), args.assessmentNumber),
-        ),
-      )
-      .first();
-    if (existing) {
-      throw new Error(
-        `CA-${args.assessmentNumber} already exists for this subject/semester/level/year`,
-      );
-    }
-    const id = await ctx.db.insert("assessments", {
-      ...args,
-      isActive: true,
-      createdAt: Date.now(),
-    });
-    await scheduleClassRecompute(ctx, {
-      standardLevelId: args.standardLevelId,
-      academicYear: args.academicYearId,
-      subjectId: args.subjectId,
-      semester: args.semester,
-    });
+    const [id] = await createPapers(
+      ctx,
+      { semester, subjectId, standardLevelId, academicYear: academicYearId },
+      [paper],
+    );
 
     await logAudit(ctx, {
       user,
       action: "create",
       entityType: "assessments",
       entityId: id,
-      description: `Created assessment: ${args.name}`,
+      description: `Created assessment: ${paper.name}`,
     });
 
     return id;
@@ -80,48 +61,20 @@ export const bulkCreateAssessments = mutation({
     academicYearId: v.id("academicYears"),
     totalMarks: v.float64(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    { semester, subjectId, standardLevelId, academicYearId, totalMarks },
+  ) => {
     const user = await requireCapability(ctx, "browseAssessments");
-    const ids = [];
-    for (const num of [1, 2, 3] as const) {
-      // Prevent duplicate CA-X for same subject/semester/level/year
-      const existing = await ctx.db
-        .query("assessments")
-        .withIndex("by_subject_semester", (q) =>
-          q.eq("subjectId", args.subjectId).eq("semester", args.semester),
-        )
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("standardLevelId"), args.standardLevelId),
-            q.eq(q.field("academicYearId"), args.academicYearId),
-            q.eq(q.field("assessmentNumber"), num),
-          ),
-        )
-        .first();
-      if (existing) {
-        throw new Error(
-          `CA-${num} already exists for this subject/semester/level/year`,
-        );
-      }
-      const id = await ctx.db.insert("assessments", {
-        name: `CA-${num}`,
-        assessmentNumber: num,
-        semester: args.semester,
-        subjectId: args.subjectId,
-        standardLevelId: args.standardLevelId,
-        academicYearId: args.academicYearId,
-        totalMarks: args.totalMarks,
-        isActive: true,
-        createdAt: Date.now(),
-      });
-      ids.push(id);
-    }
-    await scheduleClassRecompute(ctx, {
-      standardLevelId: args.standardLevelId,
-      academicYear: args.academicYearId,
-      subjectId: args.subjectId,
-      semester: args.semester,
-    });
+    const ids = await createPapers(
+      ctx,
+      { semester, subjectId, standardLevelId, academicYear: academicYearId },
+      ([1, 2, 3] as const).map((assessmentNumber) => ({
+        name: `CA-${assessmentNumber}`,
+        assessmentNumber,
+        totalMarks,
+      })),
+    );
 
     await logAudit(ctx, {
       user,
@@ -159,40 +112,37 @@ export const getAssessmentsByLevelYear = query({
     return await Promise.all(
       filtered.map(async (a) => {
         const subject = await ctx.db.get(a.subjectId);
-        const questions = await ctx.db
-          .query("assessmentQuestions")
-          .withIndex("by_assessment", (q) => q.eq("assessmentId", a._id))
-          .take(200);
-        const totalQMarks = questions.reduce(
-          (sum, q) => sum + q.marksAllocated,
-          0,
-        );
+        const questions = await paperQuestions(ctx, a._id);
         return {
           ...a,
           subjectDoc: subject,
           questionCount: questions.length,
-          totalQMarks,
+          totalQMarks: questionTotal(questions),
         };
       }),
     );
   },
 });
 
-/** Get a single assessment by ID with its questions. */
+/**
+ * Get a single assessment by ID with its questions. `questionTotal` is the
+ * real CA total (the sum of the question marks, ADR-0004) — what a student's
+ * marks are out of; `totalMarks` is only the display target.
+ */
 export const getAssessmentById = query({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
     await requireCapability(ctx, "manageAssessments");
     const assessment = await ctx.db.get(args.assessmentId);
     if (!assessment) return null;
-    const questions = await ctx.db
-      .query("assessmentQuestions")
-      .withIndex("by_assessment_order", (q) =>
-        q.eq("assessmentId", args.assessmentId),
-      )
-      .take(200);
+    const questions = await paperQuestions(ctx, args.assessmentId);
     const subject = await ctx.db.get(assessment.subjectId);
-    return { ...assessment, subjectDoc: subject, questions };
+    return {
+      ...assessment,
+      subjectDoc: subject,
+      questions,
+      questionTotal: questionTotal(questions),
+    };
   },
 });
 
@@ -221,10 +171,10 @@ export const deactivateAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
     const user = await requireCapability(ctx, "manageAssessments");
-    const assessment = await ctx.db.get(args.assessmentId);
-    if (!assessment) throw new Error("Assessment not found");
-    await ctx.db.patch(args.assessmentId, { isActive: false });
-    const queued = await scheduleClassRecompute(ctx, classKeyOf(assessment));
+    const { assessment, queued } = await deactivatePaper(
+      ctx,
+      args.assessmentId,
+    );
 
     await logAudit(ctx, {
       user,
@@ -245,49 +195,9 @@ export const updateAssessment = mutation({
     passingMarks: v.optional(v.float64()),
     assessmentDate: v.optional(v.float64()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { assessmentId, ...updates }) => {
     const user = await requireCapability(ctx, "manageAssessments");
-    const assessment = await ctx.db.get(args.assessmentId);
-    if (!assessment) throw new Error("Assessment not found");
-
-    // If lowering totalMarks, ensure it doesn't go below allocated question marks
-    if (
-      args.totalMarks !== undefined &&
-      args.totalMarks < assessment.totalMarks
-    ) {
-      const questions = await ctx.db
-        .query("assessmentQuestions")
-        .withIndex("by_assessment", (q) =>
-          q.eq("assessmentId", args.assessmentId),
-        )
-        .take(200);
-      const allocatedMarks = questions.reduce(
-        (sum, q) => sum + q.marksAllocated,
-        0,
-      );
-      if (args.totalMarks < allocatedMarks) {
-        throw new Error(
-          `Cannot reduce total marks below ${allocatedMarks} (currently allocated across ${questions.length} questions)`,
-        );
-      }
-    }
-
-    const { assessmentId, ...updates } = args;
-    // Remove undefined values so we only patch what was provided
-    const patch: Partial<{
-      name: string;
-      totalMarks: number;
-      passingMarks: number;
-      assessmentDate: number;
-    }> = {};
-    if (updates.name !== undefined) patch.name = updates.name;
-    if (updates.totalMarks !== undefined) patch.totalMarks = updates.totalMarks;
-    if (updates.passingMarks !== undefined)
-      patch.passingMarks = updates.passingMarks;
-    if (updates.assessmentDate !== undefined)
-      patch.assessmentDate = updates.assessmentDate;
-
-    await ctx.db.patch(assessmentId, patch);
+    const assessment = await updatePaper(ctx, assessmentId, updates);
 
     await logAudit(ctx, {
       user,
@@ -304,52 +214,19 @@ export const deleteAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
     const user = await requireCapability(ctx, "manageAssessments");
-    const assessment = await ctx.db.get(args.assessmentId);
-    if (!assessment) throw new Error("Assessment not found");
-
-    // Capture name before cascade-delete
-    const assessmentName = assessment.name;
-
-    // 1. Delete all student answers for this assessment
-    const answers = await ctx.db
-      .query("studentAssessmentAnswers")
-      .withIndex("by_assessment", (q) =>
-        q.eq("assessmentId", args.assessmentId),
-      )
-      .take(5000);
-    for (const answer of answers) {
-      await ctx.db.delete(answer._id);
-    }
-
-    // 2. Delete all questions for this assessment
-    const questions = await ctx.db
-      .query("assessmentQuestions")
-      .withIndex("by_assessment", (q) =>
-        q.eq("assessmentId", args.assessmentId),
-      )
-      .take(200);
-    for (const question of questions) {
-      await ctx.db.delete(question._id);
-    }
-
-    // 3. Delete the assessment itself
-    await ctx.db.delete(args.assessmentId);
-
-    // 4. Every classmate's grade for this subject + term loses a CA. The batch
-    // runs after this transaction commits, so it sees the deletes above.
-    await scheduleClassRecompute(ctx, classKeyOf(assessment));
+    const { assessment, deletedAnswers, deletedQuestions } = await deletePaper(
+      ctx,
+      args.assessmentId,
+    );
 
     await logAudit(ctx, {
       user,
       action: "delete",
       entityType: "assessments",
       entityId: args.assessmentId,
-      description: `Deleted assessment: ${assessmentName}`,
+      description: `Deleted assessment: ${assessment.name}`,
     });
 
-    return {
-      deletedAnswers: answers.length,
-      deletedQuestions: questions.length,
-    };
+    return { deletedAnswers, deletedQuestions };
   },
 });
