@@ -643,7 +643,9 @@ export const deleteStudent = mutation({
 
 /**
  * Update a student record with partial fields.
- * Handles bidirectional sibling re-linking when siblingIds changes.
+ * Handles bidirectional sibling re-linking when siblingIds changes: refuses
+ * a student as their own sibling or a sibling that does not exist, and
+ * stores a repeated id once.
  * `placement` (level + campus) amends the open enrollment in the same
  * transaction — ConvexError `NOT_PLACED` for a student with none.
  * Requires admin role.
@@ -708,8 +710,13 @@ export const updateStudent = mutation({
 
     // ── Handle sibling re-linking if siblingIds changed ─────────────────
     if (args.siblingIds !== undefined) {
+      if (args.siblingIds.includes(studentId)) {
+        throw new Error("A student cannot be their own sibling");
+      }
       const oldSiblingIds = student.siblingIds ?? [];
-      const newSiblingIds = args.siblingIds;
+      // A repeated id is stored once, so a double submit cannot duplicate it.
+      const newSiblingIds = [...new Set(args.siblingIds)];
+      updateFields.siblingIds = newSiblingIds;
 
       // Siblings removed — take this student out of their lists
       const removedSiblings = oldSiblingIds.filter(
@@ -731,13 +738,13 @@ export const updateStudent = mutation({
         }),
         ...addedSiblings.map(async (sibId) => {
           const sib = await ctx.db.get(sibId);
-          if (sib) {
-            const existing = sib.siblingIds ?? [];
-            if (!existing.includes(studentId)) {
-              await ctx.db.patch(sibId, {
-                siblingIds: [...existing, studentId],
-              });
-            }
+          // A link must exist on both records; the throw rolls back the rest.
+          if (!sib) throw new Error("Sibling not found");
+          const existing = sib.siblingIds ?? [];
+          if (!existing.includes(studentId)) {
+            await ctx.db.patch(sibId, {
+              siblingIds: [...existing, studentId],
+            });
           }
         }),
       ]);

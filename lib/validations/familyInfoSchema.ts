@@ -1,11 +1,5 @@
 import { z } from "zod";
 
-const siblingSchema = z.object({
-  name: z.string().min(1),
-  standardLevelId: z.string().min(1),
-  campus: z.string().min(1),
-});
-
 export const familyInfoSchema = z.object({
   fatherName: z.string().min(1, "Father's name is required"),
   fatherOccupation: z.string().min(1, "Father's occupation is required"),
@@ -25,7 +19,6 @@ export const familyInfoSchema = z.object({
   guardianPhoneNumber: z.string().min(1, "Guardian's phone number is required"),
 
   familyAnnualIncome: z.string().min(1, "Family annual income is required"),
-  siblings: z.array(siblingSchema).optional(),
 });
 
 export type FamilyInfoValues = z.infer<typeof familyInfoSchema>;

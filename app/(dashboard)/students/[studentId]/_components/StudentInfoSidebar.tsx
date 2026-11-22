@@ -2,17 +2,34 @@
 
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
+import { Plus, X } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useCapabilities } from "@/hooks/use-capabilities";
+import { useSiblingLinks } from "@/hooks/use-sibling-links";
 import { cn } from "@/lib/utils";
 
 interface StudentInfoSidebarProps {
@@ -109,6 +126,12 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
     api.computedGrades.getComputedGradesByStudent,
     canOnStudent("viewStudentGrades", studentId) ? { studentId } : "skip",
   );
+
+  // Link / unlink controls are for whoever may edit students (#89); the
+  // roster to pick from is only fetched while the search is open.
+  const canLinkSiblings = can("manageStudents");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const siblingLinks = useSiblingLinks(studentId, siblings, linkOpen);
 
   if (student === undefined) {
     return (
@@ -504,8 +527,9 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
           </AccordionItem>
         )}
 
-        {/* Siblings (collapsed, conditional) */}
-        {siblings && siblings.length > 0 && (
+        {/* Siblings (collapsed) — hidden when empty, except for someone who
+            can link one and needs somewhere to do it from. */}
+        {siblings && (siblings.length > 0 || canLinkSiblings) && (
           <AccordionItem
             value="siblings"
             className="bg-white border rounded-lg overflow-hidden"
@@ -522,31 +546,98 @@ export function StudentInfoSidebar({ studentId }: StudentInfoSidebarProps) {
             </AccordionTrigger>
             <AccordionContent className="px-3.5 pb-3 pt-0">
               <div className="flex flex-col gap-2">
+                {siblings.length === 0 && (
+                  <p className="text-muted-foreground">
+                    No siblings linked yet.
+                  </p>
+                )}
                 {siblings.map(
                   (s) =>
                     s && (
-                      <Link
-                        key={s._id}
-                        href={`/students/${s._id}`}
-                        className="flex items-center gap-2 p-2 bg-slate-50 rounded-md hover:bg-green-50 hover:border-school-green transition-colors border border-transparent"
-                      >
-                        <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-semibold shrink-0">
-                          {getInitials(s.studentFullName)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-medium text-xs truncate">
-                            {s.studentFullName ?? s.studentNumber}
+                      <div key={s._id} className="flex items-center gap-1">
+                        <Link
+                          href={`/students/${s._id}`}
+                          className="flex flex-1 min-w-0 items-center gap-2 p-2 bg-slate-50 rounded-md hover:bg-green-50 hover:border-school-green transition-colors border border-transparent"
+                        >
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-semibold shrink-0">
+                            {getInitials(s.studentFullName)}
                           </div>
-                          {/* Level and campus are each optional (#93) — join
-                              only what is actually on record. */}
-                          <div className="text-[9px] text-muted-foreground">
-                            {[s.standardLevelName, s.campusName]
-                              .filter(Boolean)
-                              .join(" · ") || "—"}
+                          <div className="min-w-0">
+                            <div className="font-medium text-xs truncate">
+                              {s.studentFullName ?? s.studentNumber}
+                            </div>
+                            {/* Level and campus are each optional (#93) — join
+                                only what is actually on record. */}
+                            <div className="text-[9px] text-muted-foreground">
+                              {[s.standardLevelName, s.campusName]
+                                .filter(Boolean)
+                                .join(" · ") || "—"}
+                            </div>
                           </div>
-                        </div>
-                      </Link>
+                        </Link>
+                        {canLinkSiblings && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-600"
+                            aria-label={`Unlink ${s.studentFullName ?? s.studentNumber}`}
+                            disabled={siblingLinks.isPending}
+                            onClick={() => siblingLinks.unlink(s)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     ),
+                )}
+                {canLinkSiblings && (
+                  <Popover open={linkOpen} onOpenChange={setLinkOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-full text-xs"
+                        disabled={siblingLinks.isPending}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Link sibling
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Name or student number…" />
+                        <CommandList>
+                          <CommandEmpty>
+                            {siblingLinks.candidates
+                              ? "No students found."
+                              : "Loading students…"}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {siblingLinks.candidates?.map((c) => (
+                              <CommandItem
+                                key={c._id}
+                                value={`${c.studentFullName ?? ""} ${c.studentNumber}`}
+                                onSelect={() => {
+                                  setLinkOpen(false);
+                                  siblingLinks.link(c);
+                                }}
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-xs font-medium truncate">
+                                    {c.studentFullName ?? c.studentNumber}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground">
+                                    {c.studentNumber} ·{" "}
+                                    {c.standardLevelName ?? "—"}
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </div>
             </AccordionContent>

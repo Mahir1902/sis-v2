@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { getFunctionName } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +12,7 @@ type Ref = Parameters<typeof getFunctionName>[0];
 const data = new Map<string, unknown>();
 const subscribed: string[] = [];
 let studentId = "s1";
+const mutate = vi.fn(async (_args: unknown) => undefined);
 
 vi.mock("convex/react", () => ({
   useQuery: (ref: Ref, args?: unknown) => {
@@ -20,8 +21,12 @@ vi.mock("convex/react", () => ({
     subscribed.push(name);
     return data.get(name);
   },
-  useMutation: () => vi.fn(),
+  useMutation: () => mutate,
   useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
+}));
+const toastSuccess = vi.hoisted(() => vi.fn());
+vi.mock("sonner", () => ({
+  toast: { success: toastSuccess, error: vi.fn() },
 }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ studentId }),
@@ -29,6 +34,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 import StudentDetailPage from "./page";
+
+// jsdom has neither; the sibling search list (cmdk) needs both.
+vi.stubGlobal(
+  "ResizeObserver",
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
+Element.prototype.scrollIntoView = () => {};
 
 function signInAs(me: { role: string; studentId?: string }) {
   data.set("users:getMe", {
@@ -57,6 +73,8 @@ afterEach(() => {
   data.clear();
   subscribed.length = 0;
   studentId = "s1";
+  mutate.mockClear();
+  toastSuccess.mockClear();
 });
 
 describe("student page — what each role is shown and asks for", () => {
@@ -173,5 +191,101 @@ describe("student page — what each role is shown and asks for", () => {
     expect(screen.getByText("Access Denied")).toBeInTheDocument();
     expect(subscribed).not.toContain("students:getStudentById");
     expect(screen.queryByText("Rahim Uddin")).not.toBeInTheDocument();
+  });
+});
+
+describe("student page — sibling links (#89)", () => {
+  const zara = {
+    _id: "s2",
+    studentNumber: "S-2",
+    studentFullName: "Zara Uddin",
+    standardLevelName: "Grade 6",
+  };
+  const openSiblings = () =>
+    fireEvent.click(screen.getByRole("button", { name: /Siblings/ }));
+
+  it("lets an admin unlink a sibling, sending the list without them", async () => {
+    signInAs({ role: "admin" });
+    data.set("students:getSiblingsByStudent", [zara]);
+    const { rerender } = render(<StudentDetailPage />);
+    openSiblings();
+
+    fireEvent.click(screen.getByRole("button", { name: "Unlink Zara Uddin" }));
+
+    expect(mutate).toHaveBeenCalledWith({ studentId: "s1", siblingIds: [] });
+    // The roster is only fetched once the search is opened.
+    expect(subscribed).not.toContain("students:getAllStudents");
+
+    // Undo on the toast links them again, onto the list as it now stands.
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+    expect(toastSuccess.mock.calls[0][0]).toBe("Unlinked Zara Uddin");
+    data.set("students:getSiblingsByStudent", []);
+    rerender(<StudentDetailPage />);
+    toastSuccess.mock.calls[0][1].action.onClick();
+    expect(mutate).toHaveBeenLastCalledWith({
+      studentId: "s1",
+      siblingIds: ["s2"],
+    });
+  });
+
+  it("lets an admin link a student, offering neither this student nor one already linked", () => {
+    signInAs({ role: "admin" });
+    data.set("students:getSiblingsByStudent", [zara]);
+    data.set("students:getAllStudents", [
+      { _id: "s1", studentNumber: "S-1", studentFullName: "Rahim Uddin" },
+      zara,
+      // Imported student: no name, shown by student number (#93).
+      { _id: "s3", studentNumber: "S-3", standardLevelName: null },
+    ]);
+    render(<StudentDetailPage />);
+    openSiblings();
+    fireEvent.click(screen.getByRole("button", { name: "Link sibling" }));
+
+    const options = screen.getAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("S-3");
+    fireEvent.click(options[0]);
+
+    expect(mutate).toHaveBeenCalledWith({
+      studentId: "s1",
+      siblingIds: ["s2", "s3"],
+    });
+  });
+
+  it("gives an admin somewhere to link from when there are no siblings", () => {
+    signInAs({ role: "admin" });
+    data.set("students:getSiblingsByStudent", []);
+    render(<StudentDetailPage />);
+    openSiblings();
+
+    expect(screen.getByText("No siblings linked yet.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Link sibling" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a teacher the siblings without link or unlink controls", () => {
+    signInAs({ role: "teacher" });
+    data.set("students:getSiblingsByStudent", [zara]);
+    render(<StudentDetailPage />);
+    openSiblings();
+
+    expect(screen.getByText("Zara Uddin")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Unlink Zara Uddin" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Link sibling" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the empty siblings card from a teacher", () => {
+    signInAs({ role: "teacher" });
+    data.set("students:getSiblingsByStudent", []);
+    render(<StudentDetailPage />);
+
+    expect(
+      screen.queryByRole("button", { name: /Siblings/ }),
+    ).not.toBeInTheDocument();
   });
 });
