@@ -39,9 +39,9 @@ export function useSiblingLinks(
   // ponytail: the whole list is sent, so two admins editing one student at
   // the same moment can overwrite each other; add link/unlink mutations if
   // that ever matters.
-  const linked = useRef<{ studentId: Id<"students">; ids?: Id<"students">[] }>(
-    { studentId },
-  );
+  const linked = useRef<{ studentId: Id<"students">; ids?: Id<"students">[] }>({
+    studentId,
+  });
   linked.current = {
     studentId,
     ids: siblings?.flatMap((s) => (s ? [s._id] : [])),

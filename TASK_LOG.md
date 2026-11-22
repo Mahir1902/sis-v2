@@ -17,7 +17,7 @@ was picked. The prototype is kept on local branch `proto/sis-89-sibling-ui-varia
 - Concern: a teacher or student sees or reaches the controls → Mitigation: controls render only with `can("manageStudents")` (admin only, not grantable); `updateStudent` requires the same capability server-side.
 - Concern: imported students have no name (#93) → Mitigation: rows, search list and toasts fall back to the student number.
 - Concern: loading the whole roster on every student page → Mitigation: `getAllStudents` is subscribed only while the search popover is open.
-- Concern: an unlink by mistake → Mitigation: Undo on the toast re-links onto the list as it then stands.
+- Concern: an unlink by mistake → Mitigation: Undo on the toast re-links onto the list as it then stands; it does nothing once the page shows a different student.
 - Concern: the client sends the whole sibling list, so two admins editing one student at once can overwrite each other → Mitigation: none; accepted at this school's size, noted in the hook.
 
 ### Sub-tasks
@@ -25,7 +25,7 @@ was picked. The prototype is kept on local branch `proto/sis-89-sibling-ui-varia
 - [x] 2. `hooks/use-sibling-links.ts`: mutation call, pending guard, toasts with Undo, candidate list.
 - [x] 3. `StudentInfoSidebar.tsx`: X to unlink on each row and a "Link sibling" popover search (shadcn Popover + Command), both gated on `can("manageStudents")`; the card also shows empty for those users.
 - [x] 4. Deleted the dead `siblingSchema` (`lib/validations/familyInfoSchema.ts`) and its `siblings: []` seed (`AddStudentForm.tsx`).
-- [x] 5. Tests: `convex/students.siblings.test.ts` (6: link and unlink on both records, self-link, repeated id, missing sibling, teacher refused); `page.test.tsx` (5: unlink + Undo, link, empty card for admin, teacher sees no controls, teacher sees no empty card).
+- [x] 5. Tests: `convex/students.siblings.test.ts` (6: link and unlink on both records, self-link, repeated id, missing sibling, teacher refused); `page.test.tsx` (6: unlink + Undo, stale Undo after the student changes, link, empty card for admin, teacher sees no controls, teacher sees no empty card).
 
 ### Follow-ups (not built)
 - Links are pairwise, not family-wide: linking A–B and A–C leaves B and C unlinked. A product decision.
