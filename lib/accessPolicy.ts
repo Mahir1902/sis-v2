@@ -127,8 +127,50 @@ export const GRANTABLE_CAPABILITIES = [
 ] as const satisfies readonly SchoolCapability[];
 export type GrantableCapability = (typeof GRANTABLE_CAPABILITIES)[number];
 
-const isGrantable = (capability: string): capability is GrantableCapability =>
+/** Is this name one an admin may grant to a teacher? */
+export const isGrantable = (
+  capability: string,
+): capability is GrantableCapability =>
   (GRANTABLE_CAPABILITIES as readonly string[]).includes(capability);
+
+/**
+ * What the grant editor (Settings → Users) calls each grantable feature, and
+ * the one line it says about it. Keyed by capability, so a capability cannot
+ * become grantable without copy. The Promotions and Audit Log lines are the
+ * disclosures the captain's decision rests on — keep them.
+ */
+export const GRANTABLE_FEATURES: Record<
+  GrantableCapability,
+  { label: string; description: string }
+> = {
+  browseAssessments: {
+    label: "Assessments",
+    description: "See every level's CA papers and create new ones.",
+  },
+  viewClassAnalytics: {
+    label: "Class Analytics",
+    description: "Grade spread and students needing help, for any class.",
+  },
+  promoteStudents: {
+    label: "Promotions",
+    description:
+      "Promote or hold back a class. Also assigns next year's fees and graduates leavers.",
+  },
+  manageSubjects: {
+    label: "Subjects",
+    description: "Add subjects and switch them on or off.",
+  },
+  viewAuditLog: {
+    label: "Audit Log",
+    description:
+      "Read the full change history, including fee and account changes.",
+  },
+  manageCalendar: {
+    label: "School Calendar",
+    description:
+      "Add and remove closures. Closing a day voids its attendance marks.",
+  },
+};
 
 /** The part of a user account the policy needs. */
 export type PolicyCaller = {

@@ -2,7 +2,58 @@
 
 ---
 
-## Current Feature: CA Paper module — what makes an Assessment's questions and marks valid (architecture review candidate 2, 2026-11-21)
+## Current Feature: Settings → Users "Manage access" sheet (variant B, 2026-11-22)
+**Status**: Complete
+**Active Agent**: CODING AGENT
+
+Source: sub-task 9 of the Access Policy feature below; brief
+`firstmate/data/sis-access-policy/handoff-settings-access-sheet.md`. Branch `fm/sis-access-sheet`. The look was
+picked by the captain (variant B "Access sheet per account"); the server (`listUsers`, `updateUserRole`,
+`setTeacherGrants`) is unchanged.
+
+### Plan
+- `lib/accessPolicy.ts`: `GRANTABLE_FEATURES` — label and one-line description per grantable capability, keyed
+  by capability so a new one cannot compile without copy.
+- `lib/validations/userAccessSchema.ts`: role, linked student (required for a student), grants.
+- `hooks/use-user-access-form.ts`: the form and the save. `planAccessSave(liveRow, values)` decides the calls —
+  `updateUserRole` if the role or the student link changed, then `setTeacherGrants` if a teacher's grants differ
+  from what the row will hold (none after a role change). Save is enabled only when there is a call to make.
+- `_components/ManageAccessSheet.tsx` + `StudentPicker.tsx`: render only (shadcn Sheet, Select, Switch,
+  Popover + Command).
+- Page: columns `User | Access | Actions`; the inline role dropdown and its stop-gap (bff2a01) are removed.
+
+### Devil's Advocate Findings (2026-11-22, Opus 5.5 — verdict: approve with caution)
+- Concern: "form is dirty" and "there is something to save" disagree (pick Student, then back to Admin) → Mitigation: Save follows `planAccessSave`, not dirtiness; test "has nothing to save after a change is undone".
+- Concern: a sheet left open can undo another admin's change (`setTeacherGrants` replaces the list; a stale "teacher" would re-grant a removed role) → Mitigation: the hook remembers the account as it last knew it; when the live row drifts, the sheet shows "Someone else changed this account", holds Save, and offers Reload.
+- Concern: the row disappears while the sheet is open → Mitigation: the sheet's account is looked up in the live list; a missing row closes the sheet.
+- Concern: a stored grant name that is no longer grantable → Mitigation: `isGrantable` filters it in the form defaults, the diff, the warning count and the "+ N extra" text, as the server does.
+- Concern: double submit → Mitigation: Save and the role select are disabled while saving; both mutations are idempotent.
+- Concern: role saved but grants call fails → Mitigation: error toast says the role was saved; the sheet stays open and the next Save sends only the grants.
+- Concern: Popover inside a modal Sheet does not wheel-scroll; default sheet is 3/4 width → Mitigation: `<Popover modal>`, sheet `w-full sm:max-w-md`; verified in a browser at 1440 and 375.
+- Concern: `STUDENT_REQUIRED` also means the picked student was deleted meanwhile → Mitigation: the message says the record could not be found and to pick another.
+- Declined: warning when a student account changes role (not asked for; the admin is choosing it); disabling "Manage access" on the admin's own row (the sheet opens with the role locked and says why); paging the picker past 50 matches (school is ~400; noted in a `ponytail:` comment).
+
+### Sub-tasks
+- [x] 1. Feature copy next to the policy + form schema — APPROVED by Frontend Review Agent (2026-11-22)
+- [x] 2. `useUserAccessForm` / `planAccessSave` + tests — APPROVED by Frontend Review Agent (2026-11-22)
+- [x] 3. Sheet, student picker, Users table columns, stop-gap removed + page test — APPROVED by Frontend Review Agent (2026-11-22)
+
+### Review Notes
+**Frontend Review (sub-tasks 1–3, Opus 5.5, 2026-11-22): APPROVED after one required change.** Required, applied:
+the hook's "account as last known" was updated after the role call but not after the grants call, so every
+successful grants save briefly raised the "someone else changed this account" alert in the closing sheet — it is
+now updated after each call that succeeds, with a test. Optional, applied: redundant `aria-label`s on the role
+select and picker trigger removed (they are named by their labels); the "Extra features" heading uses `useId()`.
+Optional, not applied: an open counter in the sheet's key, a 44px hit area on the switches, locking the role
+select until the signed-in account has loaded. No backend review: no Convex file changed.
+
+Verification (2026-11-22): `npm test` 781 passed, `npm run lint` clean bar one pre-existing warning
+(`FeeDetailDialog.tsx`), `npm run build` and `tsc --noEmit` pass. Browser run on mock data (no Convex): grants
+save, student link save, picker wheel-scroll, no page overflow at 375px, no console errors.
+
+---
+
+## Previous Feature: CA Paper module — what makes an Assessment's questions and marks valid (architecture review candidate 2, 2026-11-21)
 **Status**: Implemented on branch `fm/sis-ca-paper` — awaiting the no-mistakes review pipeline
 **Active Agent**: CODING AGENT
 
@@ -36,7 +87,7 @@ Enforces ADR-0004. `lib/gradeComputation` is unchanged.
 
 ---
 
-## Current Feature: Access Policy module — one capability table for server and client (architecture review candidate 1, 2026-11-21)
+## Previous Feature: Access Policy module — one capability table for server and client (architecture review candidate 1, 2026-11-21)
 **Status**: Complete on this branch — Settings → Users (access sheet, variant B) is handed to a separate session
 **Active Agent**: CODING AGENT
 
@@ -134,7 +185,7 @@ permission matrix is the source of truth for the table. Branch `fm/sis-access-po
 ### Sub-tasks (added)
 - [x] 7. Per-teacher grants: table + server (`users.grants`, `setTeacherGrants`) + tests — APPROVED by Backend Review Agent (2026-11-21)
 - [x] 8. Grant editor prototype (3 variants) + screenshots — captain picked B "Access sheet per account" (2026-11-21)
-- [ ] 9. Settings → Users: the access sheet (role, linked student, a teacher's extra features) — NOT ON THIS BRANCH. The captain asked for it to be built in a separate session; brief: `firstmate/data/sis-access-policy/handoff-settings-access-sheet.md`. Until then the role dropdown offers "Student" only on rows that are already students, and grants can be set only through `users.setTeacherGrants`.
+- [x] 9. Settings → Users: the access sheet (role, linked student, a teacher's extra features) — built on `fm/sis-access-sheet` (2026-11-22), see the feature above. Originally: NOT ON THIS BRANCH. The captain asked for it to be built in a separate session; brief: `firstmate/data/sis-access-policy/handoff-settings-access-sheet.md`. Until then the role dropdown offers "Student" only on rows that are already students, and grants can be set only through `users.setTeacherGrants`.
 
 ### Review Notes
 **Backend Review (sub-tasks 1–3, commit 78b95c2, Opus 5.5): APPROVED.** Every removed role list was paired with
