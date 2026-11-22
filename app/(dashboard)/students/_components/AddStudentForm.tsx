@@ -46,7 +46,6 @@ export function AddStudentForm({ onSuccess }: AddStudentFormProps) {
     defaultValues: {
       gender: undefined,
       hasHealthIssues: false,
-      siblings: [],
     },
     mode: "onChange",
   });

@@ -2,6 +2,38 @@
 
 ---
 
+## Current Feature: Sibling link / unlink on the student page (issue #89, 2026-11-22)
+**Status**: Implemented on branch `fm/sis-89-proto` — awaiting the no-mistakes review pipeline
+**Active Agent**: CODING AGENT
+
+Source: issue #89 ("Siblings are display-only — no surface writes `students.siblingIds`"). Since the
+Excel import links no siblings (#85), a manual DB write was the only way to add one. UI prototyped
+first as three variants (popover search, manage dialog, inline search); variant A, popover search,
+was picked. The prototype is kept on local branch `proto/sis-89-sibling-ui-variants`, not in main.
+
+### Devil's Advocate Findings
+- Concern: `updateStudent` accepted a student as their own sibling and the same id twice → Mitigation: self-link is refused; a repeated id is stored once (so a double submit is harmless).
+- Concern: linking a student that was deleted meanwhile left a one-sided link → Mitigation: refused ("Sibling not found"); the transaction rolls back.
+- Concern: a teacher or student sees or reaches the controls → Mitigation: controls render only with `can("manageStudents")` (admin only, not grantable); `updateStudent` requires the same capability server-side.
+- Concern: imported students have no name (#93) → Mitigation: rows, search list and toasts fall back to the student number.
+- Concern: loading the whole roster on every student page → Mitigation: `getAllStudents` is subscribed only while the search popover is open.
+- Concern: an unlink by mistake → Mitigation: Undo on the toast re-links onto the list as it then stands; it does nothing once the page shows a different student.
+- Concern: the client sends the whole sibling list, so two admins editing one student at once can overwrite each other → Mitigation: none; accepted at this school's size, noted in the hook.
+
+### Sub-tasks
+- [x] 1. `convex/students.ts` `updateStudent`: refuse self-link and a missing sibling, collapse repeated ids.
+- [x] 2. `hooks/use-sibling-links.ts`: mutation call, pending guard, toasts with Undo, candidate list.
+- [x] 3. `StudentInfoSidebar.tsx`: X to unlink on each row and a "Link sibling" popover search (shadcn Popover + Command), both gated on `can("manageStudents")`; the card also shows empty for those users.
+- [x] 4. Deleted the dead `siblingSchema` (`lib/validations/familyInfoSchema.ts`) and its `siblings: []` seed (`AddStudentForm.tsx`).
+- [x] 5. Tests: `convex/students.siblings.test.ts` (6: link and unlink on both records, self-link, repeated id, missing sibling, teacher refused); `page.test.tsx` (6: unlink + Undo, stale Undo after the student changes, link, empty card for admin, teacher sees no controls, teacher sees no empty card).
+
+### Follow-ups (not built)
+- Links are pairwise, not family-wide: linking A–B and A–C leaves B and C unlinked. A product decision.
+- Sibling auto-detection and linking during the Excel import (out of scope for #89).
+- `createStudent` has the same repeated-id gap; no surface sends `siblingIds` on create today.
+
+---
+
 ## Current Feature: Settings → Users "Manage access" sheet (variant B, 2026-11-22)
 **Status**: Complete
 **Active Agent**: CODING AGENT
