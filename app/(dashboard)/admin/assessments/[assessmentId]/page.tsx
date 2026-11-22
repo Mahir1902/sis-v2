@@ -216,7 +216,7 @@ function AssessmentDetailContent({
           assessmentId={assessmentId}
           assessment={{
             _id: assessment._id,
-            totalMarks: assessment.totalMarks,
+            questionTotal: assessment.questionTotal,
             standardLevelId: assessment.standardLevelId,
             academicYearId: assessment.academicYearId,
             questions: assessment.questions.map((q) => ({

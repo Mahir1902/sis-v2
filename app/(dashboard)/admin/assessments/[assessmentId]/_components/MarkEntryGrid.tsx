@@ -34,7 +34,8 @@ interface MarkEntryGridProps {
   assessmentId: Id<"assessments">;
   assessment: {
     _id: Id<"assessments">;
-    totalMarks: number;
+    /** The real CA total: the sum of the question marks (ADR-0004). */
+    questionTotal: number;
     standardLevelId: Id<"standardLevels">;
     academicYearId: Id<"academicYears">;
     questions: Array<{
@@ -455,7 +456,7 @@ export function MarkEntryGrid({
                     >
                       {displayTotal}
                       <span className="text-xs font-normal text-gray-400">
-                        /{assessment.totalMarks}
+                        /{assessment.questionTotal}
                       </span>
                     </span>
                   </TableCell>
